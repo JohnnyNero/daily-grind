@@ -80,10 +80,10 @@ html, body {
 
 .corner-buttons {
   position: fixed;
-  right: 12px;
+  right: 8px;
   bottom: calc(env(safe-area-inset-bottom) + 12px);
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 .staff-button {
   min-height: 44px;
@@ -178,6 +178,41 @@ body.panel-open .corner-buttons, body.panel-open .recentre, body.building .corne
   cursor: pointer;
 }
 .toast[hidden] { display: none; }
+body.has-alerts .toast { top: calc(env(safe-area-inset-top) + 108px); }
+.alerts {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  top: calc(env(safe-area-inset-top) + 66px);
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  pointer-events: none;
+}
+.alert {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  font: 600 13px system-ui, sans-serif;
+  background: #2e3137f0;
+  color: var(--bar-ink);
+  box-shadow: 0 2px 8px #00000040;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.alert.critical { background: #c8483af2; color: #fff; }
+.alert.high { background: #d99a2bf2; color: #1d1f23; }
+.alert.more { display: inline-flex; align-items: center; cursor: default; }
+.staff-button.quiet { background: #2e3137; color: var(--bar-ink); padding: 0 12px; }
+.badge:empty { display: none; }
+.badge { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #1d1f23; font-size: 12px; line-height: 18px; }
+.badge.urgent { background: #ff8a7a; }
+.card.letter.bad { border-left: 4px solid var(--bad); }
+.card.letter.good { border-left: 4px solid var(--good); }
+.card.letter.decision { border: 2px solid #c8955f; }
 .toast.bad { background: #fde4df; }
 .toast.good { background: #e3f1e5; }
 

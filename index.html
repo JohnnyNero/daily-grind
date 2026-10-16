@@ -34,6 +34,8 @@
     </div>
   </header>
 
+  <div class="alerts" id="alerts" hidden role="status" aria-label="Alerts"></div>
+
   <button type="button" class="toast" id="toast" hidden></button>
 
   <button type="button" class="recentre" id="recentre" aria-label="Fit the café to the screen">
@@ -41,6 +43,8 @@
   </button>
 
   <div class="corner-buttons">
+    <button type="button" class="staff-button quiet" id="calls-open">Calls</button>
+    <button type="button" class="staff-button quiet" id="inbox-open">Inbox <span id="inbox-count" class="badge"></span></button>
     <button type="button" class="staff-button" id="cafe-open">Venue</button>
     <button type="button" class="staff-button" id="staff-open">Staff</button>
   </div>
@@ -107,6 +111,30 @@
       <p class="hint">Opens the new-game screens. This place stays saved until the new one opens.</p>
       <div class="row"><button type="button" class="danger" id="save-new">New game</button></div>
     </div>
+  </section>
+
+  <section class="sheet panel" id="inbox-panel" hidden aria-labelledby="inbox-title">
+    <div class="sheet-head">
+      <h2 id="inbox-title">Inbox</h2>
+      <button type="button" class="close" id="inbox-close" aria-label="Close">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+    <div class="cards" id="inbox-list"></div>
+    <div class="row"><button type="button" id="inbox-clear">Clear the news</button></div>
+  </section>
+
+  <section class="sheet panel" id="calls-panel" hidden aria-labelledby="calls-title">
+    <div class="sheet-head">
+      <div>
+        <h2 id="calls-title">Manager's calls</h2>
+        <p>Direct orders for when it's going wrong. Each one costs something.</p>
+      </div>
+      <button type="button" class="close" id="calls-close" aria-label="Close">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3L3 13"/></svg>
+      </button>
+    </div>
+    <div class="cards" id="calls-list"></div>
   </section>
 
   <div class="overlay" id="editor" hidden>

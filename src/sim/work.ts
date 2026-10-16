@@ -12,6 +12,7 @@ import { pick } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_MINUTE, type Action, type Job, type ObjectInst, type Pawn, type Step } from './state';
 import { chargeIngredients, machineWear, wearMachine } from './business';
+import { allHands } from './calls';
 import { addMemory, hasTrait } from './thoughts';
 
 const MAX_WASH_BATCH = 6;
@@ -148,7 +149,8 @@ export function findWork(sim: Sim, p: Pawn): Job | null {
     const rushJob = take(urgent);
     if (rushJob) return rushJob;
     const waited = sim.state.tick - (staff.focus?.lastDone ?? -Infinity);
-    if (waited < (station ? STATION_HELP_AFTER : FOCUS_HELP_AFTER)) return null;
+    // All hands: nobody waits about at their post.
+    if (!allHands(sim) && waited < (station ? STATION_HELP_AFTER : FOCUS_HELP_AFTER)) return null;
   }
 
   for (let priority = 1; priority <= 4; priority++) {

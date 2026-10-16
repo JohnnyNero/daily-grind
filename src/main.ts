@@ -5,6 +5,7 @@ import { Hud } from './ui/hud';
 import { attachInput } from './ui/input';
 import { BuildUi } from './ui/buildUi';
 import { CafeUi, TeamUi } from './ui/manageUi';
+import { AlertsUi, CallsUi, InboxUi, type InboxHooks } from './ui/inboxUi';
 import { loadFromDevice, saveToDevice } from './ui/save';
 import { showStartScreen } from './ui/startScreen';
 
@@ -72,9 +73,24 @@ function play(sim: Sim): void {
   const team = new TeamUi(sim, hooks, () => hud.refreshStaffPanel());
   const build = new BuildUi(sim, renderer, hooks);
   const cafe = new CafeUi(sim, hooks, () => build.start());
+  const inboxHooks: InboxHooks = {
+    ...hooks,
+    select: (id) => {
+      hud.closePanels();
+      selectedId = id;
+    },
+    openPanel: (panel) => document.getElementById(panel === 'staff' ? 'staff-open' : 'cafe-open')!.click(),
+  };
+  const alerts = new AlertsUi(sim, inboxHooks);
+  const inbox = new InboxUi(sim, inboxHooks);
+  const calls = new CallsUi(sim, inboxHooks);
   hud.onStaffPanelOpen = () => team.render();
-  hud.onClosePanels = () => cafe.close();
-  hud.otherPanelOpen = () => cafe.isOpen;
+  hud.onClosePanels = () => {
+    cafe.close();
+    inbox.close();
+    calls.close();
+  };
+  hud.otherPanelOpen = () => cafe.isOpen || inbox.isOpen || calls.isOpen;
 
   function fitView(): void {
     const top = topbar.getBoundingClientRect().bottom;
@@ -99,7 +115,7 @@ function play(sim: Sim): void {
         build.tap(x, y);
         return;
       }
-      if (hud.staffPanelOpen || cafe.isOpen) return;
+      if (hud.staffPanelOpen || hud.otherPanelOpen()) return;
       selectedId = renderer.pawnAt(x, y)?.id ?? null;
     },
   });
@@ -143,6 +159,9 @@ function play(sim: Sim): void {
     if (ticks > 0 || view !== lastView) renderer.draw(now);
     lastView = view;
     hud.update(selected, fastForwarding, now);
+    alerts.update(now);
+    inbox.update();
+    calls.update();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

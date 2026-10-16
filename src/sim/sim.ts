@@ -27,6 +27,7 @@ import { abandonAction, findWork, performAction, standByJob, updateRushes, valid
 import { World, parseMap } from './world';
 import { emptyDay } from './business';
 import { morningBooks } from './books';
+import { lapseDecisions, letterFromLog } from './letters';
 import { isDayOff, stressEveryMinute } from './stakes';
 import { fillStaff, normalize } from './normalize';
 
@@ -250,6 +251,7 @@ export class Sim {
     log.push({ tick: this.state.tick, text, tone, pawn, tale, interest });
     if (log.length > 120) log.splice(0, log.length - 120);
     if (tale && FAME_TALES.has(tale)) this.remember(text);
+    letterFromLog(this, text, tone, pawn, tale);
   }
 
   /** Keeps a moment in the hall of fame for good. */
@@ -336,6 +338,7 @@ export class Sim {
     guestsEveryMinute(this);
     storytellerEveryMinute(this);
     if (m % 10 === 0) checkWants(this);
+    lapseDecisions(this);
     this.maybeRecap();
   }
 

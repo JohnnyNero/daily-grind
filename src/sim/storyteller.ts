@@ -201,8 +201,8 @@ export function storytellerEveryMinute(sim: Sim): void {
     addCondition(sim, 'stationBroken', 3);
     sim.log(sim.venue.text.stationBroken, 'bad', null, 'machineBroken', 7);
   }
-  // Coach party arrivals trickle in a couple a minute.
-  if (story.pendingArrivals > 0) {
+  // Coach party arrivals trickle in a couple a minute (and wait outside while the doors are shut).
+  if (story.pendingArrivals > 0 && s.calls.closedUntil <= s.tick) {
     const n = Math.min(story.pendingArrivals, randInt(s, 1, 2));
     story.pendingArrivals -= n;
     for (let i = 0; i < n; i++) sim.arriveGuest();
