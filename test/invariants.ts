@@ -86,7 +86,8 @@ export class StuckWatch {
   check(sim: Sim): string[] {
     const out: string[] = [];
     for (const p of sim.state.pawns) {
-      if (!p.onMap) {
+      // Off shift, or deliberately waiting at their post: not stuck.
+      if (!p.onMap || p.job?.idle) {
         this.last.delete(p.id);
         continue;
       }

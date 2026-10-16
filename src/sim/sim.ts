@@ -23,7 +23,7 @@ import {
   SAVE_VERSION, type Applicant, type ConditionId, type DayStats, type Job, type LogEntry, type Pawn, type Relation, type Shift, type SimState, type Step,
 } from './state';
 import { addMemory, driftMood, expireMemories, hasTrait, opinionFromMemories } from './thoughts';
-import { abandonAction, findWork, performAction, validateAction } from './work';
+import { abandonAction, findWork, performAction, standByJob, updateRushes, validateAction } from './work';
 import { World, parseMap } from './world';
 
 /** Walking speed in tiles per tick. At 1x (60 ticks per real second) that's about 4 tiles a second. */
@@ -167,7 +167,7 @@ export class Sim {
         priorities, skills, tipsToday: 0, tipsTotal: 0, traits, memories: [], mood: 60,
         belowSince: { minor: null, major: null, severe: null }, highSince: null, lastBreak: s.tick,
         mentalBreak: null, inspiration: null, quit: false, sickDay: null, servedToday: 0,
-        forcedBreak: false, homeEarlyDay: null, fired: false, wants: [],
+        forcedBreak: false, homeEarlyDay: null, fired: false, wants: [], station: null, focus: null,
       },
       visit: null,
     };
@@ -272,13 +272,14 @@ export class Sim {
     const s = this.state;
     s.tick++;
     if (s.tick % TICKS_PER_MINUTE === 0) this.everyMinute();
+    if (s.tick % 10 === 0) updateRushes(this);
     // Iterate a copy: guests leave the list mid-loop.
     for (const p of [...s.pawns]) {
       if (!p.onMap) continue;
       if (p.kind === 'guest') {
         if (!p.job) guestTick(this, p);
       } else {
-        if ((s.tick + p.id * 7) % IDLE_RECHECK_TICKS === 0 && p.job?.label === IDLE_LABEL) this.interruptIdle(p);
+        if ((s.tick + p.id * 7) % IDLE_RECHECK_TICKS === 0 && (p.job?.idle || p.job?.label === IDLE_LABEL)) this.interruptIdle(p);
         if (!p.job) this.decide(p);
       }
       if (p.job) this.runJob(p, p.job);
@@ -451,6 +452,11 @@ export class Sim {
       return;
     }
     if (this.startNeedJob(p, candidates)) return;
+    const standBy = standByJob(this, p);
+    if (standBy) {
+      p.job = standBy;
+      return;
+    }
     this.idle(p);
   }
 
@@ -507,10 +513,10 @@ export class Sim {
       const g = this.gotoStep(x, y);
       g.path = this.pathFrom(p, x, y);
       if (!g.path) continue;
-      p.job = this.makeJob(IDLE_LABEL, [g, { kind: 'wait', ticksLeft: randInt(s, 2, 6) * TICKS_PER_MINUTE }]);
+      p.job = { ...this.makeJob(IDLE_LABEL, [g, { kind: 'wait', ticksLeft: randInt(s, 2, 6) * TICKS_PER_MINUTE }]), idle: true };
       return;
     }
-    p.job = this.makeJob(IDLE_LABEL, [{ kind: 'wait', ticksLeft: 2 * TICKS_PER_MINUTE }]);
+    p.job = { ...this.makeJob(IDLE_LABEL, [{ kind: 'wait', ticksLeft: 2 * TICKS_PER_MINUTE }]), idle: true };
   }
 
   // ---------------------------------------------------------------- jobs (shared with guests.ts and work.ts)

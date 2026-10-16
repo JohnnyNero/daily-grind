@@ -268,12 +268,14 @@ export class Hud {
     const value = p.staff!.priorities[work];
     const skill = Math.floor(p.staff!.skills[work]);
     button.dataset.p = String(value);
+    button.classList.toggle('station', p.staff!.station === work);
     button.replaceChildren(value === 0 ? 'off' : String(value));
     const small = document.createElement('small');
     small.textContent = String(skill);
     button.append(small);
     const label = this.sim.venue.workLabels[work] ?? WORK_TYPES.find((w) => w.id === work)!.label;
-    button.setAttribute('aria-label', `${p.name}, ${label}: ${value === 0 ? 'off' : `priority ${value}`}, skill ${skill}`);
+    const station = p.staff!.station === work ? ', their station' : '';
+    button.setAttribute('aria-label', `${p.name}, ${label}: ${value === 0 ? 'off' : `priority ${value}`}, skill ${skill}${station}`);
   }
 
   /** Shows the newest log entry as a toast, and keeps the Recent list current. */
@@ -382,7 +384,9 @@ export class Hud {
       this.setMeter(row.fill, row.value, selected.needs[def.id]);
     }
     const tips = selected.staff ? ` · Tips today ${pounds(selected.staff.tipsToday)}` : '';
-    this.shift.textContent = `Shift ${hhmm(selected.shift.start)}–${hhmm(selected.shift.end)}${tips}`;
+    const station = selected.staff?.station;
+    const stationText = station ? ` · Station: ${this.sim.venue.workLabels[station] ?? WORK_TYPES.find((w) => w.id === station)!.label}` : '';
+    this.shift.textContent = `Shift ${hhmm(selected.shift.start)}–${hhmm(selected.shift.end)}${stationText}${tips}`;
   }
 
   private renderStaffDetails(p: Pawn): void {

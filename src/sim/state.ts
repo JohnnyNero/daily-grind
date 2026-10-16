@@ -56,6 +56,8 @@ export interface Job {
   /** The tick the current step started, used to spot pawns that make no progress. */
   stepStartedAt: number;
   sitting: boolean;
+  /** Filling time (wandering, or waiting at a post): dropped as soon as there's something to do. */
+  idle?: boolean;
 }
 
 export interface Shift {
@@ -119,6 +121,10 @@ export interface StaffInfo {
   fired: boolean;
   /** Things they'd like to happen (Sims-style wants); meeting one is a lasting mood boost. */
   wants: Want[];
+  /** The manager's choice of station: they stick to this work and only help out when it's quiet. */
+  station?: WorkType | null;
+  /** What they've settled into (without a station), and when they last did any of it. */
+  focus?: { work: WorkType; lastDone: number; since: number } | null;
 }
 
 export interface Want {
@@ -342,6 +348,8 @@ export interface SimState {
   spills: { x: number; y: number }[];
   /** The café's proudest and most infamous moments, kept for good. */
   hallOfFame: { day: number; text: string }[];
+  /** Kinds of work currently in a rush (they start at a high backlog and end at a lower one). */
+  rushes?: WorkType[];
 }
 
 export const TICKS_PER_MINUTE = 60;

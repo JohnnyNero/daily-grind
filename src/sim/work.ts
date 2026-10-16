@@ -1,5 +1,6 @@
 // Staff work. Each work type has a scanner that finds tasks; a staff member takes
-// the nearest task at their highest-priority level (RimWorld-style work givers).
+// the nearest task at their highest-priority level (RimWorld-style work givers), but
+// sticks to their station or current kind of work rather than hopping between them.
 // Tasks are jobs made of steps; "act" steps change the world when they finish.
 
 import { reservationKey } from './ai';
@@ -52,19 +53,139 @@ function at(p: Pawn, x: number, y: number): boolean {
   return Math.abs(p.x - x) < 0.05 && Math.abs(p.y - y) < 0.05;
 }
 
+// At 1x an in-game minute passes in a real second, so these are roughly real seconds too.
+/** Station staff wait this long with nothing to do at their station before helping elsewhere. */
+export const STATION_HELP_AFTER = 8 * TICKS_PER_MINUTE;
+/** Staff without a station settle into what they're doing, and move on after this long without any. */
+export const FOCUS_HELP_AFTER = 4 * TICKS_PER_MINUTE;
+
+/** Without a station, a stint at one kind of work lasts at least this long before a better one wins. */
+export const MIN_STINT = 20 * TICKS_PER_MINUTE;
+
+/**
+ * Backlog at which each kind of work counts as a rush, and the lower level at which
+ * the rush is over (so it doesn't flicker on and off at the threshold).
+ */
+const RUSH: Record<WorkType, { start: number; end: number; backlog: (sim: Sim) => number }> = {
+  counter: { start: 4, end: 2, backlog: (sim) => sim.state.queue.length },
+  barista: {
+    start: 4, end: 2,
+    backlog: (sim) => sim.state.orders.reduce((n, o) => n + o.items.filter((i) => i.status === 'todo' && i.kind !== 'food').length, 0),
+  },
+  floor: { start: 3, end: 1, backlog: (sim) => Object.values(sim.state.dirty).filter((n) => n > 0).length },
+  dishes: { start: 8, end: 4, backlog: (sim) => sim.state.sinkDirty },
+  cleaning: { start: 2, end: 1, backlog: (sim) => sim.state.spills.length },
+};
+
+/** Updates which kinds of work are in a rush. Called once a tick by the sim. */
+export function updateRushes(sim: Sim): void {
+  const s = sim.state;
+  const now = new Set(s.rushes ?? []);
+  for (const w of WORK_TYPES) {
+    const r = RUSH[w.id];
+    const n = r.backlog(sim);
+    if (n >= r.start) now.add(w.id);
+    else if (n < r.end) now.delete(w.id);
+  }
+  s.rushes = WORK_TYPES.map((w) => w.id).filter((id) => now.has(id));
+}
+
+function rushes(sim: Sim): Set<WorkType> {
+  return new Set(sim.state.rushes ?? []);
+}
+
+/** The work someone sticks to: their station, or else what they've settled into. */
+export function homeWork(p: Pawn): WorkType | null {
+  return p.staff?.station ?? p.staff?.focus?.work ?? null;
+}
+
+/**
+ * Picks the next task. Staff stick to their home work (their station, or what they've
+ * settled into) while there's any; when it's quiet they wait a little before helping
+ * elsewhere, unless somewhere else is in a rush. Without a station, a strictly higher
+ * priority job still wins straight away. Helping uses the usual priorities, nearest first.
+ */
 export function findWork(sim: Sim, p: Pawn): Job | null {
   const staff = p.staff;
   if (!staff) return null;
   const tasks = scanTasks(sim, p);
-  for (let priority = 1; priority <= 4; priority++) {
-    const level = tasks.filter((t) => staff.priorities[t.work] === priority);
-    level.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
-    for (const t of level) {
+  const home = homeWork(p);
+  const station = staff.station ?? null;
+  const priorityOf = (w: WorkType) => (w === station ? 1 : staff.priorities[w]);
+  const nearest = (list: Task[]) => list.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
+  const take = (list: Task[]): Job | null => {
+    for (const t of nearest(list)) {
       const job = t.build();
-      if (job) return job;
+      if (!job) continue;
+      if (t.work !== home && home) job.label += ' (helping out)';
+      const now = sim.state.tick;
+      const work = station ?? t.work;
+      if (t.work === home || !station) {
+        staff.focus = { work, lastDone: now, since: staff.focus?.work === work ? staff.focus.since : now };
+      }
+      return job;
     }
+    return null;
+  };
+
+  if (home) {
+    const homeTasks = tasks.filter((t) => t.work === home && (t.work === station || staff.priorities[t.work] > 0));
+    // Without a station, a better-priority job wins once they've given this one a fair go.
+    const settled = sim.state.tick - (staff.focus?.since ?? -Infinity) >= MIN_STINT;
+    const better = station || !settled ? [] : tasks.filter((t) => staff.priorities[t.work] > 0 && staff.priorities[t.work] < staff.priorities[home]);
+    const job = take(better) ?? take(homeTasks);
+    if (job) return job;
+    // Home is quiet. Help straight away where there's a rush or nobody else covers that
+    // work; anywhere else only after a wait, so people don't hop between jobs.
+    const rush = rushes(sim);
+    const covered = new Set(sim.state.pawns.filter((o) => o !== p && o.onMap && o.staff && !o.staff.mentalBreak).map(homeWork));
+    const urgent = tasks.filter((t) => (rush.has(t.work) || !covered.has(t.work)) && priorityOf(t.work) > 0);
+    const rushJob = take(urgent);
+    if (rushJob) return rushJob;
+    const waited = sim.state.tick - (staff.focus?.lastDone ?? -Infinity);
+    if (waited < (station ? STATION_HELP_AFTER : FOCUS_HELP_AFTER)) return null;
+  }
+
+  for (let priority = 1; priority <= 4; priority++) {
+    const job = take(tasks.filter((t) => priorityOf(t.work) === priority));
+    if (job) return job;
   }
   return null;
+}
+
+/** Somewhere to wait for the next bit of home work: by the till, the machine or the sink. */
+function postFor(sim: Sim, work: WorkType): [number, number] | null {
+  const s = sim.state;
+  if (work === 'counter') return [...sim.venue.positions.tillStaff] as [number, number];
+  const def = work === 'barista' ? sim.venue.drinkStation : work === 'dishes' ? 'sink' : null;
+  const o = def ? s.objects.find((x) => x.def === def) : undefined;
+  const spot = o ? sim.world.spots(o).find(([x, y]) => sim.world.passable(x, y)) : undefined;
+  return spot ? [spot[0], spot[1]] : null;
+}
+
+const POST_LABELS: Partial<Record<WorkType, string>> = {
+  counter: 'Waiting at the till',
+  barista: 'Waiting by the machine',
+  dishes: 'Waiting by the sink',
+};
+
+/** A staff member with nothing to do waits at their post instead of wandering off. */
+export function standByJob(sim: Sim, p: Pawn): Job | null {
+  const home = homeWork(p);
+  if (!home) return null;
+  const post = postFor(sim, home);
+  if (!post) return null;
+  const wait: Step = { kind: 'wait', ticksLeft: TICKS_PER_MINUTE };
+  const near = Math.hypot(post[0] - p.x, post[1] - p.y) <= 1.5;
+  const steps: Step[] = [];
+  if (!near) {
+    const go = sim.gotoStep(post[0], post[1]);
+    go.path = sim.pathFrom(p, post[0], post[1]);
+    if (!go.path) return null;
+    steps.push(go);
+  }
+  steps.push(wait);
+  return { ...sim.makeJob(POST_LABELS[home] ?? 'Waiting for work', steps), idle: true };
 }
 
 function scanTasks(sim: Sim, p: Pawn): Task[] {

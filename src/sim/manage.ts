@@ -5,7 +5,7 @@
 
 import {
   BACKSTORIES, FIRST_NAMES, HAIR_COLOURS, HAIR_STYLES, MAX_STAFF, SKIN_TONES, TRAITS, WORK_TYPES,
-  objectDef, type HairStyle, type Skills, type TraitId,
+  objectDef, type HairStyle, type Skills, type TraitId, type WorkType,
 } from './defs';
 import { pick, randRange } from './rng';
 import { Sim } from './sim';
@@ -104,6 +104,15 @@ export function setShift(sim: Sim, p: Pawn, start: number, end: number): string 
   const s = Math.max(EARLIEST_START, Math.min(latest - MIN_SHIFT, Math.round(start / 30) * 30));
   const e = Math.max(s + MIN_SHIFT, Math.min(latest, Math.round(end / 30) * 30));
   p.shift = { start: s, end: e };
+  return null;
+}
+
+/** Puts someone on a station (or back to going where they're needed, with null). */
+export function setStation(sim: Sim, p: Pawn, work: WorkType | null): string | null {
+  if (!p.staff) return 'Only staff have stations.';
+  if (work !== null && !WORK_TYPES.some((w) => w.id === work)) return 'Unknown station.';
+  p.staff.station = work;
+  p.staff.focus = work ? { work, lastDone: sim.state.tick, since: sim.state.tick } : null;
   return null;
 }
 

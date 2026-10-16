@@ -117,6 +117,7 @@ body.panel-open .corner-buttons, body.panel-open .recentre, body.building .corne
 #priorities button[data-p="1"] { background: #2f6b3c; border-color: #2f6b3c; color: #ffffff; }
 #priorities button[data-p="2"] { background: #8cc097; border-color: #8cc097; }
 #priorities button[data-p="0"] { color: #9a9083; font-weight: 400; }
+#priorities button.station { box-shadow: 0 0 0 2px var(--sheet), 0 0 0 4px #c8955f; }
 #priorities button small { display: inline; font-size: 10px; font-weight: 500; opacity: .75; margin-left: 2px; }
 
 .sheet {
@@ -467,6 +468,8 @@ body.starting .bar, body.starting .corner-buttons, body.starting .recentre { vis
 .card.person { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
 .card.person > .portrait { border-radius: 10px; background: #f1eadd; }
 .person-info { min-width: 0; }
+.station { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: #5e5446; }
+.station select { flex: 1; min-height: 40px; padding: 0 10px; border: 1px solid #d9cdb8; border-radius: 10px; background: #fff; color: var(--sheet-ink); font: 500 14px system-ui, sans-serif; }
 .person .row button { flex: 1; padding: 0 6px; white-space: nowrap; }
 .cards button.portrait-button { padding: 0; min-height: 0; border: 0; border-radius: 12px; background: #f1eadd; }
 .portrait { display: block; }

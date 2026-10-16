@@ -1,9 +1,9 @@
 // Management panels: the team (rota, breaks, editing, hiring) and the café (menu, saving).
 // Build mode lives in buildUi.ts. All changes go through sim/manage.ts, which validates them.
 
-import { MAX_STAFF, TRAITS, WORK_TYPES, type TraitId } from '../sim/defs';
+import { MAX_STAFF, TRAITS, WORK_TYPES, type TraitId, type WorkType } from '../sim/defs';
 import {
-  editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setEnabled, setPrice, setShift,
+  editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setEnabled, setPrice, setShift, setStation,
 } from '../sim/manage';
 import type { Sim } from '../sim/sim';
 import { cleanliness, looks } from '../sim/ambience';
@@ -73,6 +73,7 @@ export class TeamUi {
       h('p', { className: 'hint' }, `${traitLabels(p.staff!.traits)} · ${status}`),
     );
     const card = h('div', { className: 'card person' }, portrait(p.look, 44, p.name), info);
+    info.append(this.stationPicker(p));
     if (this.openShift === p.id) info.append(this.shiftEditor(p));
     const act = (fn: () => string | null) => () => {
       const err = fn();
@@ -86,6 +87,22 @@ export class TeamUi {
       h('button', { type: 'button', onclick: () => this.editor.open(p) }, 'Edit'),
     ));
     return card;
+  }
+
+  private stationPicker(p: Pawn): HTMLElement {
+    const label = (w: WorkType) => this.sim.venue.workLabels[w] ?? WORK_TYPES.find((x) => x.id === w)!.label;
+    const select = h('select', {
+      'aria-label': `${p.name}'s station`,
+      onchange: (e: Event) => {
+        const v = (e.target as HTMLSelectElement).value;
+        setStation(this.sim, p, v ? (v as WorkType) : null);
+        this.onChange();
+      },
+    },
+    h('option', { value: '' }, 'Wherever needed'),
+    ...WORK_TYPES.map((w) => h('option', { value: w.id }, label(w.id))));
+    select.value = p.staff!.station ?? '';
+    return h('label', { className: 'station' }, 'Station', select);
   }
 
   private shiftEditor(p: Pawn): HTMLElement {
