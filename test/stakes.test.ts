@@ -31,7 +31,8 @@ describe('stakes', () => {
     const sim = new Sim(4);
     sim.state.money = DEBT_LIMIT + 1000;
     expect(buyObject(sim, 'plant', 1, 11)).toMatch(/bank/);
-    sim.state.money = DEBT_LIMIT / 2 - 100;
+    sim.state.money = DEBT_LIMIT - 20000;
+    sim.state.goals = [];
     sim.run(TICKS_PER_DAY);
     expect(sim.state.debtDays).toBeGreaterThan(0);
     expect(sim.state.today.other + (sim.state.yesterday?.other ?? 0)).toBeGreaterThan(0);

@@ -12,7 +12,8 @@ import { changesOf, CharacterForm, draftOf, portrait } from './characterForm';
 import { el, h, hhmm, setupTabs } from './dom';
 import { pounds } from './hud';
 import { setLead } from '../sim/careers';
-import { STRESS_STRAINED, WEEKDAYS } from '../sim/stakes';
+import { STRESS_STRAINED, WEEKDAYS, weekday } from '../sim/stakes';
+import { weekProfit } from '../sim/goals';
 import {
   DEBT_LIMIT, INGREDIENT_SHARE, SERVICE_COST, dailyRent, guestCapacity, machineWear, priceTolerance, seatCount, serviceMachine, starProgress, starText, stars,
 } from '../sim/business';
@@ -288,6 +289,25 @@ export class CafeUi {
       }),
     );
 
+    el('goals').replaceChildren(...s.goals.filter((g) => !g.done && !g.failed).map((g) => h('div', { className: 'card' },
+      h('div', { className: 'top' }, h('strong', {}, g.title), h('span', {}, pounds(g.reward))),
+      h('p', { className: 'hint' }, `${g.detail}${g.byDay !== null ? ` By day ${g.byDay}.` : ''}`))));
+    const upcoming = s.diary.slice().sort((a, b) => a.day - b.day);
+    el('diary').replaceChildren(
+      ...(upcoming.length === 0 ? [h('li', {}, 'Nothing booked yet. Big days are announced a few days ahead.')] : []),
+      ...upcoming.map((d) => h('li', {}, h('span', {}, d.day === this.sim.day ? 'Today' : `${WEEKDAYS[weekday(d.day)]}, day ${d.day}`), d.title)),
+    );
+    const weeks = s.weeklyReports.slice().reverse();
+    el('weeks').replaceChildren(
+      ...(weeks.length === 0 ? [h('p', { className: 'hint' }, 'The first report comes at the end of the week.')] : []),
+      ...weeks.map((w) => {
+        const profit = weekProfit(w);
+        return h('div', { className: 'card' },
+          h('div', { className: 'top' }, h('strong', {}, `Week ${w.week}`), h('span', { className: profit >= 0 ? 'pos' : 'neg' }, `${profit >= 0 ? '+' : '−'}${pounds(Math.abs(profit))}`)),
+          h('p', { className: 'hint' }, `Takings ${pounds(w.takings)} · wages ${pounds(w.wages)} · ingredients ${pounds(w.ingredients)} · rent ${pounds(w.rent)}${w.repairs ? ` · repairs ${pounds(w.repairs)}` : ''}${w.other ? ` · other ${pounds(w.other)}` : ''}`),
+          h('p', { className: 'hint' }, `${w.served} served, ${w.walkouts} walked out · ${w.starsStart}★ → ${w.starsEnd}★`));
+      }),
+    );
     const recaps = s.recaps.slice().reverse();
     el('scrapbook').replaceChildren(
       ...(recaps.length === 0 ? [h('li', {}, 'Nothing yet. The first page gets written at closing time.')] : []),

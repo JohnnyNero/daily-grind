@@ -4,6 +4,7 @@
 import { STARTING_FAME, askingWage, emptyDay, emptyWeek } from './business';
 import { WORK_TYPES, type WorkType } from './defs';
 import type { Sim } from './sim';
+import { topUpGoals } from './goals';
 import type { Applicant, DayStats, StaffInfo } from './state';
 
 /** A stable pseudo-random number from an id, so old saves get the same passions every load. */
@@ -68,4 +69,5 @@ export function normalize(sim: Sim): void {
   for (const r of s.recaps) fillDay(r.stats);
   for (const p of s.pawns) if (p.staff) fillStaff(p.staff, p.id, day);
   s.applicants.forEach((a, i) => fillApplicant(a, s.nextId * 31 + i));
+  if (s.goals.length === 0) topUpGoals(sim);
 }

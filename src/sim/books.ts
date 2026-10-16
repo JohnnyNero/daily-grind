@@ -4,6 +4,7 @@ import { addDayToWeek, dailyRent, emptyWeek, fadeFame, stars } from './business'
 import type { Sim } from './sim';
 import { debtMorning, stressMorning } from './stakes';
 import { careersMorning } from './careers';
+import { checkGoals, checkUnlocks, planDiary, topUpGoals, weeklyLetter } from './goals';
 
 /** Called just after midnight, once yesterday's numbers are final and today's are blank. */
 export function morningBooks(sim: Sim): void {
@@ -26,5 +27,10 @@ export function morningBooks(sim: Sim): void {
     s.weeklyReports.push(w);
     if (s.weeklyReports.length > 12) s.weeklyReports.shift();
     s.week = emptyWeek(sim, w.week + 1, sim.day);
+    weeklyLetter(sim, w);
+    checkGoals(sim, w);
   }
+  checkUnlocks(sim);
+  planDiary(sim);
+  topUpGoals(sim);
 }

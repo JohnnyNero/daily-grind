@@ -212,6 +212,8 @@ export interface Visit {
   /** Items they ordered, kept for the character sheet and for leaving dirty cups. */
   items: string[];
   mood: 'fine' | 'happy' | 'annoyed' | 'furious';
+  /** A social media star: their verdict reaches a lot of people (big fame swings). */
+  influencer?: boolean;
   /** A restaurant critic: their verdict moves reputation a lot and makes the recap. */
   critic: boolean;
   /** Set when this guest is one of the regulars. */

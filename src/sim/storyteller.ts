@@ -11,7 +11,8 @@ import { spawnGuest } from './guests';
 import { availableRegulars, birthdayVisit } from './regulars';
 import { pick, random, randInt } from './rng';
 import type { Sim } from './sim';
-import { addFame, worstWear } from './business';
+import { addFame, stars, worstWear } from './business';
+import { diaryArrivals, diaryMinute } from './goals';
 import { isDayOff } from './stakes';
 import { TICKS_PER_MINUTE, TICKS_PER_HOUR, type ConditionId, type Pawn } from './state';
 import { addMemory } from './thoughts';
@@ -46,6 +47,24 @@ function staffOnSite(sim: Sim): Pawn[] {
 function mess(sim: Sim): number {
   const s = sim.state;
   return Object.values(s.dirty).reduce((a, b) => a + b, 0) + s.sinkDirty;
+}
+
+/** A health inspector looks round. Returns whether it passed. */
+export function inspect(sim: Sim): boolean {
+  const s = sim.state;
+  const m = mess(sim);
+  const passed = m <= 4 && s.spills.length === 0;
+  const delta = passed ? 4 : m > 10 ? -8 : -3;
+  s.reputation = Math.max(0, Math.min(100, s.reputation + delta));
+  addFame(sim, passed ? 2 : delta);
+  for (const p of staffOnSite(sim)) addMemory(sim, p, passed ? 'passedInspection' : 'failedInspection');
+  sim.log(
+    passed
+      ? 'A health inspector dropped in, ran a finger along the counter and left happy. Five stars on the door.'
+      : `A health inspector dropped in and counted ${m} dirty cups${s.spills.length ? ' and a spill' : ''}. That sticker on the door is not good news.`,
+    passed ? 'good' : 'bad', null, 'inspector', passed ? 5 : 8,
+  );
+  return passed;
 }
 
 const EVENTS: readonly EventDef[] = [
@@ -92,26 +111,15 @@ const EVENTS: readonly EventDef[] = [
   },
   {
     id: 'inspector', category: 'pressure', weight: 1.5,
-    canFire: (sim) => staffOnSite(sim).length > 0,
+    canFire: (sim) => staffOnSite(sim).length > 0 && !sim.state.diary.some((d) => d.kind === 'inspection'),
     fire: (sim) => {
-      const s = sim.state;
-      const m = mess(sim);
-      const passed = m <= 4;
-      const delta = passed ? 4 : m > 10 ? -8 : -3;
-      s.reputation = Math.max(0, Math.min(100, s.reputation + delta));
-      addFame(sim, passed ? 2 : delta);
-      for (const p of staffOnSite(sim)) addMemory(sim, p, passed ? 'passedInspection' : 'failedInspection');
-      sim.log(
-        passed
-          ? 'A health inspector dropped in, ran a finger along the counter and left happy. Five stars on the door.'
-          : `A health inspector dropped in and counted ${m} dirty cups. That sticker on the door is not good news.`,
-        passed ? 'good' : 'bad', null, 'inspector', passed ? 5 : 8,
-      );
+      inspect(sim);
     },
   },
   {
+    // Only a place with a bit of a name gets reviewed.
     id: 'critic', category: 'pressure', weight: 1.5,
-    canFire: (sim) => !sim.state.pawns.some((p) => p.visit?.critic),
+    canFire: (sim) => stars(sim) >= 2 && !sim.state.pawns.some((p) => p.visit?.critic),
     fire: (sim) => {
       const g = spawnGuest(sim);
       g.visit!.critic = true;
@@ -119,6 +127,32 @@ const EVENTS: readonly EventDef[] = [
       g.look.hairStyle = 'beanie';
       g.look.hair = '#2a2a2a';
       sim.log(sim.venue.text.critic(g.name), 'neutral', g.id, null, 0);
+    },
+  },
+  {
+    // At four stars the influencers find you: their verdict reaches a lot of people.
+    id: 'influencer', category: 'pressure', weight: 1,
+    canFire: (sim) => stars(sim) >= 4 && !sim.state.pawns.some((p) => p.visit?.influencer),
+    fire: (sim) => {
+      const g = spawnGuest(sim, true);
+      g.visit!.influencer = true;
+      g.look.shirt = '#e0702c';
+      sim.log(`${g.name} has walked in filming. Half a million followers. Smile.`, 'neutral', g.id, null, 0);
+    },
+  },
+  {
+    // From two stars, offices nearby phone through big orders to collect.
+    id: 'officeOrder', category: 'pressure', weight: 1.2,
+    canFire: (sim) => stars(sim) >= 2 && sim.state.queue.length < 4,
+    fire: (sim) => {
+      const s = sim.state;
+      const drinks = s.menu.filter((m) => m.enabled && m.kind === 'drink');
+      if (drinks.length === 0) return;
+      const g = spawnGuest(sim, false);
+      g.visit!.items = Array.from({ length: randInt(s, 5, 8) }, () => pick(s, drinks).name);
+      g.visit!.patience = 1;
+      g.look.shirt = '#2e4878';
+      sim.log(`${g.name} is here to collect an office order: ${g.visit!.items.length} drinks. They're on their lunch break.`, 'neutral', g.id, 'officeOrder', 4);
     },
   },
   {
@@ -208,6 +242,7 @@ export function storytellerEveryMinute(sim: Sim): void {
     for (let i = 0; i < n; i++) sim.arriveGuest();
   }
 
+  diaryMinute(sim, () => inspect(sim));
   if (story.nextEventAt === 0) scheduleNext(sim);
   const m = sim.minuteOfDay;
   if (s.tick < story.nextEventAt) return;
@@ -284,7 +319,7 @@ export function storytellerNewDay(sim: Sim): void {
 
 /** Arrival rate multiplier from active conditions. */
 export function arrivalFactor(sim: Sim): number {
-  let f = 1;
+  let f = diaryArrivals(sim);
   if (sim.hasCondition('heatwave')) f *= 1.25;
   if (sim.hasCondition('busker')) f *= 1.15;
   if (sim.hasCondition('quietSpell')) f *= 0.5;

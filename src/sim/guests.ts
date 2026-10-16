@@ -284,7 +284,7 @@ function collect(sim: Sim, p: Pawn): void {
   }
   if (server && v.mood === 'happy' && hasTrait(server, 'peoplePerson')) addMemory(sim, server, 'madeTheirDay');
   judge(sim, satisfaction, v.critic ? 10 : 1);
-  noteVisit(sim, v.mood, v.critic ? 150 : v.regularId !== null ? 1.5 : 1);
+  noteVisit(sim, v.mood, v.critic ? 150 : v.influencer ? 250 : v.regularId !== null ? 1.5 : 1);
   s.today.served++;
   if (v.critic || random(s) < REVIEW_CHANCE) {
     const review = writeReview(sim, p, satisfaction, server);
@@ -377,7 +377,8 @@ export function walkOut(sim: Sim, p: Pawn): void {
   v.orderId = null;
   v.mood = 'furious';
   judge(sim, 0, v.critic ? 10 : 1);
-  noteVisit(sim, 'walkout', v.critic ? 150 : 1);
+  noteVisit(sim, 'walkout', v.critic ? 150 : v.influencer ? 250 : 1);
+  if (v.items.length >= 5) addFame(sim, -3);
   if (v.critic || random(s) < 0.5) {
     const review = writeReview(sim, p, 0, undefined);
     s.today.reviews.push(review);

@@ -28,6 +28,7 @@ import { World, parseMap } from './world';
 import { emptyDay } from './business';
 import { morningBooks } from './books';
 import { friendsMayFollow } from './careers';
+import { checkGoals } from './goals';
 import { lapseDecisions, letterFromLog } from './letters';
 import { isDayOff, stressEveryMinute } from './stakes';
 import { fillStaff, normalize } from './normalize';
@@ -302,6 +303,8 @@ export class Sim {
         if (!p.job) this.decide(p);
       }
       if (p.job) this.runJob(p, p.job);
+      // Staff who just finished something pick the next thing straight away, never standing jobless.
+      if (!p.job && p.kind === 'staff' && p.onMap) this.decide(p);
     }
   }
 
@@ -351,6 +354,7 @@ export class Sim {
     const m = this.minuteOfDay;
     const emptied = m >= this.venue.hours.close && s.pawns.every((p) => !p.onMap);
     if (emptied || m === 24 * 60 - 1) {
+      checkGoals(this);
       s.recaps.push(buildRecap(this));
       if (s.recaps.length > 60) s.recaps.shift();
       s.story.recapDay = this.day;
@@ -501,8 +505,10 @@ export class Sim {
     }
     const candidates = scoreCandidates(this.state, this.world, p);
     if (candidates.length > 0) {
+      // Only drop the wander (or the wait at their post) if a need job actually starts.
+      const waiting = p.job;
       this.endJob(p);
-      this.startNeedJob(p, candidates);
+      if (!this.startNeedJob(p, candidates)) p.job = waiting;
     }
   }
 

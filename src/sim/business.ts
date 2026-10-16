@@ -63,7 +63,9 @@ export function demandFactor(sim: Sim): number {
   const s = sim.state;
   const known = 0.7 + s.fame / 60;
   const liked = 0.6 + s.reputation / 125;
-  return known * liked * priceDraw(sim);
+  // A bigger menu (items unlocked with the stars) draws a few more people in.
+  const variety = 1 + 0.04 * Math.max(0, s.menu.filter((m) => m.enabled).length - sim.venue.menu.length);
+  return known * liked * variety * priceDraw(sim);
 }
 
 /** Guest seats on the floor right now. */

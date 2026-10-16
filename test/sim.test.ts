@@ -216,6 +216,7 @@ describe('storyteller and recap', () => {
     const sim = new Sim(5);
     sim.run(2 * TICKS_PER_HOUR);
     const before = sim.state.reputation;
+    sim.state.fame = 100; // critics only bother with places that have a bit of a name
     fireEvent(sim, 'critic');
     const critic = sim.state.pawns.find((p) => p.visit?.critic)!;
     critic.visit!.patience = 0.01;

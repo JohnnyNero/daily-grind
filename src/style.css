@@ -323,6 +323,8 @@ button.danger, .sheet .row button.danger, .recap-card .row button.danger { color
 .card { background: #fff; border: 1px solid #e4dccd; border-radius: 12px; padding: 10px 12px; font-size: 13px; }
 .card .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .card strong { font-size: 15px; }
+.card .top .pos { color: #2f6b3c; font-weight: 700; }
+.card .top .neg { color: #b23a2c; font-weight: 700; }
 .card p { margin: 4px 0 0 !important; }
 .card .row { flex-wrap: wrap; gap: 6px; }
 .card .row button { min-height: 40px; padding: 0 12px; border: 0; background: #f1eadd; font-size: 13px; }

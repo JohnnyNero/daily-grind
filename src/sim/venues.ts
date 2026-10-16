@@ -63,6 +63,8 @@ export interface VenueDef {
   /** Floor kinds that count as front of house (for looks). */
   frontFloors: readonly string[];
   menu: readonly { name: string; kind: ItemKind; price: number }[];
+  /** Menu items that unlock at a star rating. */
+  unlocks: readonly { stars: number; name: string; kind: ItemKind; price: number }[];
   hours: { open: number; close: number; lastArrival: number };
   /** Expected arrivals per hour at a minute of the day, before reputation. */
   arrivals: (minute: number) => number;
@@ -154,6 +156,13 @@ const CAFE: VenueDef = {
     { name: 'mocha', kind: 'drink', price: 370 },
     { name: 'slice of carrot cake', kind: 'food', price: 350 },
     { name: 'brownie', kind: 'food', price: 300 },
+  ],
+  unlocks: [
+    { stars: 2, name: 'iced latte', kind: 'drink', price: 380 },
+    { stars: 3, name: 'chai latte', kind: 'drink', price: 370 },
+    { stars: 3, name: 'cinnamon bun', kind: 'food', price: 340 },
+    { stars: 4, name: 'pour-over', kind: 'drink', price: 460 },
+    { stars: 5, name: 'house banana bread', kind: 'food', price: 380 },
   ],
   hours: { open: h(7), close: h(17), lastArrival: h(16, 45) },
   arrivals: (m) => {
@@ -270,6 +279,13 @@ const PUB: VenueDef = {
     { name: 'packet of crisps', kind: 'food', price: 150 },
     { name: 'bag of pork scratchings', kind: 'food', price: 180 },
     { name: 'cheese toastie', kind: 'food', price: 550 },
+  ],
+  unlocks: [
+    { stars: 2, name: 'craft IPA', kind: 'drink', price: 580 },
+    { stars: 3, name: 'gin and tonic', kind: 'drink', price: 700 },
+    { stars: 3, name: 'scotch egg', kind: 'food', price: 450 },
+    { stars: 4, name: 'negroni', kind: 'drink', price: 900 },
+    { stars: 5, name: 'sharing platter', kind: 'food', price: 1200 },
   ],
   hours: { open: h(12), close: h(23), lastArrival: h(22, 30) },
   arrivals: (m) => {
