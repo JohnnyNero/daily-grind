@@ -32,3 +32,18 @@ export function capitalise(text: string): string {
 export function hhmm(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
+
+/** Wires a panel's `.tabs` buttons to its `.tab-page`s (matched by data-tab). The first tab starts open. */
+export function setupTabs(root: HTMLElement, onChange: (tab: string) => void = () => {}): (tab: string) => void {
+  const buttons = [...root.querySelectorAll<HTMLButtonElement>('.tabs [data-tab]')];
+  const pages = [...root.querySelectorAll<HTMLElement>('.tab-page[data-tab]')];
+  const select = (tab: string) => {
+    for (const b of buttons) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+    for (const p of pages) p.hidden = p.dataset.tab !== tab;
+    root.scrollTop = 0;
+    onChange(tab);
+  };
+  for (const b of buttons) b.addEventListener('click', () => select(b.dataset.tab!));
+  select(buttons[0].dataset.tab!);
+  return select;
+}

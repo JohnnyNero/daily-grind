@@ -1,4 +1,4 @@
-// The top bar, the selected-person sheet and the work-priorities panel.
+// The top bar, the selected-person sheet and the staff panel's jobs and log.
 // Plain DOM over the canvas keeps text crisp.
 
 import { BREAK_LABELS } from '../sim/breaks';
@@ -6,18 +6,13 @@ import { NEEDS, WORK_TYPES, traitDef, type WorkType } from '../sim/defs';
 import type { Sim } from '../sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, type DayStats, type LogEntry, type Pawn, type Recap } from '../sim/state';
 import { moodReasons } from '../sim/thoughts';
+import { paintPortrait } from './characterForm';
+import { el, hhmm, setupTabs } from './dom';
 
 const TOAST_MS = 7000;
 
-function el<T extends HTMLElement>(id: string): T {
-  const node = document.getElementById(id);
-  if (!node) throw new Error(`Missing #${id}`);
-  return node as T;
-}
-
-function hhmm(minutes: number): string {
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-}
+/** Mood reasons shown before "Show more". */
+const TOP_REASONS = 4;
 
 export function pounds(pence: number): string {
   const sign = pence < 0 ? '−' : '';
@@ -62,6 +57,14 @@ export class Hud {
   private reasons = el('reasons');
   private relations = el('relations');
   private wants = el('wants');
+  private more = el('sheet-more');
+  private moreToggle = el<HTMLButtonElement>('sheet-toggle');
+  private portrait = el<HTMLCanvasElement>('sheet-portrait');
+  /** Whether the sheet shows every reason, colleague and want. */
+  private showAll = false;
+  private sheetFor: number | null = null;
+  private portraitKey = '';
+  private summaryKey = '';
   private toast = el<HTMLButtonElement>('toast');
   private events = el('events');
   private recapBox = el('recap');
@@ -102,6 +105,10 @@ export class Hud {
     this.speedButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-speed]')];
     for (const b of this.speedButtons) b.addEventListener('click', () => onSpeed(Number(b.dataset.speed)));
     el('sheet-close').addEventListener('click', onCloseSheet);
+    this.moreToggle.addEventListener('click', () => {
+      this.showAll = !this.showAll;
+    });
+    setupTabs(this.staffPanel);
     el('staff-open').addEventListener('click', () => this.openStaffPanel());
     el('staff-close').addEventListener('click', () => {
       this.staffPanel.hidden = true;
@@ -319,9 +326,13 @@ export class Hud {
       if (condition) this.status.textContent = this.sim.venue.text.conditions[condition.id];
       else this.status.textContent = s.queue.length > 0 ? `${s.queue.length} queuing` : 'Open';
     }
-    if (this.staffPanelOpen) this.daySummary.textContent = summary(s.today, 'Today') + (s.yesterday ? `  ${summary(s.yesterday, 'Yesterday')}` : '');
+    if (this.staffPanelOpen) this.renderSummary(s.today);
 
     this.sheet.hidden = !selected;
+    if ((selected?.id ?? null) !== this.sheetFor) {
+      this.sheetFor = selected?.id ?? null;
+      this.showAll = false;
+    }
     // Corner buttons would sit under an open panel; hide them until it closes.
     document.body.classList.toggle('panel-open', !!selected || this.staffPanelOpen || this.otherPanelOpen());
     if (!selected) return;
@@ -329,6 +340,11 @@ export class Hud {
       ? `${selected.name} (${selected.visit.critic ? 'critic' : selected.visit.regularId !== null ? 'regular' : 'guest'})`
       : selected.name;
     this.activity.textContent = this.sim.activity(selected);
+    const key = `${selected.id}|${selected.look.skin}|${selected.look.hair}|${selected.look.hairStyle}|${selected.look.shirt}`;
+    if (key !== this.portraitKey) {
+      this.portraitKey = key;
+      paintPortrait(this.portrait, selected.look);
+    }
     if (selected.visit) {
       const v = selected.visit;
       const served = v.state === 'toSeat' || v.state === 'eating' || v.state === 'leaving';
@@ -337,6 +353,8 @@ export class Hud {
       this.reasons.hidden = true;
       this.relations.hidden = true;
       this.wants.hidden = true;
+      this.more.hidden = true;
+      this.moreToggle.hidden = true;
       this.moodLabel.textContent = 'Patience';
       this.setMeter(this.moodFill, this.moodValue, v.patience);
       this.needsBox.hidden = true;
@@ -393,7 +411,15 @@ export class Hud {
     }
     this.traits.replaceChildren(...chips);
 
-    this.reasons.replaceChildren(...moodReasons(this.sim, p).map((r) => row(r.label, r.value)));
+    const reasons = moodReasons(this.sim, p).sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+    this.reasons.replaceChildren(...(this.showAll ? reasons : reasons.slice(0, TOP_REASONS)).map((r) => row(r.label, r.value)));
+    this.more.hidden = !this.showAll;
+    this.moreToggle.hidden = false;
+    this.moreToggle.setAttribute('aria-expanded', String(this.showAll));
+    const hiddenReasons = Math.max(0, reasons.length - TOP_REASONS);
+    this.moreToggle.textContent = this.showAll
+      ? 'Show less'
+      : `Show more${hiddenReasons > 0 ? ` (${hiddenReasons} more reason${hiddenReasons === 1 ? '' : 's'})` : ''}`;
 
     const others = this.sim.state.pawns
       .filter((o) => o.staff && o.id !== p.id && !o.staff.quit)
@@ -414,6 +440,29 @@ export class Hud {
     );
   }
 
+  /** Today's numbers at the top of the Team tab. */
+  private renderSummary(d: DayStats): void {
+    const net = d.takings - d.wages;
+    const stats: [string, string, number][] = [
+      ['Served', String(d.served), 0],
+      ['Walked out', String(d.walkouts), d.walkouts > 15 ? -1 : 0],
+      ['Net today', pounds(net), Math.sign(net)],
+    ];
+    const key = stats.map((x) => x[1]).join('|');
+    if (key === this.summaryKey) return;
+    this.summaryKey = key;
+    this.daySummary.replaceChildren(...stats.map(([label, value, sign]) => {
+      const box = document.createElement('div');
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      if (sign !== 0) dd.className = sign < 0 ? 'neg' : 'pos';
+      box.append(dt, dd);
+      return box;
+    }));
+  }
+
   private setMeter(fill: HTMLElement, value: HTMLElement, v: number): void {
     fill.style.width = `${Math.round(v * 100)}%`;
     fill.style.background = meterColour(v);
@@ -421,10 +470,6 @@ export class Hud {
   }
 }
 
-function summary(d: DayStats, label: string): string {
-  const net = d.takings - d.wages;
-  return `${label}: ${d.served} served, ${d.walkouts} walked out, takings ${pounds(d.takings)}, wages ${pounds(d.wages)} (${pounds(net)}).`;
-}
 
 function row(label: string, value: number): HTMLLIElement {
   const li = document.createElement('li');

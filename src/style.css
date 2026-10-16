@@ -11,6 +11,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 html, body {
   margin: 0;
@@ -132,17 +133,25 @@ body.panel-open .corner-buttons, body.panel-open .recentre, body.building .corne
   box-shadow: 0 -6px 24px #0000004d;
 }
 .sheet[hidden] { display: none; }
-.sheet-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.sheet-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.sheet-head > :first-child:not(canvas), .sheet-head .who { flex: 1; min-width: 0; }
+.sheet-head .portrait { width: 48px; height: 48px; flex: 0 0 auto; border-radius: 12px; background: #f1eadd; }
+.sheet .who p { margin: 0; font-size: 13px; }
 .sheet h2 { margin: 0; font-size: 20px; }
 .sheet p { margin: 2px 0 0; color: #5e5446; font-size: 14px; }
 .sheet .close { background: #ece5d8; color: var(--sheet-ink); }
 
 .meter { display: grid; grid-template-columns: 72px 1fr 44px; align-items: center; gap: 10px; font-size: 14px; margin: 6px 0; }
+.needs { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; margin: 6px 0 4px; }
+.needs .meter { grid-template-columns: 1fr 40px; grid-template-areas: "label value" "track track"; gap: 2px 6px; font-size: 12px; margin: 4px 0; color: #5e5446; }
+.needs .meter span { grid-area: label; }
+.needs .meter b { grid-area: value; }
+.needs .meter .track { grid-area: track; height: 6px; }
 .meter b { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .track { height: 10px; border-radius: 5px; background: #e4dccd; overflow: hidden; }
 .fill { height: 100%; border-radius: 5px; background: var(--good); transition: width .25s; }
 .mood .track { height: 14px; border-radius: 7px; }
-.shift { margin-top: 10px !important; font-size: 13px !important; }
+.shift { margin-top: 8px !important; font-size: 13px !important; color: #8a7f70 !important; }
 
 .toast {
   position: fixed;
@@ -246,7 +255,7 @@ button.link {
 }
 button.link[hidden] { display: none; }
 
-.sheet.panel { max-height: 80vh; }
+.sheet.panel { max-height: 80vh; padding-top: 14px; }
 .hint { margin: 0 0 6px !important; font-size: 13px !important; color: #6b6052 !important; }
 .hint.error { color: #b23a2c !important; min-height: 1em; }
 .row { display: flex; gap: 8px; margin-top: 8px; }
@@ -275,19 +284,48 @@ button.danger, .sheet .row button.danger, .recap-card .row button.danger { color
 .card strong { font-size: 15px; }
 .card p { margin: 4px 0 0 !important; }
 .card .row { flex-wrap: wrap; gap: 6px; }
-.card .row button { min-height: 40px; padding: 0 10px; font-size: 13px; }
+.card .row button { min-height: 40px; padding: 0 12px; border: 0; background: #f1eadd; font-size: 13px; }
+.card .row button:disabled { opacity: .5; cursor: default; }
 .shift-edit { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; margin-top: 6px; }
 .shift-edit span { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .menu-list { list-style: none; margin: 0; padding: 0; }
-.menu-list li { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid #ece5d8; font-size: 14px; }
+.menu-list li { display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 4px; align-items: center; padding: 4px 0; border-bottom: 1px solid #ece5d8; font-size: 14px; }
+.menu-list li:last-child { border-bottom: 0; }
+.menu-list .name::first-letter { text-transform: uppercase; }
 .menu-list li.off .name { color: #a89e90; text-decoration: line-through; }
 .menu-list .price { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .menu-list .price.up { color: #b23a2c; }
 .menu-list .price.down { color: #2f6b3c; }
-.menu-list button { min-width: 44px; padding: 0 8px; }
-.menu-list label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: #6b6052; min-height: 44px; }
-.menu-list input[type="checkbox"] { width: 20px; height: 20px; accent-color: #2b2e35; }
+.menu-list button { min-width: 40px; padding: 0 8px; border: 0 !important; background: #f1eadd !important; font-size: 18px !important; }
+.menu-list li.off .price { color: #a89e90; }
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 44px;
+  height: 26px;
+  margin: 0 0 0 8px;
+  border-radius: 13px;
+  background: #d9cdb8;
+  cursor: pointer;
+  transition: background .15s;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px #0000003d;
+  transition: transform .15s;
+}
+.switch:checked { background: var(--good); }
+.switch:checked::after { transform: translateX(18px); }
+.switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #5e5446; }
 .field input { min-height: 44px; padding: 0 12px; border: 1px solid #d9cdb8; border-radius: 10px; font: 500 16px system-ui, sans-serif; color: var(--sheet-ink); background: #fff; }
@@ -316,6 +354,39 @@ button.danger, .sheet .row button.danger, .recap-card .row button.danger { color
 .palette { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
 .palette button { flex: 0 0 auto; flex-direction: column; min-height: 56px !important; line-height: 1.2; }
 .palette button small { font-weight: 500; color: #6b6052; }
+
+/* ---------------------------------------------------------------- tabs and summaries */
+
+.tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  margin: 0 0 14px;
+  padding: 3px;
+  border-radius: 12px;
+  background: #ece5d8;
+}
+.tabs button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: #6b6052;
+  font: 600 14px system-ui, sans-serif;
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: #fff; color: var(--sheet-ink); box-shadow: 0 1px 3px #0000001f; }
+.tab-page > h3:first-child { margin-top: 0; }
+.tab-page > .primary:first-child, .tab-page .hint + .primary { margin-top: 4px; }
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.summary div { background: #f1eadd; border-radius: 10px; padding: 6px 10px; }
+.summary dt { font-size: 11px; color: #6b6052; }
+.summary dd { margin: 1px 0 0; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.summary dd.neg { color: #b23a2c; }
+.summary dd.pos { color: #2f6b3c; }
+#sheet-toggle { margin: 0; }
+#relations-title { margin: 8px 0 2px; }
 
 /* ---------------------------------------------------------------- start screen and character creator */
 
@@ -387,7 +458,8 @@ body.starting .bar, body.starting .corner-buttons, body.starting .recentre { vis
 .choice-card strong { font-size: 17px; }
 .choice-card .hint { margin: 0 !important; }
 
-.card.person { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: start; }
+.card.person { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; }
+.card.person > .portrait { border-radius: 10px; background: #f1eadd; }
 .person-info { min-width: 0; }
 .person .row button { flex: 1; padding: 0 6px; white-space: nowrap; }
 .cards button.portrait-button { padding: 0; min-height: 0; border: 0; border-radius: 12px; background: #f1eadd; }

@@ -56,36 +56,45 @@
     </div>
   </section>
 
-  <section class="sheet panel" id="cafe-panel" hidden aria-label="The café">
+  <section class="sheet panel" id="cafe-panel" hidden aria-labelledby="cafe-title">
     <div class="sheet-head">
-      <div>
-        <h2 id="cafe-title">The café</h2>
-        <p>Prices, furniture and saving.</p>
-      </div>
+      <h2 id="cafe-title">The café</h2>
       <button type="button" class="close" id="cafe-close" aria-label="Close">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3L3 13"/></svg>
       </button>
     </div>
-    <h3>Menu and prices</h3>
-    <p class="hint" id="price-hint"></p>
-    <ul class="menu-list" id="menu-list"></ul>
-    <h3>How it feels</h3>
-    <p class="hint" id="ambience-line"></p>
-    <h3>Regulars</h3>
-    <div class="cards" id="regulars"></div>
-    <h3>Furniture</h3>
-    <button type="button" class="primary" id="build-start">Rearrange and buy furniture</button>
-    <h3>Scrapbook</h3>
-    <ul class="events" id="scrapbook"></ul>
-    <h3>Hall of fame</h3>
-    <ul class="events" id="hall-of-fame"></ul>
-    <h3>Saving</h3>
-    <p class="hint" id="save-status">The café saves itself every day and when you leave.</p>
-    <div class="row wrap">
-      <button type="button" id="save-now">Save now</button>
-      <button type="button" id="save-export">Export save</button>
-      <label class="file-button">Import save<input type="file" id="save-import" accept="application/json,.json"></label>
-      <button type="button" class="danger" id="save-new">New café</button>
+    <div class="tabs" role="tablist" aria-label="Venue sections">
+      <button type="button" role="tab" data-tab="menu">Menu</button>
+      <button type="button" role="tab" data-tab="place">Place</button>
+      <button type="button" role="tab" data-tab="story">Story</button>
+      <button type="button" role="tab" data-tab="save">Save</button>
+    </div>
+    <div class="tab-page" role="tabpanel" data-tab="menu">
+      <p class="hint" id="price-hint"></p>
+      <ul class="menu-list" id="menu-list"></ul>
+    </div>
+    <div class="tab-page" role="tabpanel" data-tab="place" hidden>
+      <p class="hint" id="ambience-line"></p>
+      <button type="button" class="primary" id="build-start">Rearrange and buy furniture</button>
+      <h3>Regulars</h3>
+      <div class="cards" id="regulars"></div>
+    </div>
+    <div class="tab-page" role="tabpanel" data-tab="story" hidden>
+      <h3>Scrapbook</h3>
+      <ul class="events" id="scrapbook"></ul>
+      <h3>Hall of fame</h3>
+      <ul class="events" id="hall-of-fame"></ul>
+    </div>
+    <div class="tab-page" role="tabpanel" data-tab="save" hidden>
+      <p class="hint" id="save-status">Saves itself every day and when you leave.</p>
+      <div class="row wrap">
+        <button type="button" id="save-now">Save now</button>
+        <button type="button" id="save-export">Export</button>
+        <label class="file-button">Import<input type="file" id="save-import" accept="application/json,.json"></label>
+      </div>
+      <h3>Start again</h3>
+      <p class="hint">Opens the new-game screens. This place stays saved until the new one opens.</p>
+      <div class="row"><button type="button" class="danger" id="save-new">New game</button></div>
     </div>
   </section>
 
@@ -103,25 +112,34 @@
     </section>
   </div>
 
-  <section class="sheet panel" id="staff-panel" hidden aria-label="Work priorities">
+  <section class="sheet panel" id="staff-panel" hidden aria-labelledby="staff-title">
     <div class="sheet-head">
-      <div>
-        <h2>Work priorities</h2>
-        <button type="button" class="link" id="recap-open" hidden>Last day's recap</button>
-        <p>Tap to cycle 1 (first) to 4 (last), or off. Small numbers are skill.</p>
-      </div>
+      <h2 id="staff-title">Staff</h2>
       <button type="button" class="close" id="staff-close" aria-label="Close">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l10 10M13 3L3 13"/></svg>
       </button>
     </div>
-    <div class="table-wrap"><table id="priorities"></table></div>
-    <p class="shift" id="day-summary"></p>
-    <h3>Team</h3>
-    <div class="cards" id="team"></div>
-    <h3>Applicants</h3>
-    <div class="cards" id="applicants"></div>
-    <h3>Recent</h3>
-    <ol class="events" id="events"></ol>
+    <div class="tabs" role="tablist" aria-label="Staff sections">
+      <button type="button" role="tab" data-tab="team">Team</button>
+      <button type="button" role="tab" data-tab="jobs">Jobs</button>
+      <button type="button" role="tab" data-tab="hire">Hire</button>
+      <button type="button" role="tab" data-tab="log">Log</button>
+    </div>
+    <div class="tab-page" role="tabpanel" data-tab="team">
+      <dl class="summary" id="day-summary"></dl>
+      <div class="cards" id="team"></div>
+    </div>
+    <div class="tab-page" role="tabpanel" data-tab="jobs" hidden>
+      <p class="hint">Tap a cell to cycle 1 (first) to 4 (last), or off. Small numbers are skill.</p>
+      <div class="table-wrap"><table id="priorities"></table></div>
+    </div>
+    <div class="tab-page" role="tabpanel" data-tab="hire" hidden>
+      <div class="cards" id="applicants"></div>
+    </div>
+    <div class="tab-page" role="tabpanel" data-tab="log" hidden>
+      <button type="button" class="link" id="recap-open" hidden>Last day's recap</button>
+      <ol class="events" id="events"></ol>
+    </div>
   </section>
 
   <div class="overlay" id="recap" hidden>
@@ -137,9 +155,10 @@
     </section>
   </div>
 
-  <section class="sheet" id="sheet" hidden aria-label="Selected person">
+  <section class="sheet" id="sheet" hidden aria-labelledby="sheet-name">
     <div class="sheet-head">
-      <div>
+      <canvas class="portrait" id="sheet-portrait" width="48" height="48" aria-hidden="true"></canvas>
+      <div class="who">
         <h2 id="sheet-name">Name</h2>
         <p id="sheet-activity">Doing something</p>
       </div>
@@ -150,9 +169,13 @@
     <p class="traits" id="sheet-traits"></p>
     <div class="meter mood"><span id="mood-label">Mood</span><div class="track"><div class="fill" id="mood-fill"></div></div><b id="mood-value">0%</b></div>
     <ul class="reasons" id="reasons"></ul>
-    <div id="needs"></div>
-    <ul class="reasons relations" id="relations"></ul>
-    <ul class="reasons wants" id="wants"></ul>
+    <div class="needs" id="needs"></div>
+    <div id="sheet-more">
+      <h3 id="relations-title">Colleagues</h3>
+      <ul class="reasons relations" id="relations"></ul>
+      <ul class="reasons wants" id="wants"></ul>
+    </div>
+    <button type="button" class="link" id="sheet-toggle" aria-expanded="false">More</button>
     <p class="shift" id="sheet-shift"></p>
   </section>
 

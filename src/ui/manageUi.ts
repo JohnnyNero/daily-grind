@@ -11,8 +11,8 @@ import { cleanliness, looks } from '../sim/ambience';
 import type { Pawn, Recap } from '../sim/state';
 import type { Renderer } from '../render/renderer';
 import { pounds } from './hud';
-import { changesOf, CharacterForm, draftOf } from './characterForm';
-import { el, h, hhmm } from './dom';
+import { changesOf, CharacterForm, draftOf, portrait } from './characterForm';
+import { el, h, hhmm, setupTabs } from './dom';
 import { exportSave, importSave, saveToDevice } from './save';
 
 function traitLabels(traits: TraitId[]): string {
@@ -46,10 +46,12 @@ export class TeamUi {
       ...(s.applicants.length === 0 ? [h('p', { className: 'hint' }, 'Nobody has applied yet. Check back tomorrow.')] : []),
       ...s.applicants.map((a, i) => {
         const best = WORK_TYPES.slice().sort((x, y) => a.skills[y.id] - a.skills[x.id])[0];
-        return h('div', { className: 'card' },
+        return h('div', { className: 'card person' },
+          portrait(a.look, 44, a.name),
+          h('div', { className: 'person-info' },
           h('div', { className: 'top' }, h('strong', {}, a.name), h('span', {}, traitLabels(a.traits))),
           h('p', {}, a.backstory),
-          h('p', { className: 'hint' }, `Best at ${best.label.toLowerCase()} (skill ${Math.floor(a.skills[best.id])}). Starts on 09:00–17:00.`),
+          h('p', { className: 'hint' }, `Best at ${best.label.toLowerCase()} (skill ${Math.floor(a.skills[best.id])}) · 09:00–17:00`),
           h('div', { className: 'row' },
             h('button', {
               type: 'button',
@@ -61,7 +63,7 @@ export class TeamUi {
                 this.onChange();
               },
             }, full ? 'Team is full' : `Hire ${a.name}`),
-          ),
+          )),
         );
       }),
     );
@@ -69,17 +71,18 @@ export class TeamUi {
 
   private card(p: Pawn): HTMLElement {
     const status = p.onMap ? this.sim.activity(p) : p.staff!.sickDay === this.sim.day ? 'Off sick' : 'Not in';
-    const card = h('div', { className: 'card' },
+    const info = h('div', { className: 'person-info' },
       h('div', { className: 'top' }, h('strong', {}, p.name), h('span', {}, `${hhmm(p.shift.start)}–${hhmm(p.shift.end)}`)),
       h('p', { className: 'hint' }, `${traitLabels(p.staff!.traits)} · ${status}`),
     );
-    if (this.openShift === p.id) card.append(this.shiftEditor(p));
+    const card = h('div', { className: 'card person' }, portrait(p.look, 44, p.name), info);
+    if (this.openShift === p.id) info.append(this.shiftEditor(p));
     const act = (fn: () => string | null) => () => {
       const err = fn();
       if (err) this.hooks.notify(err, 'bad');
       this.render();
     };
-    card.append(h('div', { className: 'row' },
+    info.append(h('div', { className: 'row' },
       h('button', { type: 'button', 'aria-expanded': String(this.openShift === p.id), onclick: () => { this.openShift = this.openShift === p.id ? null : p.id; this.render(); } }, 'Shift'),
       h('button', { type: 'button', disabled: !p.onMap, onclick: act(() => orderBreak(this.sim, p)) }, 'Break now'),
       h('button', { type: 'button', disabled: !p.onMap, onclick: act(() => sendHomeEarly(this.sim, p)) }, 'Send home'),
@@ -161,6 +164,7 @@ export class CafeUi {
   private resetting = false;
 
   constructor(private readonly sim: Sim, private readonly hooks: ManageHooks, startBuild: () => void) {
+    setupTabs(this.panel);
     el('cafe-open').addEventListener('click', () => {
       this.hooks.closePanels();
       this.render();
@@ -266,10 +270,10 @@ export class CafeUi {
         h('button', { type: 'button', 'aria-label': `${m.name} 10p cheaper`, onclick: change(() => setPrice(this.sim, m.name, m.price - 10)) }, '−'),
         h('span', { className: cls }, `£${(m.price / 100).toFixed(2)}`),
         h('button', { type: 'button', 'aria-label': `${m.name} 10p dearer`, onclick: change(() => setPrice(this.sim, m.name, m.price + 10)) }, '+'),
-        h('label', {}, h('input', {
-          type: 'checkbox', checked: m.enabled,
+        h('input', {
+          type: 'checkbox', role: 'switch', className: 'switch', checked: m.enabled, 'aria-label': `Sell ${m.name}`,
           onchange: change(() => setEnabled(this.sim, m.name, !m.enabled)),
-        }), 'On'),
+        }),
       );
     }));
   }

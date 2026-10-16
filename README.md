@@ -37,17 +37,16 @@ The start screen offers **Continue** (your saved place), **New game** and **Impo
 
 ## Venues
 
-There are two so far: **the café** (mornings, flat whites, cake) and **the pub** (evenings, pints, crisps, quiz night, stag dos). To switch, go to the venue panel and tap *New café*, which takes you to the new-game screens. Or add `?venue=pub` to the address to skip straight in. Venues live in `src/sim/venues.ts`, so adding one is mostly data.
+There are two so far: **the café** (mornings, flat whites, cake) and **the pub** (evenings, pints, crisps, quiz night, stag dos). To switch, open the venue panel's **Save** tab and tap *New game*. Or add `?venue=pub` to the address to skip straight in. Venues live in `src/sim/venues.ts`, so adding one is mostly data.
 
 ## Controls
 
 - Drag to pan, pinch (or scroll wheel) to zoom; the corner button fits the café back on screen.
-- Tap a person to see what they're doing. Staff show their traits, mood and every reason behind it, needs, and how they feel about each colleague. Guests show their order and patience.
-- Events (rows, romances, meltdowns, quitting, coach parties, a broken machine, the critic) pop up at the top; tap one to jump to that person. The Staff panel keeps a Recent list.
+- Tap a person to see what they're doing. Staff show their traits, mood and its biggest reasons, and needs; *Show more* adds every reason, how they feel about each colleague and what they want. Guests show their order and patience.
+- Events (rows, romances, meltdowns, quitting, coach parties, a broken machine, the critic) pop up at the top; tap one to jump to that person.
 - When the café shuts, the day's recap appears: the numbers, the best stories, a review and the star of the day. Tap **Next day** to carry on.
-- **Staff** also has your team (edit shifts, *Break now*, *Send home*, *Edit* names, looks and traits, or let someone go) and applicants to hire.
-- **Café** has menu prices and on/off switches, build mode (move, buy and sell furniture) and saving: *Save now*, *Export save*, *Import save*, *New café*. The game also saves itself on this device every day and when you leave.
-- **Staff** (bottom right) opens work priorities: tap a cell to cycle 1 (first) to 4 (last), or off. Staff take the nearest job at their highest priority, unless a need is urgent.
+- **Staff** (bottom right) has four tabs: **Team** (today's numbers; edit shifts, *Break now*, *Send home*, *Edit* names, looks and traits, or let someone go), **Jobs** (work priorities: tap a cell to cycle 1 first to 4 last, or off; staff take the nearest job at their highest priority unless a need is urgent), **Hire** (applicants) and **Log** (recent events and the last recap).
+- **Café** has **Menu** (prices and on/off switches), **Place** (how it feels, build mode to move, buy and sell furniture, and your regulars), **Story** (scrapbook and hall of fame) and **Save** (*Save now*, *Export*, *Import*, *New game*). The game also saves itself on this device every day and when you leave.
 - Pause, 1×, 3×, 6× in the top bar. While nobody is on site the clock skips ahead to the morning.
 
 ## Layout
