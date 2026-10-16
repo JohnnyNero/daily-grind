@@ -204,6 +204,11 @@ export class Sim {
     return a < b ? `${a}:${b}` : `${b}:${a}`;
   }
 
+  /** Whether two people are a couple, without creating a relation record just by asking. */
+  together(a: number, b: number): boolean {
+    return this.state.relations[this.pairKey(a, b)]?.together === true;
+  }
+
   relation(a: number, b: number): Relation {
     const key = this.pairKey(a, b);
     return (this.state.relations[key] ??= { romance: 0, together: false });

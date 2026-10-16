@@ -239,8 +239,22 @@ export function footprint(def: string, x: number, y: number): [number, number][]
   return out;
 }
 
+/** Someone is using it, sitting at it, or on their way to clear it. */
 function inUse(sim: Sim, o: ObjectInst): boolean {
-  return Object.keys(sim.state.reservations).some((k) => k.startsWith(`obj:${o.id}:`));
+  return Object.keys(sim.state.reservations).some((k) => k.startsWith(`obj:${o.id}:`) || k === `dish:${o.id}`);
+}
+
+/** Tiles someone has claimed to stand or sit on (a seat they're heading for, say). */
+function claimedSpots(sim: Sim): [number, number][] {
+  const out: [number, number][] = [];
+  for (const key of Object.keys(sim.state.reservations)) {
+    const [kind, id, spot] = key.split(':');
+    if (kind !== 'obj') continue;
+    const o = sim.world.objectById(Number(id));
+    const at = o ? objectDef(o.def).spots[Number(spot)] : undefined;
+    if (o && at) out.push([o.x + at[0], o.y + at[1]]);
+  }
+  return out;
 }
 
 /** Null if `def` can stand at (x, y); otherwise why not. `ignore` is the object being moved. */
@@ -260,6 +274,7 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
       if (footprint(o.def, o.x, o.y).some(([ox, oy]) => ox === tx && oy === ty)) return 'Something is already there.';
     }
     if (d.blocks && sim.state.pawns.some((p) => p.onMap && Math.round(p.x) === tx && Math.round(p.y) === ty)) return 'Someone is standing there.';
+    if (d.blocks && claimedSpots(sim).some(([cx, cy]) => cx === tx && cy === ty)) return "Someone's about to sit there.";
   }
   for (const [dx, dy] of d.spots) {
     const sx = x + dx;
@@ -288,6 +303,12 @@ export function reachProblem(sim: Sim): string | null {
   }
   const reach = (x: number, y: number) => sim.world.inBounds(x, y) && seen[y * s.w + x] === 1;
   if (mustReach(sim).some(([x, y]) => !reach(x, y))) return 'That would block the counter.';
+  // Nobody on the premises may be shut in. Someone between tiles counts if either side is open.
+  for (const p of s.pawns) {
+    if (!p.onMap) continue;
+    const [fx, fy, cx, cy] = [Math.floor(p.x), Math.floor(p.y), Math.ceil(p.x), Math.ceil(p.y)];
+    if (![[fx, fy], [cx, cy], [fx, cy], [cx, fy]].some(([x, y]) => reach(x, y))) return `That would shut ${p.name} in.`;
+  }
   for (const o of s.objects) {
     const spots = sim.world.spots(o);
     if (spots.length > 0 && !spots.some(([x, y]) => reach(x, y))) return `That would block the ${objectDef(o.def).label.toLowerCase()}.`;

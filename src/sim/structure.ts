@@ -98,8 +98,11 @@ function plan(sim: Sim, x: number, y: number, tool: StructureTool): { tile: Tile
   return { tile: { ...t, floor: tool.floor }, cost: BUILD_PRICES.floor };
 }
 
-/** Changes one tile, or says why not. Charges for it. */
-export function buildAt(sim: Sim, x: number, y: number, tool: StructureTool): string | null {
+/**
+ * Changes one tile, or says why not. Charges for it, and adds the cost to `ledger`
+ * (a snapshot taken before the work) so undoing refunds exactly what was spent.
+ */
+export function buildAt(sim: Sim, x: number, y: number, tool: StructureTool, ledger?: LayoutSnapshot): string | null {
   const p = plan(sim, x, y, tool);
   if (typeof p === 'string') return p;
   if (!p.tile) return null;
@@ -113,6 +116,7 @@ export function buildAt(sim: Sim, x: number, y: number, tool: StructureTool): st
     return blocked;
   }
   s.money -= p.cost;
+  if (ledger) ledger.spent += p.cost;
   sim.reroute();
   return null;
 }
@@ -125,18 +129,18 @@ export function buildProblem(sim: Sim, x: number, y: number, tool: StructureTool
 
 export interface LayoutSnapshot {
   tiles: Tile[];
-  money: number;
+  /** Spent on building since the snapshot (when passed to buildAt as its ledger). */
+  spent: number;
 }
 
 export function snapshotLayout(sim: Sim): LayoutSnapshot {
-  return { tiles: sim.state.tiles.map((t) => ({ ...t })), money: sim.state.money };
+  return { tiles: sim.state.tiles.map((t) => ({ ...t })), spent: 0 };
 }
 
 /** Puts the walls and floors back as they were (and the money spent on them), if it's still possible. */
 export function restoreLayout(sim: Sim, snap: LayoutSnapshot): string | null {
   const s = sim.state;
   const current = s.tiles;
-  const spent = snap.money - s.money;
   for (let i = 0; i < current.length; i++) {
     const was = snap.tiles[i];
     if (!was.wall || current[i].wall) continue;
@@ -151,7 +155,8 @@ export function restoreLayout(sim: Sim, snap: LayoutSnapshot): string | null {
     s.tiles = current;
     return blocked;
   }
-  s.money += Math.max(0, spent);
+  s.money += snap.spent;
+  snap.spent = 0;
   sim.reroute();
   return null;
 }

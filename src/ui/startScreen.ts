@@ -79,7 +79,10 @@ class StartScreen {
       importInput.value = '';
       if (!file) return;
       try {
-        this.finish(deserialize(await file.text()));
+        const loaded = deserialize(await file.text());
+        const saved = this.opts.saved;
+        if (saved && !confirm(`This replaces ${saved.venue.name.toLowerCase()} you're running (day ${saved.day}). Export it from the venue panel first if you want to keep it.\n\nLoad the save?`)) return;
+        this.finish(loaded);
       } catch (err) {
         status.textContent = (err as Error).message;
       }
@@ -160,7 +163,7 @@ class StartScreen {
           onclick: () => {
             const added = addStarter(sim);
             if (typeof added === 'string') this.team(added);
-            else this.edit(added);
+            else this.edit(added, true);
           },
         }, staff.length >= MAX_STAFF ? 'Team is full' : 'Add someone'),
         h('button', { type: 'button', onclick: () => { for (const p of staffOf(sim)) rerollStarter(sim, p); this.team(); } }, 'Shuffle everyone')),
@@ -178,11 +181,16 @@ class StartScreen {
 
   // ---------------------------------------------------------------- creator
 
-  private edit(p: Pawn): void {
+  /** `isNew`: they were just added, so Cancel takes them off the team again. */
+  private edit(p: Pawn, isNew = false): void {
     const sim = this.draft!;
     // Surprise me changes the person straight away, so Cancel puts them back as they were.
     const before = { name: p.name, look: { ...p.look }, traits: [...p.staff!.traits], skills: { ...p.staff!.skills } };
     const cancel = () => {
+      if (isNew && removeStarter(sim, p) === null) {
+        this.team();
+        return;
+      }
       Object.assign(p, { name: before.name, look: before.look });
       Object.assign(p.staff!, { traits: before.traits, skills: before.skills });
       this.team();

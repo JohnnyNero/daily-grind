@@ -34,16 +34,42 @@ export function hhmm(minutes: number): string {
 }
 
 /** Wires a panel's `.tabs` buttons to its `.tab-page`s (matched by data-tab). The first tab starts open. */
+let tabIds = 0;
 export function setupTabs(root: HTMLElement, onChange: (tab: string) => void = () => {}): (tab: string) => void {
   const buttons = [...root.querySelectorAll<HTMLButtonElement>('.tabs [data-tab]')];
   const pages = [...root.querySelectorAll<HTMLElement>('.tab-page[data-tab]')];
+  const prefix = `tab${++tabIds}`;
+  for (const b of buttons) {
+    const page = pages.find((p) => p.dataset.tab === b.dataset.tab);
+    b.id = `${prefix}-${b.dataset.tab}`;
+    if (page) {
+      page.id = `${prefix}-${b.dataset.tab}-page`;
+      b.setAttribute('aria-controls', page.id);
+      page.setAttribute('aria-labelledby', b.id);
+    }
+  }
   const select = (tab: string) => {
-    for (const b of buttons) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+    for (const b of buttons) {
+      const on = b.dataset.tab === tab;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
     for (const p of pages) p.hidden = p.dataset.tab !== tab;
     root.scrollTop = 0;
     onChange(tab);
   };
-  for (const b of buttons) b.addEventListener('click', () => select(b.dataset.tab!));
+  buttons.forEach((b, i) => {
+    b.addEventListener('click', () => select(b.dataset.tab!));
+    // Arrow keys move between tabs, as screen-reader users expect.
+    b.addEventListener('keydown', (e) => {
+      const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      const next = buttons[(i + step + buttons.length) % buttons.length];
+      select(next.dataset.tab!);
+      next.focus();
+    });
+  });
   select(buttons[0].dataset.tab!);
   return select;
 }

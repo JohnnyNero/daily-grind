@@ -174,8 +174,12 @@ export class BuildUi {
   /** A second finger landed: they meant to pinch, so put back whatever the first finger did. */
   dragCancel(): void {
     if (this.stroke) {
-      restoreLayout(this.sim, this.stroke.before);
-      this.stroke = null;
+      const err = this.stroke.changed > 0 ? restoreLayout(this.sim, this.stroke.before) : null;
+      if (err) {
+        this.finishStroke(`Couldn't take that back: ${err.charAt(0).toLowerCase()}${err.slice(1)} Use Undo once they've moved.`);
+      } else {
+        this.stroke = null;
+      }
       this.renderer.rebuildStatic();
     }
     this.drag = null;
@@ -228,26 +232,36 @@ export class BuildUi {
     const st = this.stroke!;
     if (st.last && st.last[0] === tx && st.last[1] === ty) return;
     st.last = [tx, ty];
-    if (st.changed > 0 && restoreLayout(this.sim, st.before) !== null) return;
+    if (st.changed > 0) {
+      const err = restoreLayout(this.sim, st.before);
+      if (err) {
+        // Someone wandered into the work: keep what's done so far and stop here.
+        this.finishStroke(`Stopped there: ${err.charAt(0).toLowerCase()}${err.slice(1)}`);
+        return;
+      }
+    }
     st.changed = 0;
     st.problem = null;
     const s = this.sim.state;
     for (const [x, y] of this.strokeTiles(tx, ty)) {
       if (!this.sim.world.inBounds(x, y)) continue;
       const before = s.tiles[y * s.w + x];
-      const err = buildAt(this.sim, x, y, this.structureTool);
+      const err = buildAt(this.sim, x, y, this.structureTool, st.before);
       if (err) st.problem ??= err;
       else if (s.tiles[y * s.w + x] !== before) st.changed++;
     }
     this.renderer.rebuildStatic();
   }
 
-  private finishStroke(): void {
+  private finishStroke(note: string | null = null): void {
     const st = this.stroke!;
     this.stroke = null;
-    if (st.changed > 0) {
+    if (note && st.changed > 0) {
       this.undo = st.before;
-      const spent = st.before.money - this.sim.state.money;
+      this.hooks.notify(note, 'bad');
+    } else if (st.changed > 0) {
+      this.undo = st.before;
+      const spent = st.before.spent;
       if (st.problem) this.hooks.notify(`Some of it was skipped: ${st.problem.charAt(0).toLowerCase()}${st.problem.slice(1)}`, 'bad');
       else if (spent > 0) this.hooks.notify(`Building work: ${pounds(spent)}.`, 'neutral');
     } else if (st.problem) {

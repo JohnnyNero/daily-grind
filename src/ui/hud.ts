@@ -65,6 +65,7 @@ export class Hud {
   private sheetFor: number | null = null;
   private portraitKey = '';
   private summaryKey = '';
+  private detailsKey = '';
   private toast = el<HTMLButtonElement>('toast');
   private events = el('events');
   private recapBox = el('recap');
@@ -240,7 +241,7 @@ export class Hud {
     }
     const body = table.createTBody();
     for (const p of this.sim.state.pawns) {
-      if (!p.staff) continue;
+      if (!p.staff || p.staff.quit) continue;
       const row = body.insertRow();
       const name = document.createElement('th');
       name.scope = 'row';
@@ -357,6 +358,7 @@ export class Hud {
       this.wants.hidden = true;
       this.more.hidden = true;
       this.moreToggle.hidden = true;
+      this.detailsKey = '';
       this.moodLabel.textContent = 'Patience';
       this.setMeter(this.moodFill, this.moodValue, v.patience);
       this.needsBox.hidden = true;
@@ -391,6 +393,18 @@ export class Hud {
 
   private renderStaffDetails(p: Pawn): void {
     const staff = p.staff!;
+    // Rebuilding these lists every frame is costly on a phone: only redo them when something shown changed.
+    const reasons = moodReasons(this.sim, p).sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+    const others = this.sim.state.pawns
+      .filter((o) => o.staff && o.id !== p.id && !o.staff.quit)
+      .map((o) => ({ o, op: this.sim.opinion(p, o), together: this.sim.together(p.id, o.id) }))
+      .sort((a, b) => Number(b.together) - Number(a.together) || Math.abs(b.op) - Math.abs(a.op));
+    const key = JSON.stringify([
+      p.id, this.showAll, staff.traits, staff.mentalBreak?.kind, staff.inspiration?.kind,
+      reasons.map((r) => [r.label, r.value]), others.map((x) => [x.o.name, x.op, x.together]), staff.wants.map((w) => w.label),
+    ]);
+    if (key === this.detailsKey) return;
+    this.detailsKey = key;
     this.traits.hidden = false;
     this.reasons.hidden = false;
     this.relations.hidden = false;
@@ -415,7 +429,6 @@ export class Hud {
     }
     this.traits.replaceChildren(...chips);
 
-    const reasons = moodReasons(this.sim, p).sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
     this.reasons.replaceChildren(...(this.showAll ? reasons : reasons.slice(0, TOP_REASONS)).map((r) => row(r.label, r.value)));
     this.more.hidden = !this.showAll;
     this.moreToggle.hidden = false;
@@ -425,10 +438,6 @@ export class Hud {
       ? 'Show less'
       : `Show more${hiddenReasons > 0 ? ` (${hiddenReasons} more reason${hiddenReasons === 1 ? '' : 's'})` : ''}`;
 
-    const others = this.sim.state.pawns
-      .filter((o) => o.staff && o.id !== p.id && !o.staff.quit)
-      .map((o) => ({ o, op: this.sim.opinion(p, o), together: this.sim.relation(p.id, o.id).together }))
-      .sort((a, b) => Number(b.together) - Number(a.together) || Math.abs(b.op) - Math.abs(a.op));
     this.relations.replaceChildren(
       ...others.map(({ o, op, together }) => row(`${o.name}: ${together ? 'partner' : relationLabel(op)}`, op)),
     );

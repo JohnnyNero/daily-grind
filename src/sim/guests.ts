@@ -188,8 +188,18 @@ export function guestTick(sim: Sim, p: Pawn): void {
         leave(sim, p);
         return;
       }
-      if (at(p, seat[0], seat[1])) v.state = 'eating';
-      else goTo(sim, p, 'Finding a seat', seat[0], seat[1]);
+      if (at(p, seat[0], seat[1])) {
+        v.state = 'eating';
+        return;
+      }
+      const go = sim.gotoStep(seat[0], seat[1]);
+      go.path = sim.pathFrom(p, seat[0], seat[1]);
+      // The way to the seat got blocked (furniture moved, a wall went up): take it away instead.
+      if (!go.path) {
+        leave(sim, p);
+        return;
+      }
+      p.job = sim.makeJob('Finding a seat', [go]);
       return;
     }
     case 'eating': {
