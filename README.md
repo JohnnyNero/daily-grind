@@ -39,17 +39,46 @@ The start screen offers **Continue** (your saved place), **New game** and **Impo
 
 There are two so far: **the café** (mornings, flat whites, cake) and **the pub** (evenings, pints, crisps, quiz night, stag dos). To switch, open the venue panel's **Save** tab and tap *New game*. Or add `?venue=pub` to the address to skip straight in. Venues live in `src/sim/venues.ts`, so adding one is mostly data.
 
+## How it plays
+
+You run the place; your staff decide what to do. The puzzle is keeping it running as it gets busier, and the people are both the problem and the reward.
+
+- **Fame and stars.** Happy customers spread the word, walkouts, queues out the door and bad reviews undo it, and it fades a little each night. Fame brings more customers; fame times reputation gives the 1–5 star rating in the top bar. A good café gets busier until the layout and the team are the limit.
+- **Money.** Takings in; wages (each person's own, rising with skill and raises), ingredients (18% of the usual price of everything made), rent and business rates (which rise with the value of your fit-out), repairs and services out. People pay up to 8% more per star without minding. In the red you pay overdraft fees, wages go out late below £250 overdrawn, and below £500 the bank stops lending for furniture and building work. Nothing ends the game; recovering takes days.
+- **Skill and passions.** Skill sets speed (0.4× to 1.6×) and quality, grows slowly with practice, and much faster in what someone loves (an orange dot on the Jobs grid). Switching between kinds of work costs a little settling-in time, so specialists win.
+- **Machines** wear with every drink: worn ones make worse drinks and break down more. A service (£60, Place tab) makes them new; a bodge repair doesn't.
+- **Stress and days off.** Shifts, rushes, low mood and long days build stress; time off eases it. Past 60 it shows in mood, past 85 people are burnt out and sometimes off sick with it. Everyone has a day off a week (set them in the shift editor); the top bar shows the weekday.
+- **Rushes** are announced 15–30 minutes ahead and grow with fame. Coach parties in the café, stag dos in the pub.
+
 ## Controls
 
-- Drag to pan, pinch (or scroll wheel) to zoom; the corner button fits the café back on screen.
-- Tap a person to see what they're doing. Staff show their traits, mood and its biggest reasons, and needs; *Show more* adds every reason, how they feel about each colleague and what they want. Guests show their order and patience.
-- Events (rows, romances, meltdowns, quitting, coach parties, a broken machine, the critic) pop up at the top; tap one to jump to that person.
-- When the café shuts, the day's recap appears: the numbers, the best stories, a review and the star of the day. Tap **Next day** to carry on.
-- **Staff** (bottom right) has four tabs: **Team** (today's numbers; edit shifts, *Break now*, *Send home*, *Edit* names, looks and traits, or let someone go), **Jobs** (work priorities: tap a cell to cycle 1 first to 4 last, or off), **Hire** (applicants) and **Log** (recent events and the last recap).
-- **Who does what:** each Team card has a **Station** (till, barista, floor, dishes, cleaning, or *Wherever needed*). Staff stick to their station: when it's quiet they wait at their post, and only help elsewhere after about 8 in-game minutes with nothing to do, straight away if another area is in a rush (4+ in the queue, 4+ drinks waiting, 3+ dirty tables, 8+ cups by the sink, 2+ spills) or nobody covers it, or when a need gets urgent. Staff without a station settle into whatever they start and stay on it the same way (4 minutes before drifting; a higher-priority job wins after a 20-minute stint). Helping shows as "(helping out)".
-- **Café** has **Menu** (prices and on/off switches), **Place** (how it feels, *Build and rearrange*, and your regulars), **Story** (scrapbook and hall of fame) and **Save** (*Save now*, *Export*, *Import*, *New game*). The game also saves itself on this device every day and when you leave.
-- **Build mode** has three tabs. **Furniture**: drag anything to move it (it shows green where it fits, red where it doesn't), tap it to sell, or pick something from the row to buy, drag it into place and tap *Buy*. **Walls**: drag to draw a straight wall (£25 a tile), tap a wall to put a door in it (£60), or drag a box to knock walls and doors out (free). **Floors**: drag a box to lay wood, carpet, counter, kitchen, staff room or toilet floor (£5 a tile); kitchen, staff room and toilet floors decide where the oven, staff sofa or toilet can go. The outer walls, shop front and pavement are shaded and stay put, and anything that would cut people off from the counter or a piece of furniture is refused. *Undo* takes back the last stroke and refunds it. Two fingers (or a right-drag on a computer) move the view.
-- Pause, 1×, 3×, 6× in the top bar. While nobody is on site the clock skips ahead to the morning.
+- Drag to pan, pinch (or scroll wheel) to zoom; the corner button fits the café back on screen. Pause, 1×, 3×, 6× in the top bar; while nobody's working the clock skips ahead to the morning.
+- **Alerts** under the top bar say what's wrong right now (nobody on the till, a rush coming, someone close to breaking, washing up piling up, in the red...). Tap one to jump to the person or panel.
+- **Inbox**: big news and decisions (a raise request, a rival trying to poach someone, a friend thinking of following someone out). Decisions wait until closing time the next day, then take their first option.
+- **Calls**: three direct orders for a crisis, each with a cost and a cooldown. *All hands* (20 minutes of nobody waiting at their post; a little stress), *Close the doors* (no arrivals for 20 minutes; a little fame), *Comp a round* (everyone waiting gets patience back; costs money, earns fame).
+- Tap a person to see what they're doing: traits, mood and its biggest reasons, stress and needs; *Show more* adds every reason, how they feel about each colleague and what they want. Guests show their order and patience.
+- Events pop up at the top; tap one to jump to that person. When the place shuts, the day's recap appears.
+- **Staff** has four tabs. **Team**: today's numbers; each card has a **Station** and an **In a rush** station, *Shift* (hours and days off), *Break now*, *Send home*, *Edit* (name, looks, traits and catchphrases), *Live in* (once there's a staff flat) and *Lead* (one shift lead, +£1.50/h: a lead in good spirits steadies the team, one in a foul mood drags it down). **Jobs**: work priorities, and walking time per task (long walks mean the layout is costing you). **Hire**: applicants, with their passions and asking wage. **Log**.
+- **Who does what:** staff stick to their station: when it's quiet they wait at their post, and only help elsewhere after about 8 in-game minutes with nothing to do, straight away if another area is in a rush (4+ queuing, 4+ drinks waiting, 3+ dirty tables, 8+ cups by the sink, 2+ spills) or nobody covers it, or when a need gets urgent. Without a station they settle into whatever they start (4 minutes before drifting; a better-priority job wins after a 20-minute stint). Helping shows as "(helping out)".
+- **Café** has **Menu** (prices and on/off switches), **Place** (stars and capacity, how it feels, *Build and rearrange*, machines, the staff flat, running costs, regulars), **Goals** (goals, the diary, weekly reports, scrapbook, hall of fame) and **Save**. The game also saves itself on this device every day and when you leave.
+- **Build mode**: **Furniture** (drag to move, tap to sell, pick from the row to buy, *Footfall* shows where people walk), **Walls** (straight walls £25 a tile, doors £60, knock out for free) and **Floors** (£5 a tile; kitchen, staff room, toilet and staff flat floors decide what goes where). The outer walls, shop front and pavement stay put, and anything that would cut people off is refused. *Undo* takes back the last stroke. Two fingers (or right-drag) move the view.
+
+## Goals and big days
+
+- Three **goals** at a time (serve N in a day, a day with hardly any walkouts, the next star, more regulars, train someone up, a week's profit, close with everyone happy), each with a deadline and a cash reward.
+- The **diary**, announced a few days ahead: the **food festival** every two weeks (about 1.7× customers all day), the **health inspection** every three weeks at 11:00 (pass for fame and a council payment), and **Café of the Year** judging every four weeks (three stars, almost no walkouts and a clean room wins £500).
+- **Stars unlock** new menu items (a bigger menu draws a few more people), critics (from 2★), office catering orders (from 2★) and influencers (from 4★).
+- A **weekly report** in the Inbox and on the Goals tab.
+
+## People
+
+- Rows and meltdowns upset whoever sees them. Couples who fall out split up, and exes on shift together are miserable. Couples sometimes vanish from the floor together.
+- When someone leaves, a close friend who isn't happy either may follow (unless you talk them round). Good people ask for raises, and from two stars rivals try to poach them. Work anniversaries every 30 days.
+- **Catchphrases**: up to three lines per person in the character editor, for recreating real colleagues. They come out in conversation.
+
+## The staff flat
+
+Every venue has an empty plot alongside. Build a flat there by hand (Staff flat floor, beds, a telly, sofas, a fridge) or in one go for £1,500 from the Place tab. Staff can then **live in** (one per bed): they stay on site off shift and live there (telly, snacks, each other, bed at bedtime), pay £8 a night, and never miss a shift to the commute. The view only takes in the plot once something's built on it.
 
 ## Layout
 
@@ -68,6 +97,16 @@ src/
     storyteller.ts  when events happen and which: rhythm, scaling, adaptation
     tales.ts     the recap: picking fresh stories, headlines, reviews
     manage.ts    everything the player changes: rota, hiring, menu, furniture, saving
+    business.ts  fame, stars, demand, capacity, prices, costs, machine wear
+    books.ts     the overnight books: rent, the week, and the morning's checks
+    stakes.ts    stress, burnout, days off and debt
+    letters.ts   the inbox: big news and decisions
+    alerts.ts    standing alerts, worked out from the state
+    calls.ts     the manager's direct orders
+    careers.ts   raises, poaching, shift leads, anniversaries, friends following
+    goals.ts     goals, the diary of big days, star unlocks, weekly reports
+    flat.ts      the staff flat and live-ins
+    normalize.ts fills in new fields for new games and older saves
     structure.ts building work: walls, doors and floors, and what keeps the layout usable
     regulars.ts  guests who come back, remember, and hold grudges
     wants.ts     what each staff member would like to happen

@@ -290,7 +290,7 @@ function collect(sim: Sim, p: Pawn): void {
     const review = writeReview(sim, p, satisfaction, server);
     s.today.reviews.push(review);
     // Reviews outlive the visit: a stinker online costs custom for weeks.
-    if (!v.critic) addFame(sim, review.stars <= 2 ? -1.5 : review.stars === 5 ? 0.8 : 0);
+    if (!v.critic) addFame(sim, review.stars <= 2 ? -0.08 : review.stars === 5 ? 0.06 : 0);
     if (v.critic) sim.log(`The critic's verdict, ${'★'.repeat(review.stars)}: ${review.text}`, review.stars >= 4 ? 'good' : 'bad', p.id, review.stars === 5 ? 'criticRave' : 'critic', 8);
   }
   regularServed(sim, p, satisfaction, server);
@@ -382,7 +382,7 @@ export function walkOut(sim: Sim, p: Pawn): void {
   if (v.critic || random(s) < 0.5) {
     const review = writeReview(sim, p, 0, undefined);
     s.today.reviews.push(review);
-    if (!v.critic) addFame(sim, -1.5);
+    if (!v.critic) addFame(sim, -0.08);
     if (v.critic) sim.log(`The critic walked out. Tomorrow's paper: ${review.text}`, 'bad', null, 'criticWalkout', 9);
   }
   s.today.walkouts++;

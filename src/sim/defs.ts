@@ -174,7 +174,7 @@ export type Skills = Record<WorkType, number>;
 
 /** Base minutes for each task at skill 5; skill scales speed from 0.6x to 1.4x. */
 export const TASK_MINUTES = {
-  takeOrder: 1,
+  takeOrder: 0.6,
   plateCake: 0.5,
   placeItem: 0.15,
   pickDishes: 0.3,
