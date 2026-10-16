@@ -89,6 +89,8 @@ export class BuildUi {
 
   start(): void {
     this.bar.hidden = false;
+    this.renderer.showPlot = true;
+    this.hooks.refit?.();
     document.body.classList.add('building');
     this.undo = null;
     this.selectTab('furniture');
@@ -96,6 +98,8 @@ export class BuildUi {
 
   stop(): void {
     this.bar.hidden = true;
+    this.renderer.showPlot = false;
+    this.hooks.refit?.();
     document.body.classList.remove('building');
     this.undo = null;
     this.clear();

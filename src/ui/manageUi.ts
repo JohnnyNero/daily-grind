@@ -12,6 +12,7 @@ import { changesOf, CharacterForm, draftOf, portrait } from './characterForm';
 import { el, h, hhmm, setupTabs } from './dom';
 import { pounds } from './hud';
 import { setLead } from '../sim/careers';
+import { FLAT_COST, FLAT_RENT, beds, buildStaffFlat, hasFlat, liveIns, setLivesIn } from '../sim/flat';
 import { STRESS_STRAINED, WEEKDAYS, weekday } from '../sim/stakes';
 import { weekProfit } from '../sim/goals';
 import {
@@ -35,6 +36,8 @@ export interface ManageHooks {
   notify(text: string, tone?: 'good' | 'bad' | 'neutral'): void;
   closePanels(): void;
   showRecap(recap: Recap): void;
+  /** Re-frames the view (after building on the back plot, say). */
+  refit?: () => void;
 }
 
 // ------------------------------------------------------------------ team
@@ -101,6 +104,14 @@ export class TeamUi {
       h('button', { type: 'button', disabled: !p.onMap, onclick: act(() => orderBreak(this.sim, p)) }, 'Break now'),
       h('button', { type: 'button', disabled: !p.onMap, onclick: act(() => sendHomeEarly(this.sim, p)) }, 'Send home'),
       h('button', { type: 'button', onclick: () => this.editor.open(p) }, 'Edit'),
+      ...(hasFlat(this.sim) || p.staff!.livesIn ? [h('button', {
+        type: 'button', 'aria-pressed': String(p.staff!.livesIn),
+        onclick: () => {
+          const err = setLivesIn(this.sim, p, !p.staff!.livesIn);
+          if (err) this.hooks.notify(err, 'bad');
+          this.render();
+        },
+      }, p.staff!.livesIn ? 'Lives in ✓' : 'Live in')] : []),
       h('button', {
         type: 'button', 'aria-pressed': String(p.staff!.lead),
         title: 'A shift lead steadies the team around them, for +£1.50 an hour',
@@ -222,7 +233,7 @@ export class CafeUi {
   private list = el('menu-list');
   private resetting = false;
 
-  constructor(private readonly sim: Sim, private readonly hooks: ManageHooks, startBuild: () => void) {
+  constructor(private readonly sim: Sim, private readonly hooks: ManageHooks, startBuild: () => void, private readonly onLayoutChange: () => void = () => {}) {
     setupTabs(this.panel);
     el('cafe-open').addEventListener('click', () => {
       this.hooks.closePanels();
@@ -231,6 +242,13 @@ export class CafeUi {
     });
     el('cafe-close').addEventListener('click', () => {
       this.panel.hidden = true;
+    });
+    el('flat-build').addEventListener('click', () => {
+      const err = buildStaffFlat(this.sim);
+      this.hooks.notify(err ?? 'The staff flat is built. Set people to live in from their Team cards.', err ? 'bad' : 'good');
+      this.hooks.refit?.();
+      this.onLayoutChange();
+      this.render();
     });
     el('build-start').addEventListener('click', () => {
       this.panel.hidden = true;
@@ -280,6 +298,11 @@ export class CafeUi {
           },
         }, `Service ${pounds(SERVICE_COST)}`)));
     }));
+    const flat = hasFlat(this.sim);
+    el('flat-line').textContent = flat
+      ? `${liveIns(this.sim).length} of ${beds(this.sim)} beds taken. Live-ins pay ${pounds(FLAT_RENT)} a night, never miss a shift to the commute, and spend their evenings with each other. Add beds and rooms in build mode (Staff flat floor).`
+      : `The plot out back can be a flat for staff to live in: they pay a little rent, never miss a shift to the commute, and their life off the clock happens right here. Build it by hand in build mode (Staff flat floor, beds), or in one go for ${pounds(FLAT_COST)}.`;
+    el('flat-row').hidden = flat;
     const wages = this.sim.state.pawns.filter((p) => p.staff && !p.staff.quit).reduce((sum, p) => sum + p.staff!.wage * ((p.shift.end - p.shift.start) / 60), 0);
     const debt = this.sim.state.money < 0
       ? ` You're in the red: 1% a day in overdraft fees, wages go out late below ${pounds(DEBT_LIMIT / 2)}, and below ${pounds(DEBT_LIMIT)} the bank won't lend for furniture or building work.`

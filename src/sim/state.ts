@@ -3,7 +3,8 @@
 
 import type { HairStyle, ItemKind, NeedValues, PawnKind, Priorities, Skills, TraitId, WorkType } from './defs';
 
-export type FloorKind = 'K' | 'S' | 'B' | 'F' | 'C' | 'T' | 'P';
+/** Kitchen, Staff room, Behind the counter, wooden Floor, Carpet, Toilets, Pavement, Yard, Residential (the flat). */
+export type FloorKind = 'K' | 'S' | 'B' | 'F' | 'C' | 'T' | 'P' | 'Y' | 'R';
 
 export interface Tile {
   floor: FloorKind;
@@ -60,6 +61,8 @@ export interface Job {
   idle?: boolean;
   /** The kind of work this job is, for walking stats. */
   work?: WorkType;
+  /** Off-shift life in the staff flat (sleeping, unwinding), not work. */
+  home?: boolean;
 }
 
 export interface Shift {

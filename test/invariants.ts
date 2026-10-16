@@ -86,8 +86,8 @@ export class StuckWatch {
   check(sim: Sim): string[] {
     const out: string[] = [];
     for (const p of sim.state.pawns) {
-      // Off shift, or deliberately waiting at their post: not stuck.
-      if (!p.onMap || p.job?.idle) {
+      // Off shift, deliberately waiting at their post, or at home in the flat (asleep, say): not stuck.
+      if (!p.onMap || p.job?.idle || p.job?.home) {
         this.last.delete(p.id);
         continue;
       }

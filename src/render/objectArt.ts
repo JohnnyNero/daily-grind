@@ -87,7 +87,28 @@ export function drawFloorTile(ctx: Ctx, kind: FloorKind, x: number, y: number, t
       ctx.strokeStyle = '#95979a';
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 0.5, y + 0.5, t - 1, t - 1);
+      break;    case 'Y': {
+      // The back plot: scrubby grass.
+      ctx.fillStyle = '#7f9a5e';
+      ctx.fillRect(x, y, t, t);
+      ctx.fillStyle = '#738d53';
+      ctx.fillRect(x + t * 0.15, y + t * 0.2, t * 0.12, t * 0.12);
+      ctx.fillRect(x + t * 0.6, y + t * 0.55, t * 0.12, t * 0.12);
+      ctx.fillRect(x + t * 0.35, y + t * 0.75, t * 0.1, t * 0.1);
       break;
+    }
+    case 'R': {
+      // The staff flat: warm, slightly worn lino.
+      ctx.fillStyle = '#d8b99a';
+      ctx.fillRect(x, y, t, t);
+      ctx.strokeStyle = '#c9a785';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, y + t / 2);
+      ctx.lineTo(x + t, y + t / 2);
+      ctx.stroke();
+      break;
+    }
   }
 }
 
@@ -160,6 +181,16 @@ export function drawObject(ctx: Ctx, def: string, x: number, y: number, w: numbe
       box(ctx, x + p, y + p, W - 2 * p, H - 2 * p, 3, WOOD);
       disc(ctx, x + W * 0.25, y + H * 0.55, t * 0.17, '#ffffff', 1.2);
       disc(ctx, x + W * 0.75, y + H * 0.55, t * 0.17, '#ffffff', 1.2);
+      break;
+    case 'bed':
+      box(ctx, x + p, y + p, W - 2 * p, H - 2 * p, 4, '#e9e1d2');
+      box(ctx, x + W * 0.15, y + H * 0.06, W * 0.7, H * 0.18, 4, '#ffffff', 1.5);
+      box(ctx, x + p, y + H * 0.35, W - 2 * p, H * 0.6, 4, '#6c8fb3', 1.5);
+      break;
+    case 'tv':
+      box(ctx, x + W * 0.1, y + H * 0.2, W * 0.8, H * 0.5, 2, '#2a2d33');
+      box(ctx, x + W * 0.18, y + H * 0.27, W * 0.64, H * 0.36, 1, '#4f7f8a', 1);
+      box(ctx, x + W * 0.4, y + H * 0.7, W * 0.2, H * 0.12, 1, '#2a2d33', 1);
       break;
     case 'lockers':
       box(ctx, x + p, y + p, W - 2 * p, H - 2 * p, 2, '#8a96a3');

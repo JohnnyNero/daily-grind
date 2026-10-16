@@ -5,6 +5,7 @@ import type { Sim } from '../sim/sim';
 import type { ObjectInst, Pawn } from '../sim/state';
 import { drawFloorTile, drawObject } from './objectArt';
 import { isShell } from '../sim/structure';
+import { PLOT_W } from '../sim/world';
 import { drawBubble, drawItem, drawPawn, type BubbleKind } from './pawnArt';
 
 /** World pixels per tile. */
@@ -53,6 +54,23 @@ export class Renderer {
     this.rebuildStatic();
   }
 
+  /** Show the back plot even if nothing's built on it (build mode). */
+  showPlot = false;
+
+  /** Width the camera frames: the plot only once something's built on it, so the café stays big on a phone. */
+  private get viewWidth(): number {
+    const s = this.sim.state;
+    const x0 = s.w - PLOT_W;
+    if (this.showPlot) return this.worldWidth;
+    for (let y = 0; y < s.h; y++) {
+      for (let x = x0; x < s.w; x++) {
+        const t = this.sim.world.tile(x, y);
+        if (t.door || (!t.wall && t.floor !== 'Y' && t.floor !== 'P')) return this.worldWidth;
+      }
+    }
+    return x0 * TILE;
+  }
+
   get worldWidth(): number {
     return this.sim.state.w * TILE;
   }
@@ -74,9 +92,9 @@ export class Renderer {
 
   /** Fits the whole café into the given screen rectangle, top-aligned so a bottom sheet hides less. */
   fit(x: number, y: number, w: number, h: number): void {
-    const scale = Math.min(w / this.worldWidth, h / this.worldHeight);
+    const scale = Math.min(w / this.viewWidth, h / this.worldHeight);
     this.camera.scale = scale;
-    this.camera.ox = x + (w - this.worldWidth * scale) / 2;
+    this.camera.ox = x + (w - this.viewWidth * scale) / 2;
     this.camera.oy = y;
   }
 

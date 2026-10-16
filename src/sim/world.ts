@@ -4,7 +4,20 @@ import { objectDef } from './defs';
 import type { PlacedObject } from './venues';
 import type { FloorKind, ObjectInst, SimState, Tile } from './state';
 
-const FLOOR_CHARS: Record<string, FloorKind> = { K: 'K', S: 'S', B: 'B', F: 'F', C: 'C', T: 'T', P: 'P' };
+const FLOOR_CHARS: Record<string, FloorKind> = { K: 'K', S: 'S', B: 'B', F: 'F', C: 'C', T: 'T', P: 'P', Y: 'Y', R: 'R' };
+
+/** Columns of empty yard added to the side of every venue: room for a staff flat. */
+export const PLOT_W = 9;
+
+/** The venue's map with the back plot alongside: yard, edged by wall, pavement along the front. */
+export function withPlot(rows: readonly string[]): string[] {
+  return rows.map((row, y) => {
+    const edge = row[row.length - 1];
+    if (edge === 'P') return row + 'P'.repeat(PLOT_W);
+    if (y === 0) return row + '#'.repeat(PLOT_W);
+    return row + 'Y'.repeat(PLOT_W - 1) + '#';
+  });
+}
 
 export function parseMap(rows: readonly string[]): { w: number; h: number; tiles: Tile[] } {
   const h = rows.length;
@@ -31,6 +44,20 @@ function neighbourFloor(rows: readonly string[], x: number, y: number, front = f
     if (c && FLOOR_CHARS[c]) return FLOOR_CHARS[c];
   }
   return 'B';
+}
+
+/** Saves from before the back plot existed get it added alongside, coordinates unchanged. */
+export function addPlotToSave(s: SimState, venueMap: readonly string[]): void {
+  const oldW = venueMap[0].length;
+  if (s.w !== oldW) return;
+  const rows = withPlot(venueMap);
+  const plot = parseMap(rows);
+  const tiles: Tile[] = [];
+  for (let y = 0; y < s.h; y++) {
+    for (let x = 0; x < plot.w; x++) tiles.push(x < oldW ? s.tiles[y * oldW + x] : plot.tiles[y * plot.w + x]);
+  }
+  s.tiles = tiles;
+  s.w = plot.w;
 }
 
 export class World {

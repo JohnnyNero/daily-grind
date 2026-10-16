@@ -155,28 +155,35 @@ function situationalReasons(sim: Sim, p: Pawn): Reason[] {
   if (n.comfort < 0.3) add('Feet are killing me', -5);
 
   const m = sim.minuteOfDay;
-  if (hasTrait(p, 'nightOwl') && m < 10 * 60) add('Too early for this', -4);
-  if (hasTrait(p, 'earlyBird') && m < 11 * 60) add('Morning person', 3);
-  if (hasTrait(p, 'earlyBird') && m >= 15 * 60) add('Flagging', -3);
+  // Work only weighs on people while they're at work (live-ins are on site off the clock too).
+  const working = p.onMap && sim.onShift(p);
+  if (working) {
+    if (hasTrait(p, 'nightOwl') && m < 10 * 60) add('Too early for this', -4);
+    if (hasTrait(p, 'earlyBird') && m < 11 * 60) add('Morning person', 3);
+    if (hasTrait(p, 'earlyBird') && m >= 15 * 60) add('Flagging', -3);
 
-  const onShiftHours = (m - p.shift.start) / 60;
-  if (onShiftHours > 7) add('Long shift', -6);
-  else if (onShiftHours > 5) add('Long shift', -3);
+    const onShiftHours = (m - p.shift.start) / 60;
+    if (onShiftHours > 7) add('Long shift', -6);
+    else if (onShiftHours > 5) add('Long shift', -3);
 
-  const sinceBreak = (s.tick - p.staff!.lastBreak) / TICKS_PER_HOUR;
-  if (sinceBreak > 6) add('No break all shift', -10);
-  else if (sinceBreak > 4) add('Overdue a break', -5);
+    const sinceBreak = (s.tick - p.staff!.lastBreak) / TICKS_PER_HOUR;
+    if (sinceBreak > 6) add('No break all shift', -10);
+    else if (sinceBreak > 4) add('Overdue a break', -5);
 
-  if (s.queue.length >= 6 && !hasTrait(p, 'calm')) add('Slammed', hasTrait(p, 'hardWorker') ? -1 : -3);
+    if (s.queue.length >= 6 && !hasTrait(p, 'calm')) add('Slammed', hasTrait(p, 'hardWorker') ? -1 : -3);
 
-  const busy = s.queue.length >= 5;
-  if (busy && hasTrait(p, 'introvert')) add('Too many people', -4);
-  if (busy && hasTrait(p, 'lazy')) add('Run off my feet', -3);
+    const busy = s.queue.length >= 5;
+    if (busy && hasTrait(p, 'introvert')) add('Too many people', -4);
+    if (busy && hasTrait(p, 'lazy')) add('Run off my feet', -3);
+  } else if (p.onMap) {
+    add('Off the clock', 4);
+  }
 
   const clean = cleanliness(sim);
   if (clean < 0.45) add('This place is a tip', hasTrait(p, 'perfectionist') ? -6 : -3);
   else if (ambience(sim) > 0.8) add('Lovely place to work', hasTrait(p, 'perfectionist') ? 3 : 2);
   if (s.money < 0) add('Will I even get paid?', -6);
+  if (p.staff!.livesIn) add('Living at work: cheap rent, no commute', 3);
   const stress = p.staff!.stress;
   if (stress >= STRESS_BURNT_OUT) add('Burnt out', -12);
   else if (stress >= STRESS_STRAINED) add('Running on empty', -5);
@@ -185,10 +192,11 @@ function situationalReasons(sim: Sim, p: Pawn): Reason[] {
     if (other.id === p.id || !other.staff || !other.onMap) continue;
     const rel = sim.relation(p.id, other.id);
     const op = sim.opinion(p, other);
-    if (rel.together) add(`On shift with my partner ${other.name}`, 6);
-    else if (rel.exes) add(`Stuck on shift with my ex, ${other.name}`, -6);
-    else if (op >= 40) add(`Working with my mate ${other.name}`, 3);
-    else if (op <= -30) add(`Stuck on shift with ${other.name}`, -5);
+    const where = working && sim.onShift(other) ? 'On shift' : 'Around';
+    if (rel.together) add(`${where} with my partner ${other.name}`, 6);
+    else if (rel.exes) add(`${where === 'On shift' ? 'Stuck on shift' : 'Living'} with my ex, ${other.name}`, -6);
+    else if (op >= 40) add(`${where === 'On shift' ? 'Working' : 'Hanging out'} with my mate ${other.name}`, 3);
+    else if (op <= -30) add(`${where === 'On shift' ? 'Stuck on shift' : 'Stuck'} with ${other.name}`, -5);
   }
 
   // A good shift lead steadies everyone; one in a foul mood drags them down.

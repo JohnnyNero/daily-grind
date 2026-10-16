@@ -27,7 +27,7 @@ export function stressEveryMinute(sim: Sim, p: Pawn): void {
   const staff = p.staff;
   if (!staff || staff.quit) return;
   let d: number;
-  if (p.onMap) {
+  if (p.onMap && sim.onShift(p)) {
     d = 0.012;
     if ((sim.state.rushes ?? []).length > 0) d += 0.015;
     if (staff.mood < 35) d += 0.01;

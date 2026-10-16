@@ -24,13 +24,14 @@ import {
 } from './state';
 import { addMemory, driftMood, expireMemories, hasTrait, opinionFromMemories } from './thoughts';
 import { abandonAction, findWork, performAction, standByJob, updateRushes, validateAction } from './work';
-import { World, parseMap } from './world';
+import { World, addPlotToSave, parseMap, withPlot } from './world';
 import { emptyDay } from './business';
 import { morningBooks } from './books';
 import { friendsMayFollow } from './careers';
 import { checkGoals } from './goals';
 import { lapseDecisions, letterFromLog } from './letters';
 import { isDayOff, stressEveryMinute } from './stakes';
+import { bedtime, homeJob, livesHere } from './flat';
 import { fillStaff, normalize } from './normalize';
 
 /** Walking speed in tiles per tick. At 1x (60 ticks per real second) that's about 4 tiles a second. */
@@ -68,12 +69,13 @@ export class Sim {
   constructor(seed: number, saved?: SimState, venueId = 'cafe') {
     if (saved) {
       this.state = saved;
+      addPlotToSave(saved, venueDef(saved.venue).map);
       this.world = new World(this.state);
       normalize(this);
       return;
     }
     const venue = venueDef(venueId);
-    const map = parseMap(venue.map);
+    const map = parseMap(withPlot(venue.map));
     this.state = {
       version: SAVE_VERSION,
       venue: venue.id,
@@ -145,7 +147,8 @@ export class Sim {
 
   /** True when the café is shut and nobody is on site, so the game can fast-forward. */
   isQuiet(): boolean {
-    return !this.isOpen() && this.state.pawns.every((p) => !p.onMap);
+    // Live-ins at home in the flat don't stop the overnight skip.
+    return !this.isOpen() && this.state.pawns.every((p) => !p.onMap || (!!p.staff && !this.onShift(p) && livesHere(this, p)));
   }
 
   // ---------------------------------------------------------------- people
@@ -291,9 +294,11 @@ export class Sim {
     return job.label;
   }
 
+  /** On the clock right now: in their shift hours, and not off, sick or sent home today. */
   onShift(p: Pawn): boolean {
     const m = this.minuteOfDay;
-    if (p.staff?.homeEarlyDay === this.day) return false;
+    const staff = p.staff;
+    if (staff && (staff.homeEarlyDay === this.day || staff.sickDay === this.day || isDayOff(this, p))) return false;
     return m >= p.shift.start && m < p.shift.end;
   }
 
@@ -340,11 +345,21 @@ export class Sim {
         this.decayNeeds(p);
         expireMemories(this, p);
         driftMood(this, p);
-        checkBreaks(this, p);
-        const wage = staff.wage / 60;
-        s.money -= wage;
-        s.today.wages += wage;
-        if (!this.onShift(p) && !this.isLeaving(p)) this.sendHome(p);
+        const working = this.onShift(p);
+        if (working) {
+          checkBreaks(this, p);
+          const wage = staff.wage / 60;
+          s.money -= wage;
+          s.today.wages += wage;
+          // A live-in's shift starts where they are: the alarm goes and they come down.
+          if (p.arrivedDay !== this.day) {
+            p.arrivedDay = this.day;
+            staff.lastBreak = s.tick;
+            if (p.job?.home) this.endJob(p);
+          }
+        } else if (!this.isLeaving(p) && !p.job?.home) {
+          this.offShift(p);
+        }
       } else if (this.onShift(p) && p.arrivedDay !== this.day && !staff.quit && !staff.mentalBreak && staff.sickDay !== this.day && !isDayOff(this, p)) {
         this.arrive(p);
       }
@@ -415,9 +430,12 @@ export class Sim {
   private decayNeeds(p: Pawn): void {
     const sitting = p.job?.sitting === true;
     const hot = this.hasCondition('heatwave');
+    // Asleep, the body ticks over slowly: nobody wakes up starving after a night's sleep.
+    const asleep = p.job?.label === 'Asleep';
     for (const def of NEEDS) {
       if (def.id === 'comfort' && sitting) continue;
-      const rate = def.id === 'comfort' && hot ? def.decayPerHour * 1.5 : def.decayPerHour;
+      let rate = def.id === 'comfort' && hot ? def.decayPerHour * 1.5 : def.decayPerHour;
+      if (asleep && def.id !== 'energy') rate *= 0.2;
       p.needs[def.id] = clamp01(p.needs[def.id] - rate / 60);
     }
   }
@@ -458,6 +476,22 @@ export class Sim {
     p.job = this.leaveJob('Heading home');
   }
 
+  /** End of the shift: home to the flat if they live in, otherwise out the door. */
+  private offShift(p: Pawn): void {
+    if (!livesHere(this, p)) {
+      this.sendHome(p);
+      return;
+    }
+    this.endJob(p);
+    p.job = homeJob(this, p, (bed) => {
+      const candidates = bed
+        ? scoreCandidates(this.state, this.world, p, true).filter((c) => c.offer.id === 'sleep')
+        : scoreCandidates(this.state, this.world, p);
+      return this.startNeedJob(p, candidates);
+    });
+    if (!p.job) this.sendHome(p);
+  }
+
   leaveJob(label: string): Job {
     const entry = this.venue.positions.entry;
     const [ex, ey] = entry[randInt(this.state, 0, entry.length - 1)];
@@ -475,7 +509,7 @@ export class Sim {
       return;
     }
     if (!this.onShift(p)) {
-      this.sendHome(p);
+      this.offShift(p);
       return;
     }
     if (p.staff?.forcedBreak) {
@@ -508,7 +542,21 @@ export class Sim {
   private interruptIdle(p: Pawn): void {
     if (p.staff?.mentalBreak) return;
     if (!this.onShift(p)) {
-      this.sendHome(p);
+      // At home in the flat: only stop pottering about if there's something they need.
+      if (p.job?.home && livesHere(this, p)) {
+        if (bedtime(this, p) && p.job.label !== 'Asleep' && !p.job.steps.some((st) => st.kind === 'use')) {
+          this.offShift(p);
+          return;
+        }
+        const candidates = scoreCandidates(this.state, this.world, p);
+        if (candidates.length === 0) return;
+        const pottering = p.job;
+        this.endJob(p);
+        if (this.startNeedJob(p, candidates)) p.job!.home = true;
+        else p.job = pottering;
+        return;
+      }
+      this.offShift(p);
       return;
     }
     const work = findWork(this, p);
@@ -647,7 +695,9 @@ export class Sim {
 
   private runJob(p: Pawn, job: Job): void {
     const st = job.steps[job.index];
-    if (this.state.tick - job.stepStartedAt > STEP_TIMEOUT_TICKS) {
+    // Long uses (a night's sleep) get their full length before they count as stuck.
+    const limit = st?.kind === 'use' ? Math.max(STEP_TIMEOUT_TICKS, st.total + 30 * TICKS_PER_MINUTE) : STEP_TIMEOUT_TICKS;
+    if (this.state.tick - job.stepStartedAt > limit) {
       this.endJob(p);
       return;
     }

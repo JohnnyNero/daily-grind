@@ -20,7 +20,7 @@ const ROW_TOPICS = [
 type InteractionKind = 'chat' | 'banter' | 'vent' | 'compliment' | 'insult' | 'flirt';
 
 function available(p: Pawn): boolean {
-  if (!p.onMap || !p.staff || p.staff.quit) return false;
+  if (!p.onMap || !p.staff || p.staff.quit || p.job?.label === 'Asleep') return false;
   const b = p.staff.mentalBreak?.kind;
   return b !== 'walkout' && b !== 'quit' && b !== 'cry';
 }
@@ -33,6 +33,8 @@ export function socialEveryMinute(sim: Sim): void {
     if (hasTrait(actor, 'chatty')) chance *= 2;
     if (hasTrait(actor, 'introvert')) chance *= 0.5;
     if (actor.staff!.mentalBreak?.kind === 'snappy') chance *= 3;
+    // At home in the flat people mostly keep to themselves.
+    if (actor.job?.home) chance *= 0.4;
     if (random(s) >= chance) continue;
     const near = staff.filter((o) => o.id !== actor.id && Math.hypot(o.x - actor.x, o.y - actor.y) <= RANGE);
     if (near.length === 0) continue;

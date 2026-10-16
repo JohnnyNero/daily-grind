@@ -34,6 +34,8 @@ export interface OfferDef {
   sits?: boolean;
   /** Only considered once this need has fallen below the threshold (an autonomy threshold). */
   whenBelow: { need: NeedId; value: number };
+  /** Only off the clock (a bed in the staff flat). */
+  offShiftOnly?: boolean;
 }
 
 export interface ObjectDef {
@@ -59,7 +61,7 @@ const EVERYONE = ['staff', 'guest'] as const;
 
 const defs: ObjectDef[] = [
   {
-    id: 'fridge', price: 40000, floors: ['K', 'B', 'S'], label: 'Fridge', w: 1, h: 1, blocks: true, spots: [[0, 1]],
+    id: 'fridge', price: 40000, floors: ['K', 'B', 'S', 'R'], label: 'Fridge', w: 1, h: 1, blocks: true, spots: [[0, 1]],
     offers: [{ id: 'snack', label: 'Grab a snack', doing: 'Grabbing a snack', usableBy: STAFF, deltas: { hunger: 0.25 }, minutes: 4, whenBelow: { need: 'hunger', value: 0.5 } }],
   },
   { id: 'oven', price: 30000, floors: ['K'], label: 'Oven', w: 1, h: 1, blocks: true, spots: [[0, 1]], offers: [] },
@@ -79,21 +81,30 @@ const defs: ObjectDef[] = [
   { id: 'poolTable', price: 45000, floors: ['F', 'C'], label: 'Pool table', w: 3, h: 2, blocks: true, spots: [], offers: [] },
   { id: 'dartboard', price: 6000, floors: ['F', 'C'], label: 'Dartboard', w: 1, h: 1, blocks: true, spots: [], offers: [] },
   {
-    id: 'staffSofa', price: 25000, floors: ['S'], label: 'Staff sofa', w: 2, h: 1, blocks: false, spots: [[0, 0], [1, 0]],
+    id: 'staffSofa', price: 25000, floors: ['S', 'R'], label: 'Staff sofa', w: 2, h: 1, blocks: false, spots: [[0, 0], [1, 0]],
     offers: [{ id: 'rest', label: 'Put feet up', doing: 'Feet up on the sofa', usableBy: STAFF, deltas: { comfort: 0.7, energy: 0.08 }, minutes: 15, sits: true, whenBelow: { need: 'comfort', value: 0.55 } }],
   },
   {
-    id: 'staffTable', price: 18000, floors: ['S'], label: 'Staff table', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
+    id: 'staffTable', price: 18000, floors: ['S', 'R'], label: 'Staff table', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'lunch', label: 'Eat lunch', doing: 'Eating lunch', usableBy: STAFF, deltas: { hunger: 0.85, comfort: 0.25 }, minutes: 20, sits: true, whenBelow: { need: 'hunger', value: 0.4 } }],
   },
-  { id: 'lockers', price: 12000, floors: ['S'], label: 'Lockers', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'lockers', price: 12000, floors: ['S', 'R'], label: 'Lockers', w: 1, h: 1, blocks: true, spots: [], offers: [] },
   { id: 'table4', price: 22000, floors: ['F', 'C'], label: 'Four-top', w: 2, h: 2, blocks: true, spots: [[0, -1], [1, -1], [0, 2], [1, 2]], offers: [] },
   { id: 'table2', price: 12000, floors: ['F', 'C'], label: 'Two-top', w: 1, h: 1, blocks: true, spots: [[0, -1], [0, 1]], offers: [] },
   { id: 'armchair', price: 15000, floors: ['F', 'C'], label: 'Armchair', w: 1, h: 1, blocks: false, spots: [[0, 0]], offers: [] },
-  { id: 'plant', price: 4000, floors: ['F', 'C', 'K', 'B', 'S'], label: 'Plant', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'plant', price: 4000, floors: ['F', 'C', 'K', 'B', 'S', 'R'], label: 'Plant', w: 1, h: 1, blocks: true, spots: [], offers: [] },
   {
     id: 'toilet', price: 30000, floors: ['T'], label: 'Toilet', w: 1, h: 1, blocks: false, spots: [[0, 0]],
     offers: [{ id: 'loo', label: 'Use the loo', doing: 'In the loo', usableBy: EVERYONE, deltas: { bladder: 1 }, minutes: 3, sits: true, whenBelow: { need: 'bladder', value: 0.45 } }],
+  },
+  // The staff flat.
+  {
+    id: 'bed', price: 18000, floors: ['R'], label: 'Bed', w: 1, h: 2, blocks: false, spots: [[0, 0]],
+    offers: [{ id: 'sleep', label: 'Sleep', doing: 'Asleep', usableBy: STAFF, deltas: { energy: 0.95, comfort: 0.5 }, minutes: 420, sits: true, whenBelow: { need: 'energy', value: 0.4 }, offShiftOnly: true }],
+  },
+  {
+    id: 'tv', price: 22000, floors: ['R', 'S'], label: 'TV', w: 1, h: 1, blocks: true, spots: [[0, 1]],
+    offers: [{ id: 'telly', label: 'Watch telly', doing: 'Watching telly', usableBy: STAFF, deltas: { comfort: 0.45 }, minutes: 40, whenBelow: { need: 'comfort', value: 0.7 }, offShiftOnly: true }],
   },
 ];
 

@@ -20,6 +20,7 @@ export const PAINTABLE_FLOORS: readonly { kind: FloorKind; label: string }[] = [
   { kind: 'K', label: 'Kitchen' },
   { kind: 'S', label: 'Staff room' },
   { kind: 'T', label: 'Toilets' },
+  { kind: 'R', label: 'Staff flat' },
 ];
 
 const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;

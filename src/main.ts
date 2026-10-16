@@ -69,10 +69,11 @@ function play(sim: Sim): void {
     notify: (text: string, tone: 'good' | 'bad' | 'neutral' = 'neutral') => hud.notify(text, tone),
     closePanels: () => hud.closePanels(),
     showRecap: (r: Recap) => hud.showRecap(r),
+    refit: () => fitView(),
   };
   const team = new TeamUi(sim, hooks, () => hud.refreshStaffPanel());
   const build = new BuildUi(sim, renderer, hooks);
-  const cafe = new CafeUi(sim, hooks, () => build.start());
+  const cafe = new CafeUi(sim, hooks, () => build.start(), () => renderer.rebuildStatic());
   const inboxHooks: InboxHooks = {
     ...hooks,
     select: (id) => {
