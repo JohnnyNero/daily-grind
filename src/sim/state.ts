@@ -241,6 +241,8 @@ export interface Relation {
   /** Romantic memories shared so far; enough of them, plus liking each other, makes a couple. */
   romance: number;
   together: boolean;
+  /** Used to be together. Shifts with an ex are awkward. */
+  exes?: boolean;
 }
 
 export interface LogEntry {

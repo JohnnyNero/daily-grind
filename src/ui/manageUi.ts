@@ -11,6 +11,7 @@ import type { Pawn, Recap } from '../sim/state';
 import { changesOf, CharacterForm, draftOf, portrait } from './characterForm';
 import { el, h, hhmm, setupTabs } from './dom';
 import { pounds } from './hud';
+import { setLead } from '../sim/careers';
 import { STRESS_STRAINED, WEEKDAYS } from '../sim/stakes';
 import {
   DEBT_LIMIT, INGREDIENT_SHARE, SERVICE_COST, dailyRent, guestCapacity, machineWear, priceTolerance, seatCount, serviceMachine, starProgress, starText, stars,
@@ -82,7 +83,7 @@ export class TeamUi {
   private card(p: Pawn): HTMLElement {
     const status = p.onMap ? this.sim.activity(p) : p.staff!.sickDay === this.sim.day ? 'Off sick' : 'Not in';
     const info = h('div', { className: 'person-info' },
-      h('div', { className: 'top' }, h('strong', {}, p.name), h('span', {}, `${hhmm(p.shift.start)}–${hhmm(p.shift.end)}`)),
+      h('div', { className: 'top' }, h('strong', {}, p.name + (p.staff!.lead ? ' · lead' : '')), h('span', {}, `${hhmm(p.shift.start)}–${hhmm(p.shift.end)}`)),
       h('p', { className: 'hint' }, `${traitLabels(p.staff!.traits)} · ${status}`),
       h('p', { className: 'hint' }, `Loves ${p.staff!.passions.map((w) => workLabel(this.sim, w).toLowerCase()).join(' and ')} · ${perHour(p.staff!.wage)} · ${p.staff!.daysOff.length > 0 ? `off ${p.staff!.daysOff.map((d) => WEEKDAYS[d]).join(', ')}` : 'no days off'}${p.staff!.stress >= STRESS_STRAINED ? ` · stress ${Math.round(p.staff!.stress)}%` : ''}`),
     );
@@ -99,6 +100,11 @@ export class TeamUi {
       h('button', { type: 'button', disabled: !p.onMap, onclick: act(() => orderBreak(this.sim, p)) }, 'Break now'),
       h('button', { type: 'button', disabled: !p.onMap, onclick: act(() => sendHomeEarly(this.sim, p)) }, 'Send home'),
       h('button', { type: 'button', onclick: () => this.editor.open(p) }, 'Edit'),
+      h('button', {
+        type: 'button', 'aria-pressed': String(p.staff!.lead),
+        title: 'A shift lead steadies the team around them, for +£1.50 an hour',
+        onclick: () => { setLead(this.sim, p.staff!.lead ? null : p); this.render(); },
+      }, p.staff!.lead ? 'Lead ✓' : 'Make lead'),
     ));
     return card;
   }

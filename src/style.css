@@ -327,6 +327,7 @@ button.danger, .sheet .row button.danger, .recap-card .row button.danger { color
 .card .row { flex-wrap: wrap; gap: 6px; }
 .card .row button { min-height: 40px; padding: 0 12px; border: 0; background: #f1eadd; font-size: 13px; }
 .card .row button:disabled { opacity: .5; cursor: default; }
+.card .row button[aria-pressed="true"] { background: #2b2e35; color: #fff; }
 .shift-edit { display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; margin-top: 6px; }
 .shift-edit span { text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
 

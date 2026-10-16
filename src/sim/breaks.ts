@@ -5,6 +5,7 @@
 
 import { random, pick, randInt } from './rng';
 import type { Sim } from './sim';
+import { witness } from './social';
 import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type BreakKind, type Pawn } from './state';
 import { addMemory, finalStraw, hasTrait } from './thoughts';
 
@@ -86,6 +87,7 @@ export function startBreak(sim: Sim, p: Pawn, kind: BreakKind): void {
   sim.endJob(p);
   sim.log(`${BREAK_LOG[kind](p.name)} Final straw: ${straw}.`, 'bad', p.id, kind === 'quit' ? 'quit' : 'break', kind === 'quit' ? 10 : 6);
   s.story.breaksToday++;
+  witness(sim, p, 'sawMeltdown', [p]);
   if (kind === 'walkout' || kind === 'quit') {
     if (kind === 'quit') staff.quit = true;
     p.job = sim.leaveJob(BREAK_LABELS[kind]);

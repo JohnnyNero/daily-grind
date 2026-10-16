@@ -41,6 +41,12 @@ function headline(sim: Sim, topTale: string | null): string {
     grudge: ['Old grudges', 'A regular remembers'],
     sickCall: ['Short-staffed', 'One man down'],
     argueCustomer: ['The customer is not always right', 'Somebody said what we were all thinking'],
+    breakup: ["It's over", 'Heartbreak hotel, table for two', 'Awkward at the coffee machine'],
+    poached: ['Lured away', 'Off to the competition', 'Better offer down the road'],
+    followedOut: ['Two through the door', 'Where one goes, the other follows'],
+    burnout: ['Running on empty', 'Somebody needs a holiday'],
+    milestone: ['Cake for the staff', 'A long time behind this counter'],
+    wagesLate: ['Pay day came late', 'The money conversation'],
   };
   if (topTale && byTale[topTale]) return choose(byTale[topTale]);
   if (visits > 0 && d.walkouts / visits > 0.2) return choose(['A rough one', 'Queues out the door', 'Not our finest hour']);

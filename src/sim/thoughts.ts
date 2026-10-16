@@ -47,6 +47,15 @@ const MEMORIES: readonly MemoryDef[] = [
   { id: 'meltdown', label: 'Got it out of my system', mood: 8, hours: 12, stack: 1 },
   { id: 'walkedOut', label: 'Walked out yesterday. Awkward.', mood: -4, hours: 24, stack: 1 },
   { id: 'dayOff', label: 'Had a proper day off', mood: 4, hours: 12, stack: 1 },
+  { id: 'witnessedRow', label: 'Had to watch a blazing row', mood: -2, hours: 6, stack: 2 },
+  { id: 'sawMeltdown', label: 'Saw a colleague fall apart', mood: -2, hours: 8, stack: 2 },
+  { id: 'brokeUp', label: 'Broke up with {other}', mood: -10, hours: 72, opinion: -25, stack: 1 },
+  { id: 'gotRaise', label: 'Got a raise', mood: 8, hours: 72, stack: 1 },
+  { id: 'raiseRefused', label: 'Asked for a raise. Got told no.', mood: -10, hours: 72, stack: 1 },
+  { id: 'valued', label: 'They matched the offer. I feel wanted.', mood: 8, hours: 96, stack: 1 },
+  { id: 'talkedRound', label: 'The manager talked me into staying', mood: 4, hours: 48, stack: 1 },
+  { id: 'anniversary', label: 'Work anniversary', mood: 5, hours: 24, stack: 1 },
+  { id: 'madeLead', label: 'Made shift lead', mood: 8, hours: 96, stack: 1 },
   { id: 'wagesLate', label: 'Wages were late', mood: -8, hours: 30, stack: 1 },
   // Social
   { id: 'niceChat', label: 'Had a nice chat with {other}', mood: 1, hours: 4, opinion: 3, stack: 2 },
@@ -177,8 +186,16 @@ function situationalReasons(sim: Sim, p: Pawn): Reason[] {
     const rel = sim.relation(p.id, other.id);
     const op = sim.opinion(p, other);
     if (rel.together) add(`On shift with my partner ${other.name}`, 6);
+    else if (rel.exes) add(`Stuck on shift with my ex, ${other.name}`, -6);
     else if (op >= 40) add(`Working with my mate ${other.name}`, 3);
     else if (op <= -30) add(`Stuck on shift with ${other.name}`, -5);
+  }
+
+  // A good shift lead steadies everyone; one in a foul mood drags them down.
+  const lead = s.pawns.find((o) => o.id !== p.id && o.staff?.lead && o.onMap && !o.staff.quit);
+  if (lead) {
+    if (lead.staff!.mood >= 50 && sim.opinion(lead, p) >= -10) add(`${lead.name} is running a tight ship`, 3);
+    else if (lead.staff!.mood < 30) add(`${lead.name} is taking it out on everyone`, -3);
   }
 
   const insp = p.staff!.inspiration;

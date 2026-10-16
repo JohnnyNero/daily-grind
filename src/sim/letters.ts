@@ -15,10 +15,11 @@ const LETTER_TALES: Readonly<Record<string, string>> = {
   debt: 'In the red',
   outOfDebt: 'Back in the black',
   couple: "There's a new couple",
-  machineBroken: 'Machine down',
   lostRegular: 'A regular has had enough',
   followedOut: 'Following a friend out',
   poached: 'Poached',
+  breakup: "It's over",
+  milestone: 'A milestone',
 };
 
 const MAX_LETTERS = 30;

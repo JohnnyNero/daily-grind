@@ -108,7 +108,29 @@ function row(sim: Sim, a: Pawn, b: Pawn): void {
   for (const g of s.pawns) {
     if (g.visit && Math.hypot(g.x - a.x, g.y - a.y) < 6) g.visit.patience = Math.max(0, g.visit.patience - 0.1);
   }
+  witness(sim, a, 'witnessedRow', [a, b]);
   sim.log(`${a.name} and ${b.name} had a row about ${topic}.`, 'bad', a.id, 'row', 5);
+  // A couple who row enough stop being a couple.
+  const rel = sim.relation(a.id, b.id);
+  if (rel.together && (sim.opinion(a, b) < 0 || sim.opinion(b, a) < 0)) breakUp(sim, a, b);
+}
+
+/** Colleagues close enough to see something ugly carry a little of it with them. */
+export function witness(sim: Sim, at: Pawn, memory: string, involved: Pawn[]): void {
+  for (const o of sim.state.pawns) {
+    if (!o.staff || !o.onMap || involved.includes(o) || o.staff.quit) continue;
+    if (Math.hypot(o.x - at.x, o.y - at.y) <= 6) addMemory(sim, o, memory);
+  }
+}
+
+function breakUp(sim: Sim, a: Pawn, b: Pawn): void {
+  const rel = sim.relation(a.id, b.id);
+  rel.together = false;
+  rel.exes = true;
+  rel.romance = 0;
+  addMemory(sim, a, 'brokeUp', b);
+  addMemory(sim, b, 'brokeUp', a);
+  sim.log(`${a.name} and ${b.name} have split up. Shifts together are going to be fun.`, 'bad', a.id, 'breakup', 8);
 }
 
 function flirt(sim: Sim, a: Pawn, b: Pawn): void {
@@ -138,5 +160,24 @@ function flirt(sim: Sim, a: Pawn, b: Pawn): void {
     if (Math.hypot(partner.x - a.x, partner.y - a.y) > RANGE + 2) continue;
     addMemory(sim, partner, 'flirtedWithPartner', partner === aPartner ? b : a);
     sim.log(`${partner.name} saw ${a.name} flirting with ${b.name}. Oh dear.`, 'bad', partner.id, 'jealousy', 7);
+    // Caught once too often, and that's it.
+    const other = partner === aPartner ? a : b;
+    if (sim.opinion(partner, other) < -10) breakUp(sim, partner, other);
+  }
+}
+
+/** A couple on shift together sometimes sneak off for a moment, which nobody covers. */
+export function canoodle(sim: Sim): void {
+  const s = sim.state;
+  for (const a of s.pawns) {
+    if (!available(a) || a.staff!.mentalBreak) continue;
+    const b = sim.partnerOf(a);
+    if (!b || b.id < a.id || !available(b) || b.staff!.mentalBreak) continue;
+    if (random(s) >= 0.004) continue;
+    for (const p of [a, b]) {
+      sim.endJob(p);
+      p.job = sim.makeJob(`Sneaking a moment with ${p === a ? b.name : a.name}`, [{ kind: 'wait', ticksLeft: 3 * TICKS_PER_MINUTE }]);
+    }
+    if (random(s) < 0.5) sim.log(`${a.name} and ${b.name} have both vanished from the floor. Again.`, 'neutral', a.id, 'canoodle', 3);
   }
 }

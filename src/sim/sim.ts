@@ -17,7 +17,7 @@ import { venueDef, type VenueDef } from './venues';
 import { clamp01, moodFromNeeds, worstNeed } from './mood';
 import { findPath } from './path';
 import { pick, random, randInt, randRange } from './rng';
-import { socialEveryMinute } from './social';
+import { canoodle, socialEveryMinute } from './social';
 import {
   TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE,
   SAVE_VERSION, type Applicant, type ConditionId, type Job, type LogEntry, type Pawn, type Relation, type Shift, type SimState, type StaffInfo, type Step,
@@ -27,6 +27,7 @@ import { abandonAction, findWork, performAction, standByJob, updateRushes, valid
 import { World, parseMap } from './world';
 import { emptyDay } from './business';
 import { morningBooks } from './books';
+import { friendsMayFollow } from './careers';
 import { lapseDecisions, letterFromLog } from './letters';
 import { isDayOff, stressEveryMinute } from './stakes';
 import { fillStaff, normalize } from './normalize';
@@ -44,7 +45,7 @@ const URGENT_NEED = 0.3;
 
 export const IDLE_LABEL = 'Hanging about';
 /** Story kinds memorable enough for the hall of fame. */
-const FAME_TALES = new Set(['couple', 'quit', 'criticRave', 'criticWalkout', 'milestone', 'lostRegular', 'fired', 'birthday']);
+const FAME_TALES = new Set(['couple', 'quit', 'criticRave', 'criticWalkout', 'milestone', 'lostRegular', 'fired', 'birthday', 'breakup', 'poached', 'followedOut']);
 
 
 export class Sim {
@@ -335,6 +336,7 @@ export class Sim {
       }
     }
     socialEveryMinute(this);
+    canoodle(this);
     guestsEveryMinute(this);
     storytellerEveryMinute(this);
     if (m % 10 === 0) checkWants(this);
@@ -383,6 +385,7 @@ export class Sim {
     for (const key of Object.keys(s.relations)) {
       if (key.split(':').map(Number).includes(p.id)) delete s.relations[key];
     }
+    if (!fired) friendsMayFollow(this, p);
     this.releaseAll(p);
     s.pawns = s.pawns.filter((x) => x.id !== p.id);
     if (!fired) {
