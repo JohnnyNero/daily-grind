@@ -1,0 +1,16 @@
+{
+  "name": "Daily Grind",
+  "short_name": "Daily Grind",
+  "description": "A café sim: set up your café, staff it, and watch it run.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#23262b",
+  "theme_color": "#1d1f23",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
