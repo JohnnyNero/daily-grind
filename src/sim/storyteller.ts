@@ -11,7 +11,8 @@ import { spawnGuest } from './guests';
 import { availableRegulars, birthdayVisit } from './regulars';
 import { pick, random, randInt } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_HOUR, type ConditionId, type Pawn } from './state';
+import { addFame, worstWear } from './business';
+import { TICKS_PER_MINUTE, TICKS_PER_HOUR, type ConditionId, type Pawn } from './state';
 import { addMemory } from './thoughts';
 
 type Category = 'pressure' | 'social' | 'good';
@@ -19,7 +20,8 @@ type Category = 'pressure' | 'social' | 'good';
 interface EventDef {
   id: string;
   category: Category;
-  weight: number;
+  /** How likely, against the others; can depend on the state (a worn machine breaks more). */
+  weight: number | ((sim: Sim) => number);
   canFire: (sim: Sim) => boolean;
   fire: (sim: Sim) => void;
 }
@@ -48,16 +50,18 @@ function mess(sim: Sim): number {
 const EVENTS: readonly EventDef[] = [
   {
     id: 'coachParty', category: 'pressure', weight: 3,
-    canFire: (sim) => sim.state.story.pendingArrivals === 0,
+    canFire: (sim) => sim.state.story.pendingArrivals === 0 && !sim.state.story.incoming,
     fire: (sim) => {
       const s = sim.state;
-      const n = Math.round(randInt(s, 6, 10) * (0.6 + s.reputation / 100) * pressureScale(sim));
-      s.story.pendingArrivals = Math.max(4, n);
-      sim.log(sim.venue.text.rush(s.story.pendingArrivals), 'bad', null, 'coachParty', 6);
+      // Bigger the better known you are. Announced ahead, like a raid on the horizon.
+      const n = Math.max(4, Math.round(randInt(s, 6, 10) * (0.6 + s.fame / 80) * pressureScale(sim)));
+      const minutes = randInt(s, 15, 30);
+      s.story.incoming = { at: s.tick + minutes * TICKS_PER_MINUTE, n, what: 'coachParty' };
+      sim.log(sim.venue.text.rushWarning(n, minutes), 'bad', null, null, 0);
     },
   },
   {
-    id: 'machineBroken', category: 'pressure', weight: 1.2,
+    id: 'machineBroken', category: 'pressure', weight: (sim) => 0.3 + (worstWear(sim) / 100) * 3,
     canFire: (sim) => !sim.hasCondition('stationBroken'),
     fire: (sim) => {
       addCondition(sim, 'stationBroken', 3);
@@ -94,6 +98,7 @@ const EVENTS: readonly EventDef[] = [
       const passed = m <= 4;
       const delta = passed ? 4 : m > 10 ? -8 : -3;
       s.reputation = Math.max(0, Math.min(100, s.reputation + delta));
+      addFame(sim, passed ? 2 : delta);
       for (const p of staffOnSite(sim)) addMemory(sim, p, passed ? 'passedInspection' : 'failedInspection');
       sim.log(
         passed
@@ -151,8 +156,7 @@ const EVENTS: readonly EventDef[] = [
     id: 'shoutOut', category: 'good', weight: 1.5,
     canFire: () => true,
     fire: (sim) => {
-      const s = sim.state;
-      s.reputation = Math.min(100, s.reputation + 4);
+      addFame(sim, 5);
       sim.log(sim.venue.text.shoutOut, 'good', null, 'shoutOut', 5);
     },
   },
@@ -185,6 +189,17 @@ export function storytellerEveryMinute(sim: Sim): void {
   const story = s.story;
   s.conditions = s.conditions.filter((c) => c.until > s.tick);
 
+  // A rush that was announced lands.
+  if (story.incoming && s.tick >= story.incoming.at) {
+    story.pendingArrivals = story.incoming.n;
+    sim.log(sim.venue.text.rush(story.incoming.n), 'bad', null, 'coachParty', 6);
+    story.incoming = null;
+  }
+  // A machine worn right down gives up on its own.
+  if (worstWear(sim) >= 100 && !sim.hasCondition('stationBroken')) {
+    addCondition(sim, 'stationBroken', 3);
+    sim.log(sim.venue.text.stationBroken, 'bad', null, 'machineBroken', 7);
+  }
   // Coach party arrivals trickle in a couple a minute.
   if (story.pendingArrivals > 0) {
     const n = Math.min(story.pendingArrivals, randInt(s, 1, 2));
@@ -228,10 +243,11 @@ export function fireEvent(sim: Sim, forceId?: string): void {
   }
   const options = EVENTS.filter((e) => e.category === category && e.canFire(sim));
   if (options.length === 0) return;
-  const weightSum = options.reduce((a, e) => a + e.weight, 0);
+  const weightOf = (e: EventDef) => (typeof e.weight === 'function' ? e.weight(sim) : e.weight);
+  const weightSum = options.reduce((a, e) => a + weightOf(e), 0);
   let roll = random(s) * weightSum;
   for (const e of options) {
-    roll -= e.weight;
+    roll -= weightOf(e);
     if (roll <= 0) {
       e.fire(sim);
       return;

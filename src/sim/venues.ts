@@ -23,6 +23,8 @@ export interface VenueText {
   /** "café", "pub": used in sentences. */
   noun: string;
   rush: (n: number) => string;
+  /** Advance notice of a rush, so the manager can get ready. */
+  rushWarning: (n: number, minutes: number) => string;
   stationBroken: string;
   stationFixed: (name: string) => string;
   repairJob: string;
@@ -65,6 +67,8 @@ export interface VenueDef {
   /** Expected arrivals per hour at a minute of the day, before reputation. */
   arrivals: (minute: number) => number;
   shifts: readonly { start: number; end: number }[];
+  /** Daily rent, pence, before business rates. */
+  rentPerDay: number;
   uniform: { shirt: string; apron: string | null };
   workLabels: Partial<Record<WorkType, string>>;
   text: VenueText;
@@ -137,7 +141,7 @@ const CAFE: VenueDef = {
     { def: 'toilet', x: 14, y: 17 },
   ],
   drinkStation: 'espresso',
-  drinkMinutes: 1.5,
+  drinkMinutes: 1.1,
   positions: SERVICE,
   guestSeating: ['table4', 'table2', 'armchair'],
   frontFloors: ['F'],
@@ -160,6 +164,7 @@ const CAFE: VenueDef = {
     if (m < h(14)) return 15;
     return 6;
   },
+  rentPerDay: 3000,
   shifts: [
     { start: h(6, 30), end: h(14, 30) },
     { start: h(7), end: h(15) },
@@ -171,6 +176,7 @@ const CAFE: VenueDef = {
   text: {
     noun: 'café',
     rush: (n) => `A coach party of ${n} has just pulled up outside.`,
+    rushWarning: (n, minutes) => `Heads up: a coach party of about ${n} is due in ${minutes} minutes.`,
     stationBroken: 'The espresso machine has died. Coffee orders are piling up.',
     stationFixed: (name) => `${name} got the espresso machine going again. With a teaspoon.`,
     repairJob: 'Fixing the espresso machine',
@@ -274,6 +280,7 @@ const PUB: VenueDef = {
     if (m < h(22)) return 17;
     return 7;
   },
+  rentPerDay: 13000,
   shifts: [
     { start: h(11, 30), end: h(17, 30) },
     { start: h(12), end: h(20) },
@@ -286,6 +293,7 @@ const PUB: VenueDef = {
   text: {
     noun: 'pub',
     rush: (n) => `A stag do of ${n} has just piled in. One of them is dressed as a banana.`,
+    rushWarning: (n, minutes) => `Heads up: a stag do of about ${n} is heading this way. ETA ${minutes} minutes, and a banana.`,
     stationBroken: "The lager's run dry. Someone needs to change the barrel.",
     stationFixed: (name) => `${name} changed the barrel. Only slightly soaked.`,
     repairJob: 'Changing the barrel',

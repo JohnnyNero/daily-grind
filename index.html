@@ -21,7 +21,7 @@
       <span id="time">06:00</span>
     </div>
     <div class="status">
-      <span class="money"><b id="money">£0</b> · <span id="rep">Rep 50</span></span>
+      <span class="money"><b id="money">£0</b> · <span id="rep" class="stars">★☆☆☆☆</span></span>
       <span id="status"></span>
     </div>
     <div class="speeds" role="group" aria-label="Game speed">
@@ -80,8 +80,13 @@
       <ul class="menu-list" id="menu-list"></ul>
     </div>
     <div class="tab-page" role="tabpanel" data-tab="place" hidden>
+      <p class="hint" id="standing-line"></p>
       <p class="hint" id="ambience-line"></p>
       <button type="button" class="primary" id="build-start">Build and rearrange</button>
+      <h3>Machines</h3>
+      <div class="cards" id="machines"></div>
+      <h3>Running costs</h3>
+      <p class="hint" id="costs-line"></p>
       <h3>Regulars</h3>
       <div class="cards" id="regulars"></div>
     </div>
@@ -136,7 +141,7 @@
       <div class="cards" id="team"></div>
     </div>
     <div class="tab-page" role="tabpanel" data-tab="jobs" hidden>
-      <p class="hint">Tap a cell to cycle 1 (first) to 4 (last), or off. Small numbers are skill; a ring marks someone's station. People stick to their station, or to what they're doing, and help elsewhere when it's quiet or there's a rush.</p>
+      <p class="hint">Tap a cell to cycle 1 (first) to 4 (last), or off. Small numbers are skill; a ring marks someone's station and an orange dot what they love (they learn it fast). People stick to their station, or to what they're doing, and help elsewhere when it's quiet or there's a rush.</p>
       <div class="table-wrap"><table id="priorities"></table></div>
     </div>
     <div class="tab-page" role="tabpanel" data-tab="hire" hidden>

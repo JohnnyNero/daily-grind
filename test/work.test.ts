@@ -39,8 +39,12 @@ describe('sticky work', () => {
     const p = sim.state.pawns.find((x) => x.staff && x.onMap)!;
     setStation(sim, p, 'dishes');
     sim.state.sinkDirty = 0;
-    // Some cups on a table, and the floor otherwise covered by nobody else.
-    for (const o of sim.state.pawns) if (o !== p && o.staff) setStation(sim, o, 'floor');
+    // Some cups on a table; colleagues cover the till, the machine and the floor.
+    const cover = ['floor', 'counter', 'barista', 'cleaning'] as const;
+    sim.state.pawns.filter((o) => o !== p && o.staff).forEach((o, i) => setStation(sim, o, cover[i % cover.length]));
+    sim.state.spills = [];
+    sim.state.queue = [];
+    sim.state.orders = [];
     const table = sim.state.objects.find((o) => o.def === 'table2')!;
     sim.state.dirty[table.id] = 2;
     sim.state.rushes = [];

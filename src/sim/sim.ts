@@ -20,11 +20,14 @@ import { pick, random, randInt, randRange } from './rng';
 import { socialEveryMinute } from './social';
 import {
   TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE,
-  SAVE_VERSION, type Applicant, type ConditionId, type DayStats, type Job, type LogEntry, type Pawn, type Relation, type Shift, type SimState, type Step,
+  SAVE_VERSION, type Applicant, type ConditionId, type Job, type LogEntry, type Pawn, type Relation, type Shift, type SimState, type StaffInfo, type Step,
 } from './state';
 import { addMemory, driftMood, expireMemories, hasTrait, opinionFromMemories } from './thoughts';
 import { abandonAction, findWork, performAction, standByJob, updateRushes, validateAction } from './work';
 import { World, parseMap } from './world';
+import { emptyDay } from './business';
+import { morningBooks } from './books';
+import { fillStaff, normalize } from './normalize';
 
 /** Walking speed in tiles per tick. At 1x (60 ticks per real second) that's about 4 tiles a second. */
 const WALK_SPEED = 0.07;
@@ -41,9 +44,6 @@ export const IDLE_LABEL = 'Hanging about';
 /** Story kinds memorable enough for the hall of fame. */
 const FAME_TALES = new Set(['couple', 'quit', 'criticRave', 'criticWalkout', 'milestone', 'lostRegular', 'fired', 'birthday']);
 
-export function emptyDay(): DayStats {
-  return { reviews: [], served: 0, walkouts: 0, turnedAway: 0, takings: 0, wages: 0, tips: 0 };
-}
 
 export class Sim {
   readonly state: SimState;
@@ -54,6 +54,7 @@ export class Sim {
     if (saved) {
       this.state = saved;
       this.world = new World(this.state);
+      normalize(this);
       return;
     }
     const venue = venueDef(venueId);
@@ -83,7 +84,7 @@ export class Sim {
       log: [],
       conditions: [],
       story: {
-        adaptation: 0, phase: 'busy', phaseUntilDay: 3, nextEventAt: 0, pendingArrivals: 0,
+        adaptation: 0, phase: 'busy', phaseUntilDay: 3, nextEventAt: 0, pendingArrivals: 0, incoming: null,
         taleUses: {}, repAtOpen: BUSINESS.startingReputation, breaksToday: 0, quitsToday: 0, recapDay: 0,
       },
       recaps: [],
@@ -92,10 +93,11 @@ export class Sim {
       regulars: [],
       spills: [],
       hallOfFame: [],
-    };
+    } as Partial<SimState> as SimState;
     this.world = new World(this.state);
     refreshApplicants(this);
     for (const o of venue.objects) this.world.placeObject(o);
+    normalize(this);
     for (const shift of venue.shifts) this.addStaff({ ...shift });
   }
 
@@ -168,9 +170,14 @@ export class Sim {
         belowSince: { minor: null, major: null, severe: null }, highSince: null, lastBreak: s.tick,
         mentalBreak: null, inspiration: null, quit: false, sickDay: null, servedToday: 0,
         forcedBreak: false, homeEarlyDay: null, fired: false, wants: [], station: null, focus: null,
-      },
+      } as Partial<StaffInfo> as StaffInfo,
       visit: null,
     };
+    if (from) {
+      p.staff!.passions = [...from.passions];
+      p.staff!.wage = from.wage;
+    }
+    fillStaff(p.staff!, p.id, this.day);
     s.pawns.push(p);
     topUpWants(this, p);
     return p;
@@ -312,7 +319,7 @@ export class Sim {
         expireMemories(this, p);
         driftMood(this, p);
         checkBreaks(this, p);
-        const wage = BUSINESS.wagePerHour / 60;
+        const wage = staff.wage / 60;
         s.money -= wage;
         s.today.wages += wage;
         if (!this.onShift(p) && !this.isLeaving(p)) this.sendHome(p);
@@ -342,9 +349,9 @@ export class Sim {
 
   private newDay(): void {
     const s = this.state;
-    s.money -= BUSINESS.rentPerDay;
     s.yesterday = s.today;
     s.today = emptyDay();
+    morningBooks(this);
     for (const p of s.pawns) {
       if (!p.staff) continue;
       p.staff.tipsToday = 0;
@@ -648,8 +655,15 @@ export class Sim {
         }
         if (--st.ticksLeft <= 0) {
           performAction(this, p, st.action);
-          const skills = p.staff?.skills;
-          if (skills) skills[st.work] = Math.min(10, Math.round((skills[st.work] + 0.03) * 100) / 100);
+          const staff = p.staff;
+          if (staff) {
+            // Practice makes better: much faster at something they love, slowly otherwise.
+            // Each point is harder won than the last, so mastery takes weeks.
+            const rate = staff.passions.includes(st.work) ? 0.006 : 0.0015;
+            const now = staff.skills[st.work];
+            staff.skills[st.work] = Math.min(10, now + rate * (1 - now / 12) ** 2);
+            staff.lastWork = st.work;
+          }
           this.advance(p, job);
         }
         return;

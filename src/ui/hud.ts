@@ -8,6 +8,7 @@ import { TICKS_PER_DAY, TICKS_PER_MINUTE, type DayStats, type LogEntry, type Paw
 import { moodReasons } from '../sim/thoughts';
 import { paintPortrait } from './characterForm';
 import { el, hhmm, setupTabs } from './dom';
+import { stars } from '../sim/business';
 
 const TOAST_MS = 7000;
 
@@ -182,7 +183,7 @@ export class Hud {
     if (r.review) {
       const cite = document.createElement('cite');
       cite.textContent = `${'★'.repeat(r.review.stars)}${'☆'.repeat(5 - r.review.stars)} ${r.review.name}${r.review.critic ? ', restaurant critic' : ''}`;
-      quote.replaceChildren(`“${r.review.text}”`, cite);
+      quote.replaceChildren(`“${r.review.text.replace(/^["“]+|["”]+$/g, '')}”`, cite);
     }
     el('recap-star').textContent = r.star ? `Star of the day: ${r.star}` : '';
     this.recapBox.hidden = false;
@@ -270,12 +271,13 @@ export class Hud {
     const skill = Math.floor(p.staff!.skills[work]);
     button.dataset.p = String(value);
     button.classList.toggle('station', p.staff!.station === work);
+    button.classList.toggle('passion', p.staff!.passions.includes(work));
     button.replaceChildren(value === 0 ? 'off' : String(value));
     const small = document.createElement('small');
     small.textContent = String(skill);
     button.append(small);
     const label = this.sim.venue.workLabels[work] ?? WORK_TYPES.find((w) => w.id === work)!.label;
-    const station = p.staff!.station === work ? ', their station' : '';
+    const station = (p.staff!.station === work ? ', their station' : '') + (p.staff!.passions.includes(work) ? ', loves it' : '');
     button.setAttribute('aria-label', `${p.name}, ${label}: ${value === 0 ? 'off' : `priority ${value}`}, skill ${skill}${station}`);
   }
 
@@ -321,7 +323,8 @@ export class Hud {
     this.time.textContent = this.sim.clock();
     this.money.textContent = pounds(s.money);
     this.money.classList.toggle('negative', s.money < 0);
-    this.rep.textContent = `Rep ${Math.round(s.reputation)}`;
+    this.rep.textContent = `${stars(this.sim)}★`;
+    this.rep.title = `Reputation ${Math.round(s.reputation)}, fame ${Math.round(s.fame)}`;
     if (fastForwarding) this.status.textContent = 'Closed · skipping to morning';
     else if (!this.sim.isOpen()) this.status.textContent = 'Closed';
     else {

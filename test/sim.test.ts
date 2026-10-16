@@ -95,8 +95,9 @@ describe('counter service', () => {
     expect(day.served).toBeGreaterThan(40);
     expect(day.takings).toBeGreaterThan(0);
     expect(day.walkouts).toBeLessThan(day.served);
-    // Takings in, wages and rent out.
-    expect(sim.state.money).toBeCloseTo(start + day.takings - day.wages - 6000, 0);
+    // Takings in; wages, ingredients and the next morning's rent and rates out.
+    expect(sim.state.money).toBeCloseTo(start + day.takings - day.wages - day.ingredients - day.repairs - sim.state.today.rent, 0);
+    expect(day.ingredients).toBeGreaterThan(0);
     // Nothing is left half-done overnight.
     expect(sim.state.orders).toHaveLength(0);
     expect(sim.state.queue).toHaveLength(0);

@@ -121,6 +121,27 @@ export interface StaffInfo {
   fired: boolean;
   /** Things they'd like to happen (Sims-style wants); meeting one is a lasting mood boost. */
   wants: Want[];
+  /** Kinds of work they love: they learn those much faster. */
+  passions: WorkType[];
+  /** Pay, pence per hour. Raises push it up. */
+  wage: number;
+  /** Slow-building strain, 0-100: long shifts, rushes and no days off. Burnout lies at the top. */
+  stress: number;
+  /** Weekdays (0-6, day 1 is 0) they're not in. */
+  daysOff: number[];
+  hiredDay: number;
+  /** Shift lead: steadies the team around them, for a bit more pay. */
+  lead: boolean;
+  /** Where they go when there's a rush on, overriding their usual station. */
+  rushStation: WorkType | null;
+  /** Lines they come out with (for recreating real colleagues). */
+  catchphrases: string[];
+  /** Lives in the staff flat (if there is one) instead of going home. */
+  livesIn: boolean;
+  /** The kind of work they did last, so switching costs a little settling-in time. */
+  lastWork: WorkType | null;
+  /** Last day they asked for a raise (or were offered one by a rival). */
+  lastAskDay: number;
   /** The manager's choice of station: they stick to this work and only help out when it's quiet. */
   station?: WorkType | null;
   /** What they've settled into (without a station), and when they last did any of it. */
@@ -162,6 +183,10 @@ export interface Applicant {
   traits: TraitId[];
   skills: Skills;
   backstory: string;
+  /** Kinds of work they love: they learn those much faster. */
+  passions: WorkType[];
+  /** What they'd want paying, pence per hour. */
+  wage: number;
 }
 
 export interface MenuEntry {
@@ -263,6 +288,8 @@ export interface StoryState {
   nextEventAt: number;
   /** Guests still to arrive from a coach party. */
   pendingArrivals: number;
+  /** A rush on its way: when it lands and how many. Announced ahead so you can prepare. */
+  incoming: { at: number; n: number; what: string } | null;
   /** How many times each story kind has headlined a recap; stale kinds score lower. */
   taleUses: Record<string, number>;
   repAtOpen: number;
@@ -279,6 +306,61 @@ export interface DayStats {
   takings: number;
   wages: number;
   tips: number;
+  /** Running costs, in pence. */
+  ingredients: number;
+  rent: number;
+  repairs: number;
+  other: number;
+}
+
+/** A week on the books, written up every seventh morning. */
+export interface WeeklyReport {
+  week: number;
+  firstDay: number;
+  takings: number;
+  wages: number;
+  ingredients: number;
+  rent: number;
+  repairs: number;
+  other: number;
+  served: number;
+  walkouts: number;
+  fameStart: number;
+  fameEnd: number;
+  starsStart: number;
+  starsEnd: number;
+  notes: string[];
+}
+
+/**
+ * Something that needs the manager: a big event worth reading (a letter), or a decision
+ * with choices (a raise request, a rival's offer). Stays until dealt with.
+ */
+export interface Letter {
+  id: number;
+  tick: number;
+  title: string;
+  text: string;
+  tone: 'good' | 'bad' | 'neutral';
+  pawn: number | null;
+  /** A decision: what it's about and the choices. Without these it's just news. */
+  kind?: string;
+  choices?: { id: string; label: string }[];
+  /** For decisions: when it lapses (the default choice is taken). */
+  expires?: number;
+  data?: Record<string, number | string>;
+}
+
+/** A target to aim for, with a reward. */
+export interface Goal {
+  id: string;
+  title: string;
+  detail: string;
+  /** Day it must be met by, if any. */
+  byDay: number | null;
+  done: boolean;
+  failed: boolean;
+  reward: number;
 }
 
 export interface Pawn {
@@ -350,6 +432,23 @@ export interface SimState {
   hallOfFame: { day: number; text: string }[];
   /** Kinds of work currently in a rush (they start at a high backlog and end at a lower one). */
   rushes?: WorkType[];
+  /** How well known the place is. Grows with happy customers, drives how many come. Slow to move. */
+  fame: number;
+  /** Wear on each machine, 0 (new) to 100 (about to give up), by object id. */
+  wear: Record<number, number>;
+  /** This week's numbers so far. */
+  week: WeeklyReport;
+  weeklyReports: WeeklyReport[];
+  /** Consecutive mornings spent in the red. */
+  debtDays: number;
+  letters: Letter[];
+  goals: Goal[];
+  /** Manager calls in effect, and when each can next be used. */
+  calls: { allHandsUntil: number; closedUntil: number; ready: Record<string, number> };
+  /** Big days announced ahead: a festival, the inspection, an award judging. */
+  diary: { day: number; kind: 'festival' | 'inspection' | 'award'; title: string }[];
+  /** Menu items unlocked by reaching a star rating. */
+  unlocked: string[];
 }
 
 export const TICKS_PER_MINUTE = 60;

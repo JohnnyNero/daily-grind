@@ -7,7 +7,9 @@ import {
   BACKSTORIES, FIRST_NAMES, HAIR_COLOURS, HAIR_STYLES, MAX_STAFF, SKIN_TONES, TRAITS, WORK_TYPES,
   objectDef, type HairStyle, type Skills, type TraitId, type WorkType,
 } from './defs';
-import { pick, randRange } from './rng';
+import { pick, random, randRange } from './rng';
+import { askingWage } from './business';
+import { passionsFor } from './normalize';
 import { Sim } from './sim';
 import { SAVE_VERSION, type Applicant, type ObjectInst, type Pawn, type SimState } from './state';
 import { addMemory } from './thoughts';
@@ -42,6 +44,8 @@ export function makeApplicant(sim: Sim): Applicant {
     traits: randomTraits(sim),
     skills,
     backstory: pick(s, BACKSTORIES.filter((b) => !s.applicants.some((a) => a.backstory === b))),
+    passions: passionsFor(s.nextId * 31 + s.applicants.length + Math.floor(random(s) * 1000)),
+    wage: askingWage(skills),
   };
 }
 
@@ -62,7 +66,10 @@ export function hire(sim: Sim, index: number): Pawn | string {
   if (!a) return 'That applicant has moved on.';
   if (staffList(sim).length >= MAX_STAFF) return `The café can't take more than ${MAX_STAFF} staff.`;
   s.applicants.splice(index, 1);
-  const p = sim.addStaff({ start: 9 * 60, end: 17 * 60 }, a);
+  // Two of the same name on one team gets confusing: the newcomer goes by their initial too.
+  const taken = new Set(s.pawns.filter((x) => x.staff && !x.staff.quit).map((x) => x.name));
+  const name = taken.has(a.name) ? `${a.name} ${'BCDFGHJKLMNPRSTW'[s.nextId % 16]}.` : a.name;
+  const p = sim.addStaff({ start: 9 * 60, end: 17 * 60 }, { ...a, name });
   sim.log(`${p.name} joined the team. ${a.backstory}`, 'good', p.id, 'hire', 3);
   return p;
 }
@@ -206,12 +213,7 @@ export function setEnabled(sim: Sim, name: string, enabled: boolean): string | n
   return null;
 }
 
-/** Average price against the usual price, across what's on the menu (1 = normal). */
-export function priceRatio(sim: Sim): number {
-  const on = sim.state.menu.filter((m) => m.enabled);
-  if (on.length === 0) return 1;
-  return on.reduce((sum, m) => sum + m.price / m.basePrice, 0) / on.length;
-}
+export { priceRatio } from './business';
 
 // ------------------------------------------------------------------ furniture
 

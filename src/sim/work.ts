@@ -10,7 +10,8 @@ import { walkOut } from './guests';
 import { regularWronged } from './regulars';
 import { pick } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_MINUTE, type Action, type Job, type Pawn, type Step } from './state';
+import { TICKS_PER_MINUTE, type Action, type Job, type ObjectInst, type Pawn, type Step } from './state';
+import { chargeIngredients, machineWear, wearMachine } from './business';
 import { addMemory, hasTrait } from './thoughts';
 
 const MAX_WASH_BATCH = 6;
@@ -25,9 +26,9 @@ interface Task {
 const CLUMSY_DROP_CHANCE = 0.08;
 const RUDE_CUSTOMER_CHANCE = 0.06;
 
-/** 0.6x speed at skill 0, 1x at skill 5, 1.4x at skill 10, then traits and mood breaks. */
+/** 0.4x speed at skill 0, 1x at skill 5, 1.6x at skill 10, then traits and mood breaks. */
 export function workSpeed(p: Pawn, work: WorkType): number {
-  let speed = 0.6 + (p.staff?.skills[work] ?? 0) * 0.08;
+  let speed = 0.4 + (p.staff?.skills[work] ?? 0) * 0.12;
   if (hasTrait(p, 'hardWorker')) speed *= 1.15;
   if (hasTrait(p, 'lazy')) speed *= 0.85;
   if (hasTrait(p, 'perfectionist')) speed *= 0.9;
@@ -44,8 +45,12 @@ export function workQuality(p: Pawn, work: WorkType): number {
   return Math.min(10, q);
 }
 
+/** Switching to a different kind of work takes a moment to get back into: specialists win. */
+const SETTLING_IN = 1.3;
+
 function actStep(p: Pawn, work: WorkType, action: Action, minutes: number): Step {
-  const total = Math.max(1, Math.round((minutes * TICKS_PER_MINUTE) / workSpeed(p, work)));
+  const settling = p.staff?.lastWork && p.staff.lastWork !== work ? SETTLING_IN : 1;
+  const total = Math.max(1, Math.round((minutes * TICKS_PER_MINUTE * settling) / workSpeed(p, work)));
   return { kind: 'act', action, work, ticksLeft: total, total };
 }
 
@@ -341,6 +346,22 @@ function withPath(sim: Sim, p: Pawn, label: string, x: number, y: number, rest: 
   return job;
 }
 
+function nearestMachine(sim: Sim, p: Pawn): ObjectInst | null {
+  let best: ObjectInst | null = null;
+  let bestD = Infinity;
+  for (const o of sim.state.objects) {
+    if (o.def !== sim.venue.drinkStation) continue;
+    for (const [x, y] of sim.world.spots(o)) {
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (d < bestD) {
+        bestD = d;
+        best = o;
+      }
+    }
+  }
+  return best;
+}
+
 function nearestPassableSpot(sim: Sim, objectId: number, p: Pawn): [number, number] | null {
   const o = sim.world.objectById(objectId);
   if (!o) return null;
@@ -429,6 +450,15 @@ export function performAction(sim: Sim, p: Pawn, a: Action): void {
       const item = s.orders.find((o) => o.id === a.orderId)!.items[a.index];
       item.status = 'carried';
       item.quality = workQuality(p, item.kind === 'drink' ? 'barista' : 'counter');
+      chargeIngredients(sim, s.menu.find((m) => m.name === item.name)?.basePrice ?? item.price);
+      if (item.kind === 'drink') {
+        // The machine they're stood at wears a little with every drink, and a worn one makes worse coffee.
+        const machine = nearestMachine(sim, p);
+        if (machine) {
+          item.quality = Math.max(0, item.quality - (machineWear(sim, machine.id) / 100) * 3);
+          wearMachine(sim, machine.id);
+        }
+      }
       p.carrying = { kind: item.kind, orderId: a.orderId, index: a.index };
       return;
     }
@@ -468,10 +498,13 @@ export function performAction(sim: Sim, p: Pawn, a: Action): void {
       if (p.staff?.mentalBreak) p.staff.mentalBreak.until = s.tick;
       return;
     }
-    case 'repair':
+    case 'repair': {
       s.conditions = s.conditions.filter((c) => c.id !== 'stationBroken');
+      // A bodge gets it going but doesn't make it new: only a proper service does that.
+      for (const o of s.objects) if (o.def === sim.venue.drinkStation) s.wear[o.id] = Math.min(s.wear[o.id] ?? 0, 60);
       sim.log(sim.venue.text.stationFixed(p.name), 'good', p.id, 'repair', 2);
       return;
+    }
     case 'mop':
       s.spills = s.spills.filter((sp) => !(sp.x === a.x && sp.y === a.y));
       return;

@@ -3,11 +3,11 @@
 // Patience drains while they queue and wait; at zero they walk out.
 
 import { reservationKey } from './ai';
-import { BUSINESS, GUEST_CLOTHES, HAIR_COLOURS, HAIR_STYLES, NEEDS, SKIN_TONES, objectDef, type NeedValues } from './defs';
+import { GUEST_CLOTHES, HAIR_COLOURS, HAIR_STYLES, NEEDS, SKIN_TONES, objectDef, type NeedValues } from './defs';
 import { pick, randInt, random, randRange } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_MINUTE, type Pawn, type Visit } from './state';
-import { priceRatio } from './manage';
+import { demandFactor, guestCapacity, noteVisit, priceTolerance } from './business';
 import { arrivalFactor } from './storyteller';
 import { ambience, maybeSpill } from './ambience';
 import { availableRegulars, makeRegular, maybeBecomeRegular, regularArrivalChance, regularServed, regularWronged } from './regulars';
@@ -15,7 +15,7 @@ import { writeReview } from './tales';
 import { addMemory, hasTrait } from './thoughts';
 
 /** Patience lost per minute. */
-const PATIENCE_DRAIN = { queuing: 1 / 30, waiting: 1 / 20 } as const;
+const PATIENCE_DRAIN = { queuing: 1 / 30, waiting: 1 / 26 } as const;
 /** How much one guest's verdict moves reputation (a rolling average of satisfaction). */
 const REP_WEIGHT = 0.04;
 const EAT_IN_CHANCE = 0.55;
@@ -49,9 +49,9 @@ export function guestsEveryMinute(sim: Sim): void {
 
 function maybeSpawn(sim: Sim): void {
   const s = sim.state;
-  // Pricier than usual puts people off; cheaper draws them in, up to a point.
-  const priceDraw = Math.max(0.3, Math.min(1.3, 1 - (priceRatio(sim) - 1) * 1.2));
-  const perHour = sim.venue.arrivals(sim.minuteOfDay) * (0.4 + s.reputation / 80) * arrivalFactor(sim) * priceDraw;
+  // Fame brings people, quality and fair prices keep them coming (see business.ts).
+  if (s.calls.closedUntil > s.tick) return;
+  const perHour = sim.venue.arrivals(sim.minuteOfDay) * demandFactor(sim) * arrivalFactor(sim);
   if (perHour <= 0 || random(s) >= perHour / 60) return;
   tryArrive(sim);
 }
@@ -62,10 +62,11 @@ export function tryArrive(sim: Sim): void {
   const canServe = s.menu.some((m) => m.enabled && (m.kind === 'drink' || !sim.hasCondition('noFood')));
   if (!canServe) return;
   const onSite = s.pawns.filter((p) => p.kind === 'guest').length;
-  if (onSite >= BUSINESS.maxGuestsOnSite || s.queue.length >= sim.venue.positions.queue.length) {
-    // They look in, see the chaos and keep walking.
+  if (onSite >= guestCapacity(sim) || s.queue.length >= sim.venue.positions.queue.length) {
+    // They look in, see the chaos and keep walking, and tell their friends it's always rammed.
     s.today.turnedAway++;
     judge(sim, 0.3);
+    noteVisit(sim, 'turnedAway');
     return;
   }
   // People wanting to sit in glance through the window first; a full room sends most of them on.
@@ -257,7 +258,8 @@ function collect(sim: Sim, p: Pawn): void {
   // Value for money: paying over the usual price stings more than a discount pleases.
   const paid = order.items.reduce((sum, i) => sum + i.price, 0);
   const usual = order.items.reduce((sum, i) => sum + (s.menu.find((m) => m.name === i.name)?.basePrice ?? i.price), 0);
-  const ratio = paid / usual;
+  // A well-rated place can charge more before anyone minds.
+  const ratio = paid / usual / priceTolerance(sim);
   const value = ratio > 1 ? -(ratio - 1) * 0.5 : (1 - ratio) * 0.15;
   // Regulars feel at home; everyone notices a dirty or dreary café.
   const familiar = v.regularId !== null ? 0.05 : 0;
@@ -265,7 +267,7 @@ function collect(sim: Sim, p: Pawn): void {
   // Wanting to sit down and finding nowhere to sit sours the whole visit.
   const seat = v.eatIn ? findSeat(sim, p) : null;
   const noSeat = v.eatIn && !seat ? 0.12 : 0;
-  const satisfaction = 0.45 + v.patience * 0.35 + (quality / 10) * 0.2 + value + familiar + feel - noSeat - (sim.hasCondition('noFood') ? 0.05 : 0);
+  const satisfaction = 0.4 + v.patience * 0.35 + (quality / 10) * 0.3 + value + familiar + feel - noSeat - (sim.hasCondition('noFood') ? 0.05 : 0);
   v.mood = satisfaction > 0.8 ? 'happy' : satisfaction > 0.55 ? 'fine' : 'annoyed';
   const server = sim.pawnById(order.takenBy);
   if (satisfaction > 0.72) {
@@ -282,6 +284,7 @@ function collect(sim: Sim, p: Pawn): void {
   }
   if (server && v.mood === 'happy' && hasTrait(server, 'peoplePerson')) addMemory(sim, server, 'madeTheirDay');
   judge(sim, satisfaction, v.critic ? 10 : 1);
+  noteVisit(sim, v.mood, v.critic ? 150 : v.regularId !== null ? 1.5 : 1);
   s.today.served++;
   if (v.critic || random(s) < REVIEW_CHANCE) {
     const review = writeReview(sim, p, satisfaction, server);
@@ -372,6 +375,7 @@ export function walkOut(sim: Sim, p: Pawn): void {
   v.orderId = null;
   v.mood = 'furious';
   judge(sim, 0, v.critic ? 10 : 1);
+  noteVisit(sim, 'walkout', v.critic ? 150 : 1);
   if (v.critic || random(s) < 0.5) {
     const review = writeReview(sim, p, 0, undefined);
     s.today.reviews.push(review);

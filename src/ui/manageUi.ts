@@ -1,7 +1,7 @@
 // Management panels: the team (rota, breaks, editing, hiring) and the café (menu, saving).
 // Build mode lives in buildUi.ts. All changes go through sim/manage.ts, which validates them.
 
-import { MAX_STAFF, TRAITS, WORK_TYPES, type TraitId, type WorkType } from '../sim/defs';
+import { MAX_STAFF, TRAITS, WORK_TYPES, objectDef, type TraitId, type WorkType } from '../sim/defs';
 import {
   editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setEnabled, setPrice, setShift, setStation,
 } from '../sim/manage';
@@ -10,7 +10,19 @@ import { cleanliness, looks } from '../sim/ambience';
 import type { Pawn, Recap } from '../sim/state';
 import { changesOf, CharacterForm, draftOf, portrait } from './characterForm';
 import { el, h, hhmm, setupTabs } from './dom';
+import { pounds } from './hud';
+import {
+  INGREDIENT_SHARE, SERVICE_COST, dailyRent, guestCapacity, machineWear, priceTolerance, seatCount, serviceMachine, starProgress, starText, stars,
+} from '../sim/business';
 import { exportSave, importSave, saveToDevice } from './save';
+
+function perHour(pence: number): string {
+  return `£${(pence / 100).toFixed(2)}/h`;
+}
+
+function workLabel(sim: Sim, w: WorkType): string {
+  return sim.venue.workLabels[w] ?? WORK_TYPES.find((x) => x.id === w)!.label;
+}
 
 function traitLabels(traits: TraitId[]): string {
   return traits.map((t) => TRAITS.find((x) => x.id === t)!.label).join(', ');
@@ -48,7 +60,7 @@ export class TeamUi {
           h('div', { className: 'person-info' },
           h('div', { className: 'top' }, h('strong', {}, a.name), h('span', {}, traitLabels(a.traits))),
           h('p', {}, a.backstory),
-          h('p', { className: 'hint' }, `Best at ${best.label.toLowerCase()} (skill ${Math.floor(a.skills[best.id])}) · 09:00–17:00`),
+          h('p', { className: 'hint' }, `Best at ${best.label.toLowerCase()} (skill ${Math.floor(a.skills[best.id])}) · loves ${a.passions.map((w) => workLabel(this.sim, w).toLowerCase()).join(' and ')} · wants ${perHour(a.wage)}`),
           h('div', { className: 'row' },
             h('button', {
               type: 'button',
@@ -71,6 +83,7 @@ export class TeamUi {
     const info = h('div', { className: 'person-info' },
       h('div', { className: 'top' }, h('strong', {}, p.name), h('span', {}, `${hhmm(p.shift.start)}–${hhmm(p.shift.end)}`)),
       h('p', { className: 'hint' }, `${traitLabels(p.staff!.traits)} · ${status}`),
+      h('p', { className: 'hint' }, `Loves ${p.staff!.passions.map((w) => workLabel(this.sim, w).toLowerCase()).join(' and ')} · ${perHour(p.staff!.wage)}`),
     );
     const card = h('div', { className: 'card person' }, portrait(p.look, 44, p.name), info);
     info.append(this.stationPicker(p));
@@ -219,6 +232,24 @@ export class CafeUi {
   private renderExtras(): void {
     const s = this.sim.state;
     const pct = (v: number) => `${Math.round(v * 100)}%`;
+    const n = stars(this.sim);
+    el('standing-line').textContent = `${starText(n)} ${n < 5 ? `· ${Math.round(starProgress(this.sim) * 100)}% of the way to the next star` : '· top of the tree'}. Room for ${guestCapacity(this.sim)} customers (${seatCount(this.sim)} seats). Happy customers spread the word; walkouts and queues out the door undo it.`;
+    el('machines').replaceChildren(...this.sim.state.objects.filter((o) => o.def === this.sim.venue.drinkStation).map((o) => {
+      const wear = Math.round(machineWear(this.sim, o.id));
+      return h('div', { className: 'card' },
+        h('div', { className: 'top' }, h('strong', {}, objectDef(o.def).label), h('span', {}, `${wear}% worn`)),
+        h('p', { className: 'hint' }, wear >= 70 ? 'Making worse drinks, and likely to break down.' : wear >= 40 ? 'Getting tired. Drinks are slipping a little.' : 'Running nicely.'),
+        h('div', { className: 'row' }, h('button', {
+          type: 'button', disabled: wear < 5,
+          onclick: () => {
+            const err = serviceMachine(this.sim, o.id);
+            this.hooks.notify(err ?? 'Serviced. Good as new.', err ? 'bad' : 'good');
+            this.render();
+          },
+        }, `Service ${pounds(SERVICE_COST)}`)));
+    }));
+    const wages = this.sim.state.pawns.filter((p) => p.staff && !p.staff.quit).reduce((sum, p) => sum + p.staff!.wage * ((p.shift.end - p.shift.start) / 60), 0);
+    el('costs-line').textContent = `Rent and rates ${pounds(dailyRent(this.sim))} a day (rates rise with the value of your fit-out). Wages about ${pounds(wages)} a day. Ingredients ${Math.round(INGREDIENT_SHARE * 100)}% of the usual price of everything made.`;
     el('ambience-line').textContent = `Cleanliness ${pct(cleanliness(this.sim))} · Looks ${pct(looks(this.sim))}. Plants and armchairs out front help; dirty cups and spills don't.`;
 
     const regulars = s.regulars.slice().sort((a, b) => b.visits - a.visits).slice(0, 8);
@@ -267,11 +298,13 @@ export class CafeUi {
     el('cafe-title').textContent = this.sim.venue.name.charAt(0).toUpperCase() + this.sim.venue.name.slice(1);
     this.renderExtras();
     const ratio = priceRatio(this.sim);
-    el('price-hint').textContent = ratio > 1.05
-      ? `Prices are ${Math.round((ratio - 1) * 100)}% above usual: fewer customers, and they'll grumble about value.`
+    const tolerance = priceTolerance(this.sim);
+    const fine = tolerance > 1.001 ? `At ${starText(stars(this.sim))} people will pay up to ${Math.round((tolerance - 1) * 100)}% over the usual without minding.` : 'More stars and people will pay more.';
+    el('price-hint').textContent = (ratio > tolerance + 0.04
+      ? `Prices are ${Math.round((ratio - 1) * 100)}% above usual: more than people will happily pay, so fewer come and they grumble about value. `
       : ratio < 0.95
-        ? `Prices are ${Math.round((1 - ratio) * 100)}% below usual: busier, but thinner margins.`
-        : 'Prices are at the usual level.';
+        ? `Prices are ${Math.round((1 - ratio) * 100)}% below usual: a little busier, but thinner margins. `
+        : `Prices are ${ratio > 1.005 ? `${Math.round((ratio - 1) * 100)}% above usual` : 'at the usual level'}. `) + fine;
     this.list.replaceChildren(...this.sim.state.menu.map((m) => {
       const change = (fn: () => string | null) => () => {
         const err = fn();
