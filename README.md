@@ -46,7 +46,8 @@ There are two so far: **the café** (mornings, flat whites, cake) and **the pub*
 - Events (rows, romances, meltdowns, quitting, coach parties, a broken machine, the critic) pop up at the top; tap one to jump to that person.
 - When the café shuts, the day's recap appears: the numbers, the best stories, a review and the star of the day. Tap **Next day** to carry on.
 - **Staff** (bottom right) has four tabs: **Team** (today's numbers; edit shifts, *Break now*, *Send home*, *Edit* names, looks and traits, or let someone go), **Jobs** (work priorities: tap a cell to cycle 1 first to 4 last, or off; staff take the nearest job at their highest priority unless a need is urgent), **Hire** (applicants) and **Log** (recent events and the last recap).
-- **Café** has **Menu** (prices and on/off switches), **Place** (how it feels, build mode to move, buy and sell furniture, and your regulars), **Story** (scrapbook and hall of fame) and **Save** (*Save now*, *Export*, *Import*, *New game*). The game also saves itself on this device every day and when you leave.
+- **Café** has **Menu** (prices and on/off switches), **Place** (how it feels, *Build and rearrange*, and your regulars), **Story** (scrapbook and hall of fame) and **Save** (*Save now*, *Export*, *Import*, *New game*). The game also saves itself on this device every day and when you leave.
+- **Build mode** has three tabs. **Furniture**: drag anything to move it (it shows green where it fits, red where it doesn't), tap it to sell, or pick something from the row to buy, drag it into place and tap *Buy*. **Walls**: drag to draw a straight wall (£25 a tile), tap a wall to put a door in it (£60), or drag a box to knock walls and doors out (free). **Floors**: drag a box to lay wood, carpet, counter, kitchen, staff room or toilet floor (£5 a tile); kitchen, staff room and toilet floors decide where the oven, staff sofa or toilet can go. The outer walls, shop front and pavement are shaded and stay put, and anything that would cut people off from the counter or a piece of furniture is refused. *Undo* takes back the last stroke and refunds it. Two fingers (or a right-drag on a computer) move the view.
 - Pause, 1×, 3×, 6× in the top bar. While nobody is on site the clock skips ahead to the morning.
 
 ## Layout
@@ -66,6 +67,7 @@ src/
     storyteller.ts  when events happen and which: rhythm, scaling, adaptation
     tales.ts     the recap: picking fresh stories, headlines, reviews
     manage.ts    everything the player changes: rota, hiring, menu, furniture, saving
+    structure.ts building work: walls, doors and floors, and what keeps the layout usable
     regulars.ts  guests who come back, remember, and hold grudges
     wants.ts     what each staff member would like to happen
     ambience.ts  cleanliness, looks, spills and slips

@@ -46,12 +46,18 @@
   </div>
 
   <section class="buildbar" id="buildbar" hidden aria-label="Build mode">
-    <p id="build-hint">Tap furniture to move or sell it.</p>
-    <div class="palette" id="build-palette" hidden></div>
+    <div class="tabs" role="tablist" aria-label="What to build">
+      <button type="button" role="tab" data-tab="furniture">Furniture</button>
+      <button type="button" role="tab" data-tab="walls">Walls</button>
+      <button type="button" role="tab" data-tab="floors">Floors</button>
+    </div>
+    <p id="build-hint"></p>
+    <div class="palette" id="build-tools"></div>
     <div class="row">
-      <button type="button" id="build-buy">Buy</button>
+      <button type="button" id="build-undo" disabled>Undo</button>
       <button type="button" id="build-sell" hidden>Sell</button>
       <button type="button" id="build-cancel" hidden>Cancel</button>
+      <button type="button" class="done" id="build-confirm" hidden>Buy</button>
       <button type="button" class="done" id="build-done">Done</button>
     </div>
   </section>
@@ -75,7 +81,7 @@
     </div>
     <div class="tab-page" role="tabpanel" data-tab="place" hidden>
       <p class="hint" id="ambience-line"></p>
-      <button type="button" class="primary" id="build-start">Rearrange and buy furniture</button>
+      <button type="button" class="primary" id="build-start">Build and rearrange</button>
       <h3>Regulars</h3>
       <div class="cards" id="regulars"></div>
     </div>

@@ -354,6 +354,12 @@ button.danger, .sheet .row button.danger, .recap-card .row button.danger { color
 .palette { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
 .palette button { flex: 0 0 auto; flex-direction: column; min-height: 56px !important; line-height: 1.2; }
 .palette button small { font-weight: 500; color: #6b6052; }
+.palette button[aria-pressed="true"] { background: #2b2e35; border-color: #2b2e35; color: #fff; }
+.palette button[aria-pressed="true"] small { color: #d9d3c7; }
+.floor-swatch { width: 22px; height: 22px; border-radius: 5px; border: 1px solid #0000002e; margin-bottom: 2px; }
+.buildbar .tabs { margin-bottom: 8px; }
+.buildbar button:disabled { opacity: .45; cursor: default; }
+body.building .recentre { display: none; }
 
 /* ---------------------------------------------------------------- tabs and summaries */
 

@@ -206,8 +206,8 @@ export function priceRatio(sim: Sim): number {
 
 // ------------------------------------------------------------------ furniture
 
-/** Service spots that furniture may never cover. */
-function keepClear(sim: Sim): readonly (readonly [number, number])[] {
+/** Service spots that furniture and walls may never cover. */
+export function keepClear(sim: Sim): readonly (readonly [number, number])[] {
   const v = sim.venue.positions;
   return [v.tillStaff, v.foodStaff, v.pickupStaff, v.pickupGuest, ...v.queue, ...v.wait, ...v.entry];
 }
@@ -223,7 +223,7 @@ function essential(sim: Sim): string[] {
   return [sim.venue.drinkStation, 'sink', 'toilet'];
 }
 
-function footprint(def: string, x: number, y: number): [number, number][] {
+export function footprint(def: string, x: number, y: number): [number, number][] {
   const d = objectDef(def);
   const out: [number, number][] = [];
   for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) out.push([x + dx, y + dy]);
@@ -261,7 +261,7 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
 }
 
 /** Flood fill from the entrance: can everyone still get everywhere they need to? */
-function reachProblem(sim: Sim): string | null {
+export function reachProblem(sim: Sim): string | null {
   const s = sim.state;
   const seen = new Uint8Array(s.w * s.h);
   const [ex, ey] = sim.venue.positions.entry[0];
@@ -305,6 +305,7 @@ export function moveObject(sim: Sim, id: number, x: number, y: number): string |
     sim.world.rebuild();
     return blocked;
   }
+  sim.reroute();
   return null;
 }
 
@@ -321,6 +322,7 @@ export function buyObject(sim: Sim, def: string, x: number, y: number): string |
     return blocked;
   }
   sim.state.money -= d.price;
+  sim.reroute();
   return null;
 }
 

@@ -3,7 +3,8 @@ import { Sim } from './sim/sim';
 import { TICKS_PER_MINUTE, type Recap } from './sim/state';
 import { Hud } from './ui/hud';
 import { attachInput } from './ui/input';
-import { BuildUi, CafeUi, TeamUi } from './ui/manageUi';
+import { BuildUi } from './ui/buildUi';
+import { CafeUi, TeamUi } from './ui/manageUi';
 import { loadFromDevice, saveToDevice } from './ui/save';
 import { showStartScreen } from './ui/startScreen';
 
@@ -89,6 +90,10 @@ function play(sim: Sim): void {
   document.getElementById('recentre')!.addEventListener('click', fitView);
 
   attachInput(canvas, renderer.camera, {
+    onDragStart: (x, y) => build.dragStart(x, y),
+    onDragMove: (x, y) => build.dragMove(x, y),
+    onDragEnd: () => build.dragEnd(),
+    onDragCancel: () => build.dragCancel(),
     onTap(x, y) {
       if (build.active) {
         build.tap(x, y);
@@ -134,7 +139,7 @@ function play(sim: Sim): void {
     renderer.selectedId = selectedId;
     // Only redraw when something could have changed: time moved, the view moved, or a selection did.
     const c = renderer.camera;
-    const view = `${c.ox}|${c.oy}|${c.scale}|${selectedId}|${renderer.buildSelection.objectId}|${renderer.buildSelection.active}|${renderer.staticVersion}`;
+    const view = `${c.ox}|${c.oy}|${c.scale}|${selectedId}|${renderer.buildSelection.version}|${renderer.buildSelection.active}|${renderer.staticVersion}`;
     if (ticks > 0 || view !== lastView) renderer.draw(now);
     lastView = view;
     hud.update(selected, fastForwarding, now);

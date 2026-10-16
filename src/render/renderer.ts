@@ -4,6 +4,7 @@ import { NEEDS, objectDef, type NeedId } from '../sim/defs';
 import type { Sim } from '../sim/sim';
 import type { ObjectInst, Pawn } from '../sim/state';
 import { drawFloorTile, drawObject } from './objectArt';
+import { isShell } from '../sim/structure';
 import { drawBubble, drawItem, drawPawn, type BubbleKind } from './pawnArt';
 
 /** World pixels per tile. */
@@ -11,6 +12,19 @@ export const TILE = 32;
 /** Static layer resolution multiplier, so zooming in stays crisp. */
 const STATIC_SCALE = 3;
 const BUBBLE_BELOW = 0.3;
+
+/** What build mode wants drawn on top of the café. */
+export interface BuildView {
+  active: boolean;
+  /** Furniture picked out with a highlight. */
+  objectId: number | null;
+  /** Furniture being dragged or bought, drawn where it would land. */
+  ghost: { def: string; x: number; y: number; ok: boolean } | null;
+  /** Shade the parts of the building that can't be changed (walls and floors modes). */
+  shell: boolean;
+  /** Bumped on every change, so the frame loop knows to redraw. */
+  version: number;
+}
 
 export interface Camera {
   /** Screen (CSS) pixels per world pixel. */
@@ -27,7 +41,7 @@ export class Renderer {
   private dpr = 1;
   selectedId: number | null = null;
   /** Build mode: draw a grid and outline the selected object. */
-  buildSelection: { objectId: number | null; active: boolean } = { objectId: null, active: false };
+  buildSelection: BuildView = { objectId: null, active: false, ghost: null, shell: false, version: 0 };
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly sim: Sim) {
     const ctx = canvas.getContext('2d');
@@ -218,13 +232,38 @@ export class Renderer {
       ctx.lineTo(s.w * TILE, y * TILE);
     }
     ctx.stroke();
-    const id = this.buildSelection.objectId;
+    const view = this.buildSelection;
+    if (view.shell) {
+      ctx.fillStyle = 'rgba(20, 22, 26, 0.45)';
+      for (let y = 0; y < s.h; y++) {
+        for (let x = 0; x < s.w; x++) if (isShell(this.sim, x, y)) ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+      }
+    }
+    const id = view.objectId;
     const o = id !== null ? this.sim.world.objectById(id) : undefined;
     if (o) {
       const d = objectDef(o.def);
       ctx.strokeStyle = '#f2c46d';
       ctx.lineWidth = 3;
       ctx.strokeRect(o.x * TILE + 1, o.y * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
+    }
+    const g = view.ghost;
+    if (g) {
+      const d = objectDef(g.def);
+      if (o && (o.x !== g.x || o.y !== g.y)) {
+        // The original spot, faded, so it's clear what's moving.
+        ctx.fillStyle = 'rgba(29, 31, 35, 0.45)';
+        ctx.fillRect(o.x * TILE, o.y * TILE, d.w * TILE, d.h * TILE);
+      }
+      ctx.fillStyle = g.ok ? 'rgba(79, 138, 91, 0.35)' : 'rgba(200, 72, 58, 0.4)';
+      ctx.fillRect(g.x * TILE, g.y * TILE, d.w * TILE, d.h * TILE);
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      drawObject(ctx, g.def, g.x * TILE, g.y * TILE, d.w, d.h, TILE);
+      ctx.restore();
+      ctx.strokeStyle = g.ok ? '#8fd19e' : '#ff8a7a';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(g.x * TILE + 1, g.y * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
     }
   }
 

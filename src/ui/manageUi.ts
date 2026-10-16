@@ -1,16 +1,13 @@
-// Management panels: the team (rota, breaks, editing, hiring), the café (menu, saving)
-// and build mode. All changes go through sim/manage.ts, which validates them.
+// Management panels: the team (rota, breaks, editing, hiring) and the café (menu, saving).
+// Build mode lives in buildUi.ts. All changes go through sim/manage.ts, which validates them.
 
-import { MAX_STAFF, OBJECT_DEFS, TRAITS, WORK_TYPES, objectDef, type TraitId } from '../sim/defs';
+import { MAX_STAFF, TRAITS, WORK_TYPES, type TraitId } from '../sim/defs';
 import {
-  buyObject, editStaff, fire, hire, moveObject, orderBreak, priceRatio, sellObject, sellValue, sendHomeEarly,
-  setEnabled, setPrice, setShift,
+  editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setEnabled, setPrice, setShift,
 } from '../sim/manage';
 import type { Sim } from '../sim/sim';
 import { cleanliness, looks } from '../sim/ambience';
 import type { Pawn, Recap } from '../sim/state';
-import type { Renderer } from '../render/renderer';
-import { pounds } from './hud';
 import { changesOf, CharacterForm, draftOf, portrait } from './characterForm';
 import { el, h, hhmm, setupTabs } from './dom';
 import { exportSave, importSave, saveToDevice } from './save';
@@ -276,124 +273,5 @@ export class CafeUi {
         }),
       );
     }));
-  }
-}
-
-// ------------------------------------------------------------------ build mode
-
-export class BuildUi {
-  private bar = el('buildbar');
-  private hint = el('build-hint');
-  private palette = el('build-palette');
-  private sellButton = el<HTMLButtonElement>('build-sell');
-  private cancelButton = el<HTMLButtonElement>('build-cancel');
-  private selected: number | null = null;
-  private buying: string | null = null;
-
-  constructor(private readonly sim: Sim, private readonly renderer: Renderer, private readonly hooks: ManageHooks) {
-    el('build-done').addEventListener('click', () => this.stop());
-    el('build-buy').addEventListener('click', () => {
-      this.palette.hidden = !this.palette.hidden;
-      if (!this.palette.hidden) this.renderPalette();
-    });
-    this.sellButton.addEventListener('click', () => {
-      if (this.selected === null) return;
-      const o = this.sim.world.objectById(this.selected);
-      const err = sellObject(this.sim, this.selected);
-      if (err) this.hooks.notify(err, 'bad');
-      else if (o) this.hooks.notify(`Sold the ${objectDef(o.def).label.toLowerCase()}.`, 'neutral');
-      this.clear();
-      this.renderer.rebuildStatic();
-    });
-    this.cancelButton.addEventListener('click', () => this.clear());
-  }
-
-  get active(): boolean {
-    return !this.bar.hidden;
-  }
-
-  start(): void {
-    this.bar.hidden = false;
-    document.body.classList.add('building');
-    this.clear();
-  }
-
-  stop(): void {
-    this.bar.hidden = true;
-    document.body.classList.remove('building');
-    this.clear();
-  }
-
-  private clear(): void {
-    this.selected = null;
-    this.buying = null;
-    this.palette.hidden = true;
-    this.update();
-  }
-
-  private renderPalette(): void {
-    const buyable = Object.values(OBJECT_DEFS).filter((d) => d.price !== undefined && !d.fixed);
-    this.palette.replaceChildren(...buyable.map((d) => h('button', {
-      type: 'button',
-      onclick: () => {
-        this.buying = d.id;
-        this.selected = null;
-        this.palette.hidden = true;
-        this.update();
-      },
-    }, d.label, h('small', {}, pounds(d.price!)))));
-  }
-
-  private update(): void {
-    this.renderer.buildSelection = { objectId: this.selected, active: this.active };
-    const o = this.selected !== null ? this.sim.world.objectById(this.selected) : undefined;
-    this.sellButton.hidden = !o || objectDef(o.def).fixed === true;
-    this.cancelButton.hidden = !o && !this.buying;
-    if (this.buying) {
-      const d = objectDef(this.buying);
-      this.hint.textContent = `Tap where the ${d.label.toLowerCase()} should go (${pounds(d.price!)}).`;
-    } else if (o) {
-      const d = objectDef(o.def);
-      this.hint.textContent = d.fixed
-        ? `The ${d.label.toLowerCase()} is fixed in place.`
-        : `Tap a new spot for the ${d.label.toLowerCase()}, or sell it for ${pounds(sellValue(o.def))}.`;
-      this.sellButton.textContent = `Sell ${pounds(sellValue(o.def))}`;
-    } else {
-      this.hint.textContent = 'Tap furniture to move or sell it, or Buy something new.';
-    }
-  }
-
-  /** Handles a tap on the café while building. */
-  tap(sx: number, sy: number): void {
-    const [tx, ty] = this.renderer.screenToTile(sx, sy);
-    if (this.buying) {
-      const err = buyObject(this.sim, this.buying, tx, ty);
-      if (err) {
-        this.hooks.notify(err, 'bad');
-        return;
-      }
-      this.hooks.notify(`Bought a ${objectDef(this.buying).label.toLowerCase()}.`, 'neutral');
-      this.buying = null;
-      this.renderer.rebuildStatic();
-      this.update();
-      return;
-    }
-    const hit = this.renderer.objectAtTile(tx, ty);
-    if (this.selected !== null && (!hit || hit.id === this.selected)) {
-      if (hit?.id === this.selected) {
-        this.clear();
-        return;
-      }
-      const o = this.sim.world.objectById(this.selected)!;
-      const d = objectDef(o.def);
-      // Tapped tile becomes the object's top-left, nudged so the footprint centres on the finger.
-      const err = moveObject(this.sim, o.id, tx - Math.floor((d.w - 1) / 2), ty - Math.floor((d.h - 1) / 2));
-      if (err) this.hooks.notify(err, 'bad');
-      else this.clear();
-      this.renderer.rebuildStatic();
-      return;
-    }
-    this.selected = hit?.id ?? null;
-    this.update();
   }
 }

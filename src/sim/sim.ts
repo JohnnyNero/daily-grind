@@ -542,6 +542,18 @@ export class Sim {
     return path;
   }
 
+  /** After the layout changes: anyone whose route now runs into something works out a new one. */
+  reroute(): void {
+    for (const p of this.state.pawns) {
+      const st = p.job?.steps[p.job.index];
+      if (st?.kind !== 'goto' || !st.path) continue;
+      if (st.path.slice(st.node).some(([x, y]) => !this.world.passable(x, y))) {
+        st.path = null;
+        st.node = 0;
+      }
+    }
+  }
+
   isReservedByOther(key: string, p: Pawn): boolean {
     const holder = this.state.reservations[key];
     return holder !== undefined && holder !== p.id;
