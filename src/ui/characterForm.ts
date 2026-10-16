@@ -13,14 +13,15 @@ export interface CharacterDraft {
   name: string;
   look: Look;
   traits: TraitId[];
+  catchphrases: string[];
 }
 
 export function draftOf(p: Pawn): CharacterDraft {
-  return { name: p.name, look: { ...p.look }, traits: [...(p.staff?.traits ?? [])] };
+  return { name: p.name, look: { ...p.look }, traits: [...(p.staff?.traits ?? [])], catchphrases: [...(p.staff?.catchphrases ?? [])] };
 }
 
 export function changesOf(d: CharacterDraft): StaffChanges {
-  return { name: d.name, skin: d.look.skin, hair: d.look.hair, hairStyle: d.look.hairStyle, traits: [...d.traits] };
+  return { name: d.name, skin: d.look.skin, hair: d.look.hair, hairStyle: d.look.hairStyle, traits: [...d.traits], catchphrases: [...d.catchphrases] };
 }
 
 /** Draws a pawn filling a square canvas, sharp on high-density screens. */
@@ -68,6 +69,7 @@ export class CharacterForm {
   private style = h('div', { className: 'choices' });
   private traits = h('div', { className: 'choices' });
   private traitNotes = h('ul', { className: 'trait-notes' });
+  private phrases = h('textarea', { rows: 3, maxlength: 190, placeholder: 'One per line, up to three. "Not my circus." "Who moved my mug?"' });
 
   constructor(private readonly onChange: () => void = () => {}) {
     this.name.addEventListener('input', () => {
@@ -82,18 +84,29 @@ export class CharacterForm {
       h('h3', {}, 'Hair colour'), this.hair,
       h('h3', {}, 'Hair style'), this.style,
       h('h3', {}, `Traits (up to ${MAX_TRAITS})`), this.traits, this.traitNotes,
+      h('h3', {}, 'Catchphrases'),
+      h('label', { className: 'field' }, 'Things they say (great for real colleagues)', this.phrases),
     );
+    this.phrases.addEventListener('input', () => {
+      if (this.draft) this.draft.catchphrases = this.phraseLines();
+      this.onChange();
+    });
   }
 
   set(draft: CharacterDraft): void {
-    this.draft = { name: draft.name, look: { ...draft.look }, traits: [...draft.traits] };
+    this.draft = { name: draft.name, look: { ...draft.look }, traits: [...draft.traits], catchphrases: [...draft.catchphrases] };
     this.name.value = draft.name;
+    this.phrases.value = draft.catchphrases.join('\n');
     this.paint();
   }
 
   get value(): CharacterDraft {
     const d = this.draft!;
-    return { name: this.name.value, look: { ...d.look }, traits: [...d.traits] };
+    return { name: this.name.value, look: { ...d.look }, traits: [...d.traits], catchphrases: this.phraseLines() };
+  }
+
+  private phraseLines(): string[] {
+    return this.phrases.value.split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 3);
   }
 
   focusName(): void {

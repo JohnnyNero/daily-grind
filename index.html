@@ -58,6 +58,7 @@
     <p id="build-hint"></p>
     <div class="palette" id="build-tools"></div>
     <div class="row">
+      <button type="button" id="build-footfall" aria-pressed="false">Footfall</button>
       <button type="button" id="build-undo" disabled>Undo</button>
       <button type="button" id="build-sell" hidden>Sell</button>
       <button type="button" id="build-cancel" hidden>Cancel</button>
@@ -177,6 +178,7 @@
     <div class="tab-page" role="tabpanel" data-tab="jobs" hidden>
       <p class="hint">Tap a cell to cycle 1 (first) to 4 (last), or off. Small numbers are skill; a ring marks someone's station and an orange dot what they love (they learn it fast). People stick to their station, or to what they're doing, and help elsewhere when it's quiet or there's a rush.</p>
       <div class="table-wrap"><table id="priorities"></table></div>
+      <p class="hint" id="walk-stats"></p>
     </div>
     <div class="tab-page" role="tabpanel" data-tab="hire" hidden>
       <div class="cards" id="applicants"></div>

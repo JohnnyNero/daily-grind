@@ -64,6 +64,8 @@ export class BuildUi {
     problem: string | null;
   } | null = null;
   private undo: LayoutSnapshot | null = null;
+  /** The heat map of where people walk. */
+  private footfall = false;
 
   constructor(private readonly sim: Sim, private readonly renderer: Renderer, private readonly hooks: ManageHooks) {
     this.selectTab = setupTabs(this.bar, (tab) => {
@@ -75,6 +77,10 @@ export class BuildUi {
     this.sellButton.addEventListener('click', () => this.sell());
     this.cancelButton.addEventListener('click', () => this.clear());
     this.confirmButton.addEventListener('click', () => this.confirmBuy());
+    el('build-footfall').addEventListener('click', () => {
+      this.footfall = !this.footfall;
+      this.update();
+    });
   }
 
   get active(): boolean {
@@ -392,6 +398,8 @@ export class BuildUi {
     view.objectId = this.selected;
     view.ghost = this.ghost;
     view.shell = this.active && this.mode !== 'furniture';
+    view.footfall = this.active && this.footfall;
+    el('build-footfall').setAttribute('aria-pressed', String(this.footfall));
     view.version++;
 
     const furniture = this.mode === 'furniture';

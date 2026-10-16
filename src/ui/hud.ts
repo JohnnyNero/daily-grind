@@ -333,7 +333,10 @@ export class Hud {
       if (condition) this.status.textContent = this.sim.venue.text.conditions[condition.id];
       else this.status.textContent = s.queue.length > 0 ? `${s.queue.length} queuing` : 'Open';
     }
-    if (this.staffPanelOpen) this.renderSummary(s.today);
+    if (this.staffPanelOpen) {
+      this.renderSummary(s.today);
+      this.renderWalkStats();
+    }
 
     this.sheet.hidden = !selected;
     if ((selected?.id ?? null) !== this.sheetFor) {
@@ -463,6 +466,22 @@ export class Hud {
         return li;
       }),
     );
+  }
+
+  /** Seconds on foot per task for each kind of work: long walks mean the layout is costing you. */
+  private walkKey = '';
+  private renderWalkStats(): void {
+    const stats = this.sim.walkToday;
+    const parts = WORK_TYPES.filter((w) => stats[w.id].tasks >= 3).map((w) => {
+      const secs = Math.round(stats[w.id].walk / stats[w.id].tasks / (TICKS_PER_MINUTE / 60));
+      return `${this.sim.venue.workLabels[w.id] ?? w.label} ${secs}s`;
+    });
+    const text = parts.length > 0
+      ? `Walking per task today: ${parts.join(' · ')}. Long walks mean the layout is costing time; Footfall in build mode shows where.`
+      : 'Walking time per task shows here once a few jobs are done.';
+    if (text === this.walkKey) return;
+    this.walkKey = text;
+    el('walk-stats').textContent = text;
   }
 
   /** Today's numbers at the top of the Team tab. */

@@ -70,10 +70,12 @@ function interact(sim: Sim, a: Pawn, b: Pawn, kind: InteractionKind): void {
     case 'chat':
       addMemory(sim, a, 'niceChat', b);
       addMemory(sim, b, 'niceChat', a);
+      sayCatchphrase(sim, a);
       return;
     case 'banter':
       addMemory(sim, a, 'banter', b);
       addMemory(sim, b, 'banter', a);
+      sayCatchphrase(sim, a, 0.3);
       return;
     case 'vent':
       addMemory(sim, a, 'gotItOffChest');
@@ -95,6 +97,13 @@ function interact(sim: Sim, a: Pawn, b: Pawn, kind: InteractionKind): void {
   }
 }
 
+/** Now and then someone comes out with one of their lines (set in the character editor). */
+export function sayCatchphrase(sim: Sim, p: Pawn, chance = 0.12): void {
+  const lines = p.staff?.catchphrases ?? [];
+  if (lines.length === 0 || random(sim.state) >= chance) return;
+  sim.log(`${p.name}: "${pick(sim.state, lines)}"`, 'neutral', p.id, null, 0);
+}
+
 /** A full-blown row. Both stop working briefly; customers nearby get uncomfortable. */
 function row(sim: Sim, a: Pawn, b: Pawn): void {
   const s = sim.state;
@@ -109,6 +118,7 @@ function row(sim: Sim, a: Pawn, b: Pawn): void {
     if (g.visit && Math.hypot(g.x - a.x, g.y - a.y) < 6) g.visit.patience = Math.max(0, g.visit.patience - 0.1);
   }
   witness(sim, a, 'witnessedRow', [a, b]);
+  sayCatchphrase(sim, b, 0.5);
   sim.log(`${a.name} and ${b.name} had a row about ${topic}.`, 'bad', a.id, 'row', 5);
   // A couple who row enough stop being a couple.
   const rel = sim.relation(a.id, b.id);

@@ -101,7 +101,9 @@ function rushes(sim: Sim): Set<WorkType> {
 }
 
 /** The work someone sticks to: their station, or else what they've settled into. */
-export function homeWork(p: Pawn): WorkType | null {
+export function homeWork(p: Pawn, sim?: Sim): WorkType | null {
+  // In a rush, people with a rush station go there instead.
+  if (sim && p.staff?.rushStation && (sim.state.rushes ?? []).length > 0) return p.staff.rushStation;
   return p.staff?.station ?? p.staff?.focus?.work ?? null;
 }
 
@@ -115,14 +117,15 @@ export function findWork(sim: Sim, p: Pawn): Job | null {
   const staff = p.staff;
   if (!staff) return null;
   const tasks = scanTasks(sim, p);
-  const home = homeWork(p);
-  const station = staff.station ?? null;
+  const home = homeWork(p, sim);
+  const station = (staff.rushStation && (sim.state.rushes ?? []).length > 0 ? staff.rushStation : staff.station) ?? null;
   const priorityOf = (w: WorkType) => (w === station ? 1 : staff.priorities[w]);
   const nearest = (list: Task[]) => list.sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y));
   const take = (list: Task[]): Job | null => {
     for (const t of nearest(list)) {
       const job = t.build();
       if (!job) continue;
+      job.work = t.work;
       if (t.work !== home && home) job.label += ' (helping out)';
       const now = sim.state.tick;
       const work = station ?? t.work;
@@ -144,7 +147,7 @@ export function findWork(sim: Sim, p: Pawn): Job | null {
     // Home is quiet. Help straight away where there's a rush or nobody else covers that
     // work; anywhere else only after a wait, so people don't hop between jobs.
     const rush = rushes(sim);
-    const covered = new Set(sim.state.pawns.filter((o) => o !== p && o.onMap && o.staff && !o.staff.mentalBreak).map(homeWork));
+    const covered = new Set(sim.state.pawns.filter((o) => o !== p && o.onMap && o.staff && !o.staff.mentalBreak).map((o) => homeWork(o, sim)));
     const urgent = tasks.filter((t) => (rush.has(t.work) || !covered.has(t.work)) && priorityOf(t.work) > 0);
     const rushJob = take(urgent);
     if (rushJob) return rushJob;
@@ -178,7 +181,7 @@ const POST_LABELS: Partial<Record<WorkType, string>> = {
 
 /** A staff member with nothing to do waits at their post instead of wandering off. */
 export function standByJob(sim: Sim, p: Pawn): Job | null {
-  const home = homeWork(p);
+  const home = homeWork(p, sim);
   if (!home) return null;
   const post = postFor(sim, home);
   if (!post) return null;

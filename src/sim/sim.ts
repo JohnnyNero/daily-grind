@@ -3,7 +3,7 @@
 
 import { pickCandidate, reservationKey, scoreCandidates } from './ai';
 import {
-  BUSINESS, FIRST_NAMES, HAIR_COLOURS, HAIR_STYLES, NEEDS, SKIN_TONES, WORK_TYPES, objectDef,
+  BUSINESS, FIRST_NAMES, HAIR_COLOURS, HAIR_STYLES, NEEDS, SKIN_TONES, WORK_TYPES, objectDef, type WorkType,
   type MenuItem, type NeedValues, type OfferDef, type Priorities, type Skills, type TraitId,
 } from './defs';
 import { breakJob, checkBreaks } from './breaks';
@@ -49,9 +49,20 @@ export const IDLE_LABEL = 'Hanging about';
 const FAME_TALES = new Set(['couple', 'quit', 'criticRave', 'criticWalkout', 'milestone', 'lostRegular', 'fired', 'birthday', 'breakup', 'poached', 'followedOut']);
 
 
+/** Walking done for each kind of work today: ticks on foot and tasks finished. Not saved. */
+export type WalkStats = Record<WorkType, { walk: number; tasks: number }>;
+
+function emptyWalkStats(): WalkStats {
+  return Object.fromEntries(WORK_TYPES.map((w) => [w.id, { walk: 0, tasks: 0 }])) as WalkStats;
+}
+
 export class Sim {
   readonly state: SimState;
   readonly world: World;
+  /** Footsteps per tile, fading day to day: where people actually walk. Not saved. */
+  footfall: Float32Array = new Float32Array(0);
+  walkToday: WalkStats = emptyWalkStats();
+  walkYesterday: WalkStats | null = null;
 
   /** A new venue from a seed, or a saved one restored as-is. */
   constructor(seed: number, saved?: SimState, venueId = 'cafe') {
@@ -363,6 +374,9 @@ export class Sim {
 
   private newDay(): void {
     const s = this.state;
+    this.walkYesterday = this.walkToday;
+    this.walkToday = emptyWalkStats();
+    for (let i = 0; i < this.footfall.length; i++) this.footfall[i] *= 0.5;
     s.yesterday = s.today;
     s.today = emptyDay();
     morningBooks(this);
@@ -680,6 +694,7 @@ export class Sim {
             const now = staff.skills[st.work];
             staff.skills[st.work] = Math.min(10, now + rate * (1 - now / 12) ** 2);
             staff.lastWork = st.work;
+            this.walkToday[st.work].tasks++;
           }
           this.advance(p, job);
         }
@@ -728,6 +743,7 @@ export class Sim {
         p.y = ny;
         budget -= dist;
         st.node++;
+        this.step_(nx, ny);
         if (this.state.spills.length > 0) checkSlip(this, p);
       } else {
         p.x += (dx / dist) * budget;
@@ -736,7 +752,16 @@ export class Sim {
       }
     }
     p.moving = st.node < path.length;
+    const work = p.job?.work;
+    if (work && p.moving) this.walkToday[work].walk++;
     return !p.moving;
+  }
+
+  /** Counts a footstep on a tile. */
+  private step_(x: number, y: number): void {
+    const s = this.state;
+    if (this.footfall.length !== s.w * s.h) this.footfall = new Float32Array(s.w * s.h);
+    this.footfall[y * s.w + x]++;
   }
 }
 

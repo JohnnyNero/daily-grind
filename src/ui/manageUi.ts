@@ -3,7 +3,7 @@
 
 import { MAX_STAFF, TRAITS, WORK_TYPES, objectDef, type TraitId, type WorkType } from '../sim/defs';
 import {
-  editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setDaysOff, setEnabled, setPrice, setShift, setStation,
+  editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setDaysOff, setEnabled, setPrice, setRushStation, setShift, setStation,
 } from '../sim/manage';
 import type { Sim } from '../sim/sim';
 import { cleanliness, looks } from '../sim/ambience';
@@ -105,7 +105,7 @@ export class TeamUi {
         type: 'button', 'aria-pressed': String(p.staff!.lead),
         title: 'A shift lead steadies the team around them, for +£1.50 an hour',
         onclick: () => { setLead(this.sim, p.staff!.lead ? null : p); this.render(); },
-      }, p.staff!.lead ? 'Lead ✓' : 'Make lead'),
+      }, p.staff!.lead ? 'Lead ✓' : 'Lead'),
     ));
     return card;
   }
@@ -120,10 +120,23 @@ export class TeamUi {
         this.onChange();
       },
     },
-    h('option', { value: '' }, 'Wherever needed'),
+    h('option', { value: '' }, 'Anywhere'),
     ...WORK_TYPES.map((w) => h('option', { value: w.id }, label(w.id))));
     select.value = p.staff!.station ?? '';
-    return h('label', { className: 'station' }, 'Station', select);
+    const rush = h('select', {
+      'aria-label': `${p.name}'s station in a rush`,
+      onchange: (e: Event) => {
+        const v = (e.target as HTMLSelectElement).value;
+        setRushStation(p, v ? (v as WorkType) : null);
+        this.onChange();
+      },
+    },
+    h('option', { value: '' }, 'Same'),
+    ...WORK_TYPES.map((w) => h('option', { value: w.id }, label(w.id))));
+    rush.value = p.staff!.rushStation ?? '';
+    return h('div', { className: 'stations' },
+      h('label', { className: 'station' }, 'Station', select),
+      h('label', { className: 'station' }, 'In a rush', rush));
   }
 
   private shiftEditor(p: Pawn): HTMLElement {

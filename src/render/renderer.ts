@@ -22,6 +22,8 @@ export interface BuildView {
   ghost: { def: string; x: number; y: number; ok: boolean } | null;
   /** Shade the parts of the building that can't be changed (walls and floors modes). */
   shell: boolean;
+  /** Show where people walk: a heat map of footsteps. */
+  footfall: boolean;
   /** Bumped on every change, so the frame loop knows to redraw. */
   version: number;
 }
@@ -41,7 +43,7 @@ export class Renderer {
   private dpr = 1;
   selectedId: number | null = null;
   /** Build mode: draw a grid and outline the selected object. */
-  buildSelection: BuildView = { objectId: null, active: false, ghost: null, shell: false, version: 0 };
+  buildSelection: BuildView = { objectId: null, active: false, ghost: null, shell: false, footfall: false, version: 0 };
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly sim: Sim) {
     const ctx = canvas.getContext('2d');
@@ -233,6 +235,7 @@ export class Renderer {
     }
     ctx.stroke();
     const view = this.buildSelection;
+    if (view.footfall) this.drawFootfall();
     if (view.shell) {
       ctx.fillStyle = 'rgba(20, 22, 26, 0.45)';
       for (let y = 0; y < s.h; y++) {
@@ -264,6 +267,26 @@ export class Renderer {
       ctx.strokeStyle = g.ok ? '#8fd19e' : '#ff8a7a';
       ctx.lineWidth = 3;
       ctx.strokeRect(g.x * TILE + 1, g.y * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
+    }
+  }
+
+  /** Footsteps per tile as warm colour: busy routes glow, so long walks and pinch points show. */
+  private drawFootfall(): void {
+    const ctx = this.ctx;
+    const s = this.sim.state;
+    const f = this.sim.footfall;
+    if (f.length !== s.w * s.h) return;
+    let max = 0;
+    for (const v of f) max = Math.max(max, v);
+    if (max <= 0) return;
+    for (let y = 0; y < s.h; y++) {
+      for (let x = 0; x < s.w; x++) {
+        const v = f[y * s.w + x] / max;
+        if (v < 0.04) continue;
+        const t = Math.sqrt(v);
+        ctx.fillStyle = `rgba(${Math.round(240)}, ${Math.round(200 - 150 * t)}, ${Math.round(60 - 40 * t)}, ${0.18 + 0.5 * t})`;
+        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+      }
     }
   }
 

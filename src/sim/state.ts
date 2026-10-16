@@ -58,6 +58,8 @@ export interface Job {
   sitting: boolean;
   /** Filling time (wandering, or waiting at a post): dropped as soon as there's something to do. */
   idle?: boolean;
+  /** The kind of work this job is, for walking stats. */
+  work?: WorkType;
 }
 
 export interface Shift {

@@ -114,6 +114,13 @@ export function setShift(sim: Sim, p: Pawn, start: number, end: number): string 
   return null;
 }
 
+/** Where someone goes when there's a rush on (null: same as usual). */
+export function setRushStation(p: Pawn, work: WorkType | null): string | null {
+  if (!p.staff) return 'Only staff have stations.';
+  p.staff.rushStation = work;
+  return null;
+}
+
 /** Puts someone on a station (or back to going where they're needed, with null). */
 export function setStation(sim: Sim, p: Pawn, work: WorkType | null): string | null {
   if (!p.staff) return 'Only staff have stations.';
@@ -138,6 +145,8 @@ export interface StaffChanges {
   hair?: string;
   hairStyle?: HairStyle;
   traits?: TraitId[];
+  /** Up to three lines they come out with. */
+  catchphrases?: string[];
 }
 
 export function editStaff(p: Pawn, c: StaffChanges): string | null {
@@ -159,6 +168,11 @@ export function editStaff(p: Pawn, c: StaffChanges): string | null {
       if (clash) return `${def.label} and ${TRAITS.find((x) => x.id === clash)!.label} don't go together.`;
     }
     p.staff.traits = [...c.traits];
+  }
+  if (c.catchphrases) {
+    const lines = c.catchphrases.map((l) => l.trim().replace(/^["“]|["”]$/g, '').slice(0, 60)).filter(Boolean);
+    if (lines.length > 3) return 'Three catchphrases at most.';
+    p.staff.catchphrases = lines;
   }
   return null;
 }
