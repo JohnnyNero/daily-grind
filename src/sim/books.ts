@@ -2,6 +2,7 @@
 
 import { addDayToWeek, dailyRent, emptyWeek, fadeFame, stars } from './business';
 import type { Sim } from './sim';
+import { debtMorning, stressMorning } from './stakes';
 
 /** Called just after midnight, once yesterday's numbers are final and today's are blank. */
 export function morningBooks(sim: Sim): void {
@@ -12,6 +13,8 @@ export function morningBooks(sim: Sim): void {
   s.money -= rent;
   s.today.rent += rent;
   fadeFame(sim);
+  debtMorning(sim);
+  stressMorning(sim);
 
   // A new week starts every seventh morning: write up the one that just ended.
   if ((sim.day - 1) % 7 === 0 && sim.day > 1) {

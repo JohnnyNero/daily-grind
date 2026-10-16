@@ -3,7 +3,7 @@
 
 import { MAX_STAFF, TRAITS, WORK_TYPES, objectDef, type TraitId, type WorkType } from '../sim/defs';
 import {
-  editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setEnabled, setPrice, setShift, setStation,
+  editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setDaysOff, setEnabled, setPrice, setShift, setStation,
 } from '../sim/manage';
 import type { Sim } from '../sim/sim';
 import { cleanliness, looks } from '../sim/ambience';
@@ -11,8 +11,9 @@ import type { Pawn, Recap } from '../sim/state';
 import { changesOf, CharacterForm, draftOf, portrait } from './characterForm';
 import { el, h, hhmm, setupTabs } from './dom';
 import { pounds } from './hud';
+import { STRESS_STRAINED, WEEKDAYS } from '../sim/stakes';
 import {
-  INGREDIENT_SHARE, SERVICE_COST, dailyRent, guestCapacity, machineWear, priceTolerance, seatCount, serviceMachine, starProgress, starText, stars,
+  DEBT_LIMIT, INGREDIENT_SHARE, SERVICE_COST, dailyRent, guestCapacity, machineWear, priceTolerance, seatCount, serviceMachine, starProgress, starText, stars,
 } from '../sim/business';
 import { exportSave, importSave, saveToDevice } from './save';
 
@@ -83,7 +84,7 @@ export class TeamUi {
     const info = h('div', { className: 'person-info' },
       h('div', { className: 'top' }, h('strong', {}, p.name), h('span', {}, `${hhmm(p.shift.start)}–${hhmm(p.shift.end)}`)),
       h('p', { className: 'hint' }, `${traitLabels(p.staff!.traits)} · ${status}`),
-      h('p', { className: 'hint' }, `Loves ${p.staff!.passions.map((w) => workLabel(this.sim, w).toLowerCase()).join(' and ')} · ${perHour(p.staff!.wage)}`),
+      h('p', { className: 'hint' }, `Loves ${p.staff!.passions.map((w) => workLabel(this.sim, w).toLowerCase()).join(' and ')} · ${perHour(p.staff!.wage)} · ${p.staff!.daysOff.length > 0 ? `off ${p.staff!.daysOff.map((d) => WEEKDAYS[d]).join(', ')}` : 'no days off'}${p.staff!.stress >= STRESS_STRAINED ? ` · stress ${Math.round(p.staff!.stress)}%` : ''}`),
     );
     const card = h('div', { className: 'card person' }, portrait(p.look, 44, p.name), info);
     info.append(this.stationPicker(p));
@@ -128,9 +129,20 @@ export class TeamUi {
         h('button', { type: 'button', 'aria-label': `${label} 30 minutes earlier`, onclick: minus }, '−'),
         h('span', {}, `${label} ${hhmm(value)}`),
         h('button', { type: 'button', 'aria-label': `${label} 30 minutes later`, onclick: plus }, '+'));
+    const days = h('div', { className: 'choices days' }, ...WEEKDAYS.map((label, d) => h('button', {
+      type: 'button', 'aria-pressed': String(p.staff!.daysOff.includes(d)), 'aria-label': `Off on ${label}`,
+      onclick: () => {
+        const off = p.staff!.daysOff.includes(d) ? p.staff!.daysOff.filter((x) => x !== d) : [...p.staff!.daysOff, d];
+        const err = setDaysOff(p, off);
+        if (err) this.hooks.notify(err, 'bad');
+        this.render();
+      },
+    }, label)));
     return h('div', {},
       row('Starts', p.shift.start, nudge(-30, 0), nudge(30, 0)),
       row('Ends', p.shift.end, nudge(0, -30), nudge(0, 30)),
+      h('p', { className: 'hint' }, 'Days off (a day off a week keeps stress down):'),
+      days,
     );
   }
 }
@@ -249,7 +261,10 @@ export class CafeUi {
         }, `Service ${pounds(SERVICE_COST)}`)));
     }));
     const wages = this.sim.state.pawns.filter((p) => p.staff && !p.staff.quit).reduce((sum, p) => sum + p.staff!.wage * ((p.shift.end - p.shift.start) / 60), 0);
-    el('costs-line').textContent = `Rent and rates ${pounds(dailyRent(this.sim))} a day (rates rise with the value of your fit-out). Wages about ${pounds(wages)} a day. Ingredients ${Math.round(INGREDIENT_SHARE * 100)}% of the usual price of everything made.`;
+    const debt = this.sim.state.money < 0
+      ? ` You're in the red: 1% a day in overdraft fees, wages go out late below ${pounds(DEBT_LIMIT / 2)}, and below ${pounds(DEBT_LIMIT)} the bank won't lend for furniture or building work.`
+      : '';
+    el('costs-line').textContent = `Rent and rates ${pounds(dailyRent(this.sim))} a day (rates rise with the value of your fit-out). Wages about ${pounds(wages)} a day. Ingredients ${Math.round(INGREDIENT_SHARE * 100)}% of the usual price of everything made.${debt}`;
     el('ambience-line').textContent = `Cleanliness ${pct(cleanliness(this.sim))} · Looks ${pct(looks(this.sim))}. Plants and armchairs out front help; dirty cups and spills don't.`;
 
     const regulars = s.regulars.slice().sort((a, b) => b.visits - a.visits).slice(0, 8);

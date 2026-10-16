@@ -6,6 +6,7 @@
 // Mood itself drifts toward the target, so one bad moment doesn't flip it instantly.
 
 import { ambience, cleanliness } from './ambience';
+import { STRESS_BURNT_OUT, STRESS_STRAINED } from './stakes';
 import type { Sim } from './sim';
 import { TICKS_PER_HOUR, type Memory, type Pawn } from './state';
 
@@ -45,6 +46,8 @@ const MEMORIES: readonly MemoryDef[] = [
   { id: 'droppedSomething', label: 'Dropped something. Again.', mood: -3, hours: 4, stack: 3 },
   { id: 'meltdown', label: 'Got it out of my system', mood: 8, hours: 12, stack: 1 },
   { id: 'walkedOut', label: 'Walked out yesterday. Awkward.', mood: -4, hours: 24, stack: 1 },
+  { id: 'dayOff', label: 'Had a proper day off', mood: 4, hours: 12, stack: 1 },
+  { id: 'wagesLate', label: 'Wages were late', mood: -8, hours: 30, stack: 1 },
   // Social
   { id: 'niceChat', label: 'Had a nice chat with {other}', mood: 1, hours: 4, opinion: 3, stack: 2 },
   { id: 'banter', label: 'Banter with {other}', mood: 2, hours: 4, opinion: 4, stack: 2 },
@@ -165,6 +168,9 @@ function situationalReasons(sim: Sim, p: Pawn): Reason[] {
   if (clean < 0.45) add('This place is a tip', hasTrait(p, 'perfectionist') ? -6 : -3);
   else if (ambience(sim) > 0.8) add('Lovely place to work', hasTrait(p, 'perfectionist') ? 3 : 2);
   if (s.money < 0) add('Will I even get paid?', -6);
+  const stress = p.staff!.stress;
+  if (stress >= STRESS_BURNT_OUT) add('Burnt out', -12);
+  else if (stress >= STRESS_STRAINED) add('Running on empty', -5);
 
   for (const other of s.pawns) {
     if (other.id === p.id || !other.staff || !other.onMap) continue;

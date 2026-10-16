@@ -12,6 +12,7 @@ import { availableRegulars, birthdayVisit } from './regulars';
 import { pick, random, randInt } from './rng';
 import type { Sim } from './sim';
 import { addFame, worstWear } from './business';
+import { isDayOff } from './stakes';
 import { TICKS_PER_MINUTE, TICKS_PER_HOUR, type ConditionId, type Pawn } from './state';
 import { addMemory } from './thoughts';
 
@@ -174,7 +175,7 @@ const EVENTS: readonly EventDef[] = [
 /** Staff due in later today who haven't arrived yet. */
 function laterToday(sim: Sim): Pawn[] {
   const m = sim.minuteOfDay;
-  return sim.state.pawns.filter((p) => p.staff && !p.staff.quit && !p.onMap && p.arrivedDay !== sim.day && p.shift.start > m + 30 && p.staff.sickDay !== sim.day);
+  return sim.state.pawns.filter((p) => p.staff && !p.staff.quit && !p.onMap && p.arrivedDay !== sim.day && p.shift.start > m + 30 && p.staff.sickDay !== sim.day && !isDayOff(sim, p));
 }
 
 function scheduleNext(sim: Sim): void {

@@ -155,6 +155,8 @@ body.panel-open .corner-buttons, body.panel-open .recentre, body.building .corne
 .track { height: 10px; border-radius: 5px; background: #e4dccd; overflow: hidden; }
 .fill { height: 100%; border-radius: 5px; background: var(--good); transition: width .25s; }
 .mood .track { height: 14px; border-radius: 7px; }
+.stress { font-size: 13px; color: #5e5446; }
+.choices.days button { min-width: 44px; padding: 0 8px; }
 .shift { margin-top: 8px !important; font-size: 13px !important; color: #8a7f70 !important; }
 
 .toast {

@@ -8,7 +8,7 @@ import {
   objectDef, type HairStyle, type Skills, type TraitId, type WorkType,
 } from './defs';
 import { pick, random, randRange } from './rng';
-import { askingWage } from './business';
+import { askingWage, canSpend } from './business';
 import { passionsFor } from './normalize';
 import { Sim } from './sim';
 import { SAVE_VERSION, type Applicant, type ObjectInst, type Pawn, type SimState } from './state';
@@ -120,6 +120,15 @@ export function setStation(sim: Sim, p: Pawn, work: WorkType | null): string | n
   if (work !== null && !WORK_TYPES.some((w) => w.id === work)) return 'Unknown station.';
   p.staff.station = work;
   p.staff.focus = work ? { work, lastDone: sim.state.tick, since: sim.state.tick } : null;
+  return null;
+}
+
+/** Sets which weekdays (0 = Monday) someone is off. They need at least one working day. */
+export function setDaysOff(p: Pawn, days: number[]): string | null {
+  if (!p.staff) return 'Only staff have days off.';
+  const clean = [...new Set(days.filter((d) => d >= 0 && d <= 6))].sort();
+  if (clean.length >= 7) return 'They need to work at least one day.';
+  p.staff.daysOff = clean;
   return null;
 }
 
@@ -344,6 +353,7 @@ export function moveObject(sim: Sim, id: number, x: number, y: number): string |
 export function buyObject(sim: Sim, def: string, x: number, y: number): string | null {
   const d = objectDef(def);
   if (d.price === undefined || d.fixed) return "That's not for sale.";
+  if (!canSpend(sim, d.price)) return "The bank won't lend any more. Get back in the black first.";
   const problem = placementProblem(sim, def, x, y);
   if (problem) return problem;
   const o = sim.world.placeObject({ def, x, y });

@@ -9,6 +9,7 @@ import { moodReasons } from '../sim/thoughts';
 import { paintPortrait } from './characterForm';
 import { el, hhmm, setupTabs } from './dom';
 import { stars } from '../sim/business';
+import { WEEKDAYS, weekday } from '../sim/stakes';
 
 const TOAST_MS = 7000;
 
@@ -319,7 +320,7 @@ export class Hud {
       this.showRecap(s.recaps[s.recaps.length - 1]);
     }
     el('recap-open').hidden = s.recaps.length === 0;
-    this.day.textContent = `Day ${this.sim.day}`;
+    this.day.textContent = `${WEEKDAYS[weekday(this.sim.day)]} · Day ${this.sim.day}`;
     this.time.textContent = this.sim.clock();
     this.money.textContent = pounds(s.money);
     this.money.classList.toggle('negative', s.money < 0);
@@ -365,6 +366,7 @@ export class Hud {
       this.moodLabel.textContent = 'Patience';
       this.setMeter(this.moodFill, this.moodValue, v.patience);
       this.needsBox.hidden = true;
+      el('stress-row').hidden = true;
       const order = `Ordered ${v.items.join(' and ')}${v.eatIn ? ' to have in' : ' to take away'}.`;
       const regular = this.sim.state.regulars.find((r) => r.id === v.regularId);
       let about = '';
@@ -384,14 +386,21 @@ export class Hud {
     this.setMeter(this.moodFill, this.moodValue, this.sim.mood(selected));
     this.renderStaffDetails(selected);
     this.needsBox.hidden = false;
+    const stress = selected.staff ? selected.staff.stress / 100 : 0;
+    el('stress-row').hidden = !selected.staff;
+    // Stress reads the other way round: full is bad.
+    this.setMeter(el('stress-fill'), el('stress-value'), 1 - stress);
+    el('stress-value').textContent = `${Math.round(stress * 100)}%`;
+    el('stress-fill').style.width = `${Math.round(stress * 100)}%`;
     for (const def of NEEDS) {
       const row = this.needFills.get(def.id)!;
       this.setMeter(row.fill, row.value, selected.needs[def.id]);
     }
     const tips = selected.staff ? ` · Tips today ${pounds(selected.staff.tipsToday)}` : '';
     const station = selected.staff?.station;
+    const off = selected.staff && selected.staff.daysOff.length > 0 ? ` · Off ${selected.staff.daysOff.map((d) => WEEKDAYS[d]).join(', ')}` : '';
     const stationText = station ? ` · Station: ${this.sim.venue.workLabels[station] ?? WORK_TYPES.find((w) => w.id === station)!.label}` : '';
-    this.shift.textContent = `Shift ${hhmm(selected.shift.start)}–${hhmm(selected.shift.end)}${stationText}${tips}`;
+    this.shift.textContent = `Shift ${hhmm(selected.shift.start)}–${hhmm(selected.shift.end)}${off}${stationText}${tips}`;
   }
 
   private renderStaffDetails(p: Pawn): void {

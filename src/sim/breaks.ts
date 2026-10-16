@@ -80,6 +80,8 @@ export function startBreak(sim: Sim, p: Pawn, kind: BreakKind): void {
   const straw = finalStraw(sim, p);
   const minutes = kind === 'slowWalk' || kind === 'snappy' ? randInt(s, 45, 75) : randInt(s, 25, 45);
   staff.mentalBreak = { kind, until: s.tick + minutes * TICKS_PER_MINUTE, finalStraw: straw };
+  // Cracking up takes something out of you.
+  staff.stress = Math.min(100, staff.stress + 8);
   staff.belowSince = { minor: null, major: null, severe: null };
   sim.endJob(p);
   sim.log(`${BREAK_LOG[kind](p.name)} Final straw: ${straw}.`, 'bad', p.id, kind === 'quit' ? 'quit' : 'break', kind === 'quit' ? 10 : 6);

@@ -3,6 +3,7 @@
 // as long as everyone can still reach the counter and every piece of furniture.
 
 import { objectDef } from './defs';
+import { canSpend } from './business';
 import { footprint, keepClear, reachProblem } from './manage';
 import type { Sim } from './sim';
 import type { FloorKind, Tile } from './state';
@@ -106,6 +107,7 @@ export function buildAt(sim: Sim, x: number, y: number, tool: StructureTool, led
   const p = plan(sim, x, y, tool);
   if (typeof p === 'string') return p;
   if (!p.tile) return null;
+  if (p.cost > 0 && !canSpend(sim, p.cost)) return "The bank won't lend any more. Get back in the black first.";
   const s = sim.state;
   const i = y * s.w + x;
   const before = s.tiles[i];

@@ -27,6 +27,7 @@ import { abandonAction, findWork, performAction, standByJob, updateRushes, valid
 import { World, parseMap } from './world';
 import { emptyDay } from './business';
 import { morningBooks } from './books';
+import { isDayOff, stressEveryMinute } from './stakes';
 import { fillStaff, normalize } from './normalize';
 
 /** Walking speed in tiles per tick. At 1x (60 ticks per real second) that's about 4 tiles a second. */
@@ -98,7 +99,10 @@ export class Sim {
     refreshApplicants(this);
     for (const o of venue.objects) this.world.placeObject(o);
     normalize(this);
-    for (const shift of venue.shifts) this.addStaff({ ...shift });
+    // The opening team all work day one, and take their days off on different days after.
+    venue.shifts.forEach((shift, i) => {
+      this.addStaff({ ...shift }).staff!.daysOff = [1 + (i % 6)];
+    });
   }
 
   get venue(): VenueDef {
@@ -310,6 +314,7 @@ export class Sim {
     for (const p of s.pawns) {
       if (p.kind !== 'staff') continue;
       const staff = p.staff!;
+      stressEveryMinute(this, p);
       if (!p.onMap && staff.mentalBreak && s.tick >= staff.mentalBreak.until) {
         if (staff.mentalBreak.kind === 'walkout') addMemory(this, p, 'walkedOut');
         staff.mentalBreak = null;
@@ -323,7 +328,7 @@ export class Sim {
         s.money -= wage;
         s.today.wages += wage;
         if (!this.onShift(p) && !this.isLeaving(p)) this.sendHome(p);
-      } else if (this.onShift(p) && p.arrivedDay !== this.day && !staff.quit && !staff.mentalBreak && staff.sickDay !== this.day) {
+      } else if (this.onShift(p) && p.arrivedDay !== this.day && !staff.quit && !staff.mentalBreak && staff.sickDay !== this.day && !isDayOff(this, p)) {
         this.arrive(p);
       }
     }
