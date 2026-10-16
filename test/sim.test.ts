@@ -10,6 +10,7 @@ import { checkWants } from '../src/sim/wants';
 import { spillAt } from '../src/sim/ambience';
 import { taleScore } from '../src/sim/tales';
 import {
+  addStarter, isSetup, removeStarter, rerollStarter,
   buyObject, deserialize, editStaff, fire, hire, moveObject, orderBreak, sellObject, sendHomeEarly, serialize, setPrice,
 } from '../src/sim/manage';
 import { addMemory, expireMemories, moodReasons, moodTarget } from '../src/sim/thoughts';
@@ -403,5 +404,35 @@ describe('venues', () => {
     a.run(3 * TICKS_PER_HOUR);
     b.run(3 * TICKS_PER_HOUR);
     expect(serialize(b)).toEqual(serialize(a));
+  });
+});
+
+describe('starting team', () => {
+  it('can be reshaped before opening, and is locked once the first person arrives', () => {
+    const sim = new Sim(21);
+    const staff = () => sim.state.pawns.filter((p) => p.staff);
+    expect(isSetup(sim)).toBe(true);
+    const start = staff().length;
+
+    const added = addStarter(sim);
+    expect(typeof added).not.toBe('string');
+    expect(staff()).toHaveLength(start + 1);
+
+    const p = staff()[0];
+    const others = new Set(staff().filter((x) => x.id !== p.id).map((x) => x.name));
+    for (let i = 0; i < 10; i++) {
+      rerollStarter(sim, p);
+      expect(others.has(p.name)).toBe(false);
+      expect(p.staff!.traits.length).toBeGreaterThan(0);
+    }
+
+    expect(removeStarter(sim, p)).toBeNull();
+    expect(sim.pawnById(p.id)).toBeUndefined();
+    while (staff().length > 1) removeStarter(sim, staff()[0]);
+    expect(removeStarter(sim, staff()[0])).toMatch(/open up/);
+
+    sim.run(10 * TICKS_PER_HOUR);
+    expect(isSetup(sim)).toBe(false);
+    expect(typeof addStarter(sim)).toBe('string');
   });
 });

@@ -251,7 +251,7 @@ button.link[hidden] { display: none; }
 .hint.error { color: #b23a2c !important; min-height: 1em; }
 .row { display: flex; gap: 8px; margin-top: 8px; }
 .row.wrap { flex-wrap: wrap; }
-.sheet .row button, .recap-card .row button, .file-button, .buildbar button, .cards button, .menu-list button {
+.sheet .row button, .recap-card .row button, .start-card .row button, .file-button, .buildbar button, .cards button, .menu-list button {
   min-height: 44px;
   padding: 0 14px;
   border: 1px solid #d9cdb8;
@@ -316,6 +316,89 @@ button.danger, .sheet .row button.danger, .recap-card .row button.danger { color
 .palette { display: flex; gap: 8px; overflow-x: auto; padding: 4px 0; }
 .palette button { flex: 0 0 auto; flex-direction: column; min-height: 56px !important; line-height: 1.2; }
 .palette button small { font-weight: 500; color: #6b6052; }
+
+/* ---------------------------------------------------------------- start screen and character creator */
+
+body.starting .bar, body.starting .corner-buttons, body.starting .recentre { visibility: hidden; }
+.start {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  overflow-y: auto;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);
+  background:
+    radial-gradient(120% 60% at 50% 0%, #3a2f25 0%, transparent 70%),
+    #1d1f23;
+}
+.start[hidden] { display: none; }
+.start-card {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 22px 20px 20px;
+  border-radius: 18px;
+  background: var(--sheet);
+  color: var(--sheet-ink);
+  box-shadow: 0 10px 40px #00000066;
+}
+.start-card .kicker { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: #8a7f70; font-weight: 600; }
+.start-card h1, .start-card h2 { outline: none; }
+.start-card h2 { margin: 4px 0 10px; font-size: 26px; line-height: 1.15; }
+.start-card h3 { margin: 14px 0 6px; font-size: 14px; color: #5e5446; }
+.start-card .row button { flex: 1; }
+.start-card .row button.primary { margin-top: 0; min-height: 44px; background: #2b2e35; border-color: #2b2e35; color: #fff; }
+.start-card button:disabled { opacity: .45; cursor: default; }
+
+.title-block { text-align: center; }
+.title-block h1 { margin: 6px 0 6px; font-size: 44px; line-height: 1; letter-spacing: -.02em; }
+.title-block .tagline { margin: 0 auto; max-width: 30ch; font-size: 15px; line-height: 1.4; color: #5e5446; }
+.crowd { display: flex; justify-content: center; margin: 18px 0 6px; }
+.crowd .portrait { flex: 0 1 auto; max-width: 20%; height: auto !important; aspect-ratio: 1; }
+.start-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.start-actions button, .start-actions .file-button {
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  border: 1px solid #d9cdb8;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--sheet-ink);
+  font: 700 16px system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+.start-actions button.primary { background: #2b2e35; border-color: #2b2e35; color: #fff; }
+.start-actions small { font-weight: 500; font-size: 12px; opacity: .8; margin-top: 2px; }
+
+.cards button.choice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 0;
+  padding: 12px 14px;
+  text-align: left;
+  font-weight: 400;
+}
+.choice-card strong { font-size: 17px; }
+.choice-card .hint { margin: 0 !important; }
+
+.card.person { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: start; }
+.person-info { min-width: 0; }
+.person .row button { flex: 1; padding: 0 6px; white-space: nowrap; }
+.cards button.portrait-button { padding: 0; min-height: 0; border: 0; border-radius: 12px; background: #f1eadd; }
+.portrait { display: block; }
+.portrait.large { width: 112px; height: 112px; border-radius: 16px; background: #f1eadd; flex: 0 0 auto; }
+
+.character-form .identity { display: flex; gap: 14px; align-items: center; }
+.character-form .identity .field { flex: 1; min-width: 0; }
+.choices button:disabled { opacity: .4; cursor: default; }
+.trait-notes { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; color: #5e5446; line-height: 1.4; }
+.trait-notes li { padding: 2px 0; }
 
 @media (min-width: 700px) {
   .sheet { left: auto; right: 16px; bottom: 16px; width: 360px; border-radius: 16px; }

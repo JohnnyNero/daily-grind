@@ -138,6 +138,46 @@ export function editStaff(p: Pawn, c: StaffChanges): string | null {
   return null;
 }
 
+// ------------------------------------------------------------------ starting team (before opening)
+
+/** True until the first staff member arrives, while the starting team can still be reshaped. */
+export function isSetup(sim: Sim): boolean {
+  return sim.day === 1 && sim.state.pawns.every((p) => !p.onMap) && sim.state.log.length === 0;
+}
+
+/** A whole new random person in this slot: name, looks, traits and skills. */
+export function rerollStarter(sim: Sim, p: Pawn): void {
+  const s = sim.state;
+  if (!p.staff) return;
+  const taken = new Set(s.pawns.filter((x) => x.id !== p.id).map((x) => x.name));
+  const free = FIRST_NAMES.filter((n) => !taken.has(n));
+  p.name = pick(s, free.length > 0 ? free : FIRST_NAMES);
+  p.look = { ...p.look, skin: pick(s, SKIN_TONES), hair: pick(s, HAIR_COLOURS), hairStyle: pick(s, HAIR_STYLES) };
+  p.staff.traits = randomTraits(sim);
+  for (const w of WORK_TYPES) p.staff.skills[w.id] = Math.round(randRange(s, 1, 8) * 10) / 10;
+}
+
+/** Adds someone to the starting team, on the venue's next default shift. */
+export function addStarter(sim: Sim): Pawn | string {
+  const staff = staffList(sim);
+  if (!isSetup(sim)) return 'The doors are already open; hire from the applicants instead.';
+  if (staff.length >= MAX_STAFF) return `The café can't take more than ${MAX_STAFF} staff.`;
+  const shifts = sim.venue.shifts;
+  return sim.addStaff({ ...shifts[staff.length % shifts.length] });
+}
+
+/** Takes someone off the starting team. They were never hired, so nobody misses them. */
+export function removeStarter(sim: Sim, p: Pawn): string | null {
+  if (!isSetup(sim)) return 'The doors are already open; let them go from the Staff panel instead.';
+  if (staffList(sim).length <= 1) return 'Someone has to open up.';
+  const s = sim.state;
+  s.pawns = s.pawns.filter((x) => x.id !== p.id);
+  for (const key of Object.keys(s.relations)) {
+    if (key.split(':').map(Number).includes(p.id)) delete s.relations[key];
+  }
+  return null;
+}
+
 // ------------------------------------------------------------------ menu
 
 export function setPrice(sim: Sim, name: string, price: number): string | null {

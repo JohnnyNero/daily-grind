@@ -20,7 +20,7 @@ Other scripts:
 | `npm run typecheck` | TypeScript checks |
 | `npm run build` | Builds a static site into `dist/` that works from any folder |
 
-Add `?seed=123` to the URL to start a fresh café from that seed (it ignores the saved one).
+Add `?seed=123` to the URL to skip the start screen and open a fresh café from that seed (it ignores the saved one).
 
 ## Play online
 
@@ -31,9 +31,13 @@ https://johnnynero.github.io/daily-grind/
 
 Open the site, then use your browser's *Add to Home Screen* (Share → Add to Home Screen on iPhone; the menu → Install app on Android). It then opens full screen and works offline.
 
+## Starting a game
+
+The start screen offers **Continue** (your saved place), **New game** and **Import save**. A new game asks what you're opening, then shows your starting team in the **character creator**: tap someone to change their name, skin, hair and up to three traits with a live preview, or use *New face* for a random person, *Add someone* (up to 8), *Remove* and *Shuffle everyone*. *Open the doors* starts day one.
+
 ## Venues
 
-There are two so far: **the café** (mornings, flat whites, cake) and **the pub** (evenings, pints, crisps, quiz night, stag dos). To switch, go to the venue panel and tap *New café*; you'll be asked what you're opening. Or add `?venue=pub` to the address. Venues live in `src/sim/venues.ts`, so adding one is mostly data.
+There are two so far: **the café** (mornings, flat whites, cake) and **the pub** (evenings, pints, crisps, quiz night, stag dos). To switch, go to the venue panel and tap *New café*, which takes you to the new-game screens. Or add `?venue=pub` to the address to skip straight in. Venues live in `src/sim/venues.ts`, so adding one is mostly data.
 
 ## Controls
 
@@ -69,7 +73,7 @@ src/
     venues.ts    each venue as data: map, furniture, menu, hours, rhythm, wording
     path.ts      A* pathfinding
   render/    canvas drawing in the Pawn style
-  ui/        touch input and the HUD
+  ui/        touch input, the HUD, the start screen and the character creator
 test/        simulation tests
 ```
 

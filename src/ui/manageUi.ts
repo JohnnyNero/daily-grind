@@ -1,47 +1,19 @@
 // Management panels: the team (rota, breaks, editing, hiring), the café (menu, saving)
 // and build mode. All changes go through sim/manage.ts, which validates them.
 
-import { HAIR_COLOURS, HAIR_STYLES, MAX_STAFF, OBJECT_DEFS, SKIN_TONES, TRAITS, WORK_TYPES, objectDef, type HairStyle, type TraitId } from '../sim/defs';
+import { MAX_STAFF, OBJECT_DEFS, TRAITS, WORK_TYPES, objectDef, type TraitId } from '../sim/defs';
 import {
   buyObject, editStaff, fire, hire, moveObject, orderBreak, priceRatio, sellObject, sellValue, sendHomeEarly,
   setEnabled, setPrice, setShift,
 } from '../sim/manage';
 import type { Sim } from '../sim/sim';
-import { VENUES } from '../sim/venues';
 import { cleanliness, looks } from '../sim/ambience';
 import type { Pawn, Recap } from '../sim/state';
 import type { Renderer } from '../render/renderer';
 import { pounds } from './hud';
-import { clearDeviceSave, exportSave, importSave, saveToDevice } from './save';
-
-function el<T extends HTMLElement>(id: string): T {
-  const node = document.getElementById(id);
-  if (!node) throw new Error(`Missing #${id}`);
-  return node as T;
-}
-
-type Child = Node | string;
-
-/** Tiny element builder: h('button', { type: 'button', onclick }, 'Label'). */
-function h<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<Record<string, unknown>> = {},
-  ...children: Child[]
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(props)) {
-    if (value === undefined || value === null || value === false) continue;
-    if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2), value as EventListener);
-    else if (key === 'className') node.className = String(value);
-    else node.setAttribute(key, value === true ? '' : String(value));
-  }
-  node.append(...children);
-  return node;
-}
-
-function hhmm(minutes: number): string {
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-}
+import { changesOf, CharacterForm, draftOf } from './characterForm';
+import { el, h, hhmm } from './dom';
+import { exportSave, importSave, saveToDevice } from './save';
 
 function traitLabels(traits: TraitId[]): string {
   return traits.map((t) => TRAITS.find((x) => x.id === t)!.label).join(', ');
@@ -135,12 +107,12 @@ export class TeamUi {
 
 class StaffEditor {
   private box = el('editor');
-  private name = el<HTMLInputElement>('editor-name');
   private error = el('editor-error');
+  private form = new CharacterForm();
   private pawn: Pawn | null = null;
-  private draft: { skin: string; hair: string; hairStyle: HairStyle; traits: TraitId[] } | null = null;
 
   constructor(private readonly sim: Sim, private readonly hooks: ManageHooks, private readonly onDone: () => void) {
+    el('editor-form').replaceWith(this.form.root);
     el('editor-cancel').addEventListener('click', () => this.close());
     el('editor-save').addEventListener('click', () => this.save());
     el('editor-fire').addEventListener('click', () => {
@@ -154,40 +126,15 @@ class StaffEditor {
 
   open(p: Pawn): void {
     this.pawn = p;
-    this.draft = { skin: p.look.skin, hair: p.look.hair, hairStyle: p.look.hairStyle, traits: [...p.staff!.traits] };
     el('editor-title').textContent = p.name;
-    this.name.value = p.name;
     this.error.textContent = '';
-    this.paint();
+    this.form.set(draftOf(p));
     this.box.hidden = false;
-    this.name.focus();
-  }
-
-  private paint(): void {
-    const d = this.draft!;
-    const swatches = (id: string, colours: readonly string[], current: string, set: (c: string) => void) =>
-      el(id).replaceChildren(...colours.map((c) => h('button', {
-        type: 'button', style: `background:${c}`, 'aria-label': c, 'aria-pressed': String(c === current),
-        onclick: () => { set(c); this.paint(); },
-      })));
-    swatches('editor-skin', SKIN_TONES, d.skin, (c) => { d.skin = c; });
-    swatches('editor-hair', HAIR_COLOURS, d.hair, (c) => { d.hair = c; });
-    el('editor-style').replaceChildren(...HAIR_STYLES.map((st) => h('button', {
-      type: 'button', 'aria-pressed': String(st === d.hairStyle), onclick: () => { d.hairStyle = st; this.paint(); },
-    }, st.charAt(0).toUpperCase() + st.slice(1))));
-    el('editor-traits').replaceChildren(...TRAITS.map((t) => h('button', {
-      type: 'button', title: t.description, 'aria-pressed': String(d.traits.includes(t.id)),
-      onclick: () => {
-        d.traits = d.traits.includes(t.id) ? d.traits.filter((x) => x !== t.id) : [...d.traits, t.id];
-        this.paint();
-      },
-    }, t.label)));
+    this.form.focusName();
   }
 
   private save(): void {
-    const p = this.pawn!;
-    const d = this.draft!;
-    const err = editStaff(p, { name: this.name.value, skin: d.skin, hair: d.hair, hairStyle: d.hairStyle, traits: d.traits });
+    const err = editStaff(this.pawn!, changesOf(this.form.value));
     if (err) {
       this.error.textContent = err;
       return;
@@ -244,23 +191,10 @@ export class CafeUi {
       }
     });
     el('save-new').addEventListener('click', () => {
-      this.panel.hidden = true;
-      el('venue-options').replaceChildren(...Object.values(VENUES).map((v) => h('div', { className: 'card' },
-        h('div', { className: 'top' }, h('strong', {}, v.name.charAt(0).toUpperCase() + v.name.slice(1))),
-        h('p', {}, v.tagline),
-        h('div', { className: 'row' }, h('button', {
-          type: 'button',
-          onclick: () => {
-            this.resetting = true;
-            clearDeviceSave();
-            location.href = `${location.pathname}?venue=${v.id}`;
-          },
-        }, `Open ${v.name.replace(/^The /i, 'a ')}`)),
-      )));
-      el('venue-picker').hidden = false;
-    });
-    el('venue-cancel').addEventListener('click', () => {
-      el('venue-picker').hidden = true;
+      // The start screen takes it from here; this place stays saved until the new one opens.
+      saveToDevice(this.sim);
+      this.resetting = true;
+      location.href = `${location.pathname}?new`;
     });
   }
 
