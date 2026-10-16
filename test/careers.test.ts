@@ -9,13 +9,12 @@ describe('careers and cascades', () => {
   it('a raise request is a decision with consequences either way', () => {
     const sim = new Sim(6);
     sim.run(12 * TICKS_PER_DAY);
-    const before = sim.state.letters.length;
     for (let i = 0; i < 200 && !sim.state.letters.some((l) => l.kind === 'raise'); i++) {
       for (const p of sim.state.pawns) if (p.staff) { p.staff.lastAskDay = -100; p.staff.hiredDay = -100; }
       careersMorning(sim);
     }
     const letter = sim.state.letters.find((l) => l.kind === 'raise')!;
-    expect(sim.state.letters.length).toBeGreaterThan(before);
+    expect(letter).toBeDefined();
     const p = sim.pawnById(Number(letter.data!.pawn))!;
     const wage = p.staff!.wage;
     expect(answerLetter(sim, letter.id, 'yes')).toBeNull();
