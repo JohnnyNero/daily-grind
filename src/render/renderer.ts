@@ -26,7 +26,7 @@ export interface BuildView {
   ghost: { def: string; x: number; y: number; rot: Rotation; ok: boolean } | null;
   /** Show the queue and pickup zones. */
   zones: boolean;
-  /** Also show the room zones (staff only, flat, screens). */
+  /** Also show the room zones (staff only, screens). */
   rooms: boolean;
   /** Shade the parts of the building that can't be changed (walls and floors modes). */
   shell: boolean;
@@ -352,8 +352,8 @@ export class Renderer {
     const order = new Map(this.sim.positions.queue.map(([x, y], i) => [y * s.w + x, i]));
     ctx.save();
     if (rooms) {
-      // Rooms: staff only in red, the flat in purple, screens in blue, with a striped edge.
-      for (const [kind, fill] of [['staff', 'rgba(214, 90, 70, 0.28)'], ['flat', 'rgba(150, 100, 200, 0.3)'], ['screen', 'rgba(90, 120, 235, 0.32)']] as const) {
+      // Rooms: staff only in red, screens in blue.
+      for (const [kind, fill] of [['staff', 'rgba(214, 90, 70, 0.28)'], ['screen', 'rgba(90, 120, 235, 0.32)']] as const) {
         ctx.fillStyle = fill;
         for (const i of s.zones[kind]) {
           const x = i % s.w;

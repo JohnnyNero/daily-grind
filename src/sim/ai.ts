@@ -43,11 +43,6 @@ export function projectNeeds(needs: NeedValues, offer: OfferDef): NeedValues {
 /** Offers worth taking up right now. `ignoreThresholds` lists everything usable (for ordered breaks). */
 export function scoreCandidates(s: SimState, world: World, p: Pawn, ignoreThresholds = false): Candidate[] {
   const base = moodFromNeeds(p.needs);
-  // Beds and the telly in the flat are for after work, not for breaks.
-  const minute = Math.floor(s.tick / 60) % (24 * 60);
-  const day = Math.floor(s.tick / (24 * 60 * 60)) + 1;
-  const offToday = p.staff ? p.staff.daysOff.includes((day - 1) % 7) || p.staff.sickDay === day || p.staff.homeEarlyDay === day : false;
-  const atWork = !p.staff || (!offToday && minute >= p.shift.start && minute < p.shift.end);
   const out: Candidate[] = [];
   for (const o of s.objects) {
     const def = objectDef(o.def);
@@ -71,7 +66,6 @@ export function scoreCandidates(s: SimState, world: World, p: Pawn, ignoreThresh
     if (spotIndex < 0) continue;
     for (const offer of def.offers) {
       if (!offer.usableBy.includes(p.kind)) continue;
-      if (offer.offShiftOnly && atWork) continue;
       if (!ignoreThresholds && p.needs[offer.whenBelow.need] >= offer.whenBelow.value) continue;
       const gain = moodFromNeeds(projectNeeds(p.needs, offer)) - base;
       if (!ignoreThresholds && gain < MIN_GAIN) continue;

@@ -33,8 +33,6 @@ export function socialEveryMinute(sim: Sim): void {
     if (hasTrait(actor, 'chatty')) chance *= 2;
     if (hasTrait(actor, 'introvert')) chance *= 0.5;
     if (actor.staff!.mentalBreak?.kind === 'snappy') chance *= 3;
-    // At home in the flat people mostly keep to themselves.
-    if (actor.job?.home) chance *= 0.4;
     if (random(s) >= chance) continue;
     const near = staff.filter((o) => o.id !== actor.id && Math.hypot(o.x - actor.x, o.y - actor.y) <= RANGE);
     if (near.length === 0) continue;

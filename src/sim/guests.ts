@@ -458,7 +458,7 @@ function findSeat(sim: Sim, p: Pawn): { key: string; objectId: number; x: number
     if ((s.dirty[o.id] ?? 0) > 0) continue;
     sim.world.spots(o).forEach(([x, y], i) => {
       const key = reservationKey(o.id, i);
-      // Seats out the back (staff only, the flat) aren't for customers.
+      // Seats out the back (staff only) aren't for customers.
       if (s.reservations[key] !== undefined || !sim.world.passable(x, y) || guestBarred(sim, x, y)) return;
       const d = Math.hypot(x - p.x, y - p.y);
       if (d < bestD) {

@@ -88,7 +88,7 @@ function play(sim: Sim): void {
   };
   const team = new TeamUi(sim, hooks, () => hud.refreshStaffPanel());
   const build = new BuildUi(sim, renderer, hooks);
-  const cafe = new CafeUi(sim, hooks, () => build.start(), () => renderer.rebuildStatic());
+  const cafe = new CafeUi(sim, hooks, () => build.start());
   const inboxHooks: InboxHooks = {
     ...hooks,
     select: (id) => {

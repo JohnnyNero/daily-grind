@@ -155,7 +155,7 @@ function situationalReasons(sim: Sim, p: Pawn): Reason[] {
   if (n.comfort < 0.3) add('Feet are killing me', -5);
 
   const m = sim.minuteOfDay;
-  // Work only weighs on people while they're at work (live-ins are on site off the clock too).
+  // Work only weighs on people while they're at work.
   const working = p.onMap && sim.onShift(p);
   if (working) {
     if (hasTrait(p, 'nightOwl') && m < 10 * 60) add('Too early for this', -4);
@@ -175,15 +175,12 @@ function situationalReasons(sim: Sim, p: Pawn): Reason[] {
     const busy = s.queue.length >= 5;
     if (busy && hasTrait(p, 'introvert')) add('Too many people', -4);
     if (busy && hasTrait(p, 'lazy')) add('Run off my feet', -3);
-  } else if (p.onMap) {
-    add('Off the clock', 4);
   }
 
   const clean = cleanliness(sim);
   if (clean < 0.45) add('This place is a tip', hasTrait(p, 'perfectionist') ? -6 : -3);
   else if (ambience(sim) > 0.8) add('Lovely place to work', hasTrait(p, 'perfectionist') ? 3 : 2);
   if (s.money < 0) add('Will I even get paid?', -6);
-  if (p.staff!.livesIn) add('Living at work: cheap rent, no commute', 3);
   const stress = p.staff!.stress;
   if (stress >= STRESS_BURNT_OUT) add('Burnt out', -12);
   else if (stress >= STRESS_STRAINED) add('Running on empty', -5);

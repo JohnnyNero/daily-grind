@@ -42,7 +42,8 @@ export function fillStaff(staff: StaffInfo, id: number, day: number): void {
   staff.lead ??= false;
   staff.rushStation ??= null;
   staff.catchphrases ??= [];
-  staff.livesIn ??= false;
+  // Living in has gone.
+  delete (staff as { livesIn?: boolean }).livesIn;
   staff.lastWork ??= null;
   staff.lastAskDay ??= day;
   staff.station ??= null;

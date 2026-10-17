@@ -2,7 +2,7 @@
 //   Furniture: drag anything to move it, rotate it, tap to sell, pick from the palette to buy.
 //   Walls:     drag to build walls, put doors in them, or knock them out.
 //   Floors:    drag to lay floor. Just for looks.
-//   Zones:     drag to mark the queue, the pickup area, staff-only areas, the flat and cinema screens.
+//   Zones:     drag to mark the queue, the pickup area, staff-only areas and cinema screens.
 // Every change goes through sim/manage.ts or sim/structure.ts, which validate it.
 
 import { OBJECT_DEFS, objectDef, rotatedSize, rotationOf, type Rotation } from '../sim/defs';
@@ -31,7 +31,7 @@ const WALL_TOOLS: readonly { id: WallTool; label: string; price: number; hint: s
 ];
 
 function copyZones(z: Zones): Zones {
-  return { queue: [...z.queue], pickup: [...z.pickup], staff: [...z.staff], flat: [...z.flat], screen: [...z.screen] };
+  return { queue: [...z.queue], pickup: [...z.pickup], staff: [...z.staff], screen: [...z.screen] };
 }
 
 const MOVE_HINT = 'Two fingers (or right-drag) move the view.';

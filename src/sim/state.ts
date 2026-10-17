@@ -3,7 +3,7 @@
 
 import type { HairStyle, ItemKind, NeedValues, PawnKind, Priorities, Skills, TraitId, WorkType } from './defs';
 
-/** Kitchen, Staff room, Behind the counter, wooden Floor, Carpet, Toilets, Pavement, Yard, Residential (the flat), cinema screen (X). */
+/** Kitchen, Staff room, Behind the counter, wooden Floor, Carpet, Toilets, Pavement, Yard, Residential boards (R), dark carpet (X). Just looks: zones say what a room is for. */
 export type FloorKind = 'K' | 'S' | 'B' | 'F' | 'C' | 'T' | 'P' | 'Y' | 'R' | 'X';
 
 export interface Tile {
@@ -32,8 +32,6 @@ export interface Zones {
   pickup: number[];
   /** Back of house: customers can't go in. Staff hang about and take themselves off here. */
   staff: number[];
-  /** The staff flat: live-ins' home, and off-limits to customers. */
-  flat: number[];
   /** A cinema screen room: a screen in it shows films, seats in it are the audience. */
   screen: number[];
 }
@@ -83,8 +81,6 @@ export interface Job {
   idle?: boolean;
   /** The kind of work this job is, for walking stats. */
   work?: WorkType;
-  /** Off-shift life in the staff flat (sleeping, unwinding), not work. */
-  home?: boolean;
 }
 
 export interface Shift {
@@ -163,8 +159,6 @@ export interface StaffInfo {
   rushStation: WorkType | null;
   /** Lines they come out with (for recreating real colleagues). */
   catchphrases: string[];
-  /** Lives in the staff flat (if there is one) instead of going home. */
-  livesIn: boolean;
   /** The kind of work they did last, so switching costs a little settling-in time. */
   lastWork: WorkType | null;
   /** Last day they asked for a raise (or were offered one by a rival). */

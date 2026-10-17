@@ -59,12 +59,11 @@ There's one till, one pickup and one food counter per place. In build mode, dash
 **Floors are only for looks**: wood, carpets, lino, tiles, steel or boards, £5 a tile, under furniture too. What a room is *for* comes from **zones**, painted for free in build mode's **Zones** tab. A tile is in one zone at most:
 
 - **Staff only**: the back of house (behind the counter, the kitchen, the staff room). Customers never walk in, and their seats don't count. Staff hang about here when there's nothing to do, and sulk here when they're upset. You can't mark the customer side of a till or pickup as staff only, or fence customers off from them.
-- **Staff flat**: where live-ins live (see *The staff flat*). Off-limits to customers too.
 - **Screen**: a cinema screen room (see *The cinema*).
 - **Queue** and **Pickup area**: below.
 - **Clear** removes any zone.
 
-The ready-made places and older saves get their zones from what the floors used to mean: kitchen, behind-the-counter and staff room floors became staff only, flat floor became the flat, screen floor became a screen. Furniture stands in staff-only, flat and screen zones as normal, but not on the queue or pickup.
+The ready-made places and older saves get their zones from what the floors used to mean: kitchen, behind-the-counter and staff room floors became staff only, screen floor became a screen. Furniture stands in staff-only and screen zones as normal, but not on the queue or pickup.
 
 The queue and pickup zones:
 
@@ -119,12 +118,12 @@ You run the place; your staff decide what to do. The puzzle is keeping it runnin
 - **Calls**: three direct orders for a crisis, each with a cost and a cooldown. *All hands* (20 minutes of nobody waiting at their post; a little stress), *Close the doors* (no arrivals for 20 minutes; a little fame), *Comp a round* (everyone waiting gets patience back; costs money, earns fame).
 - Tap a person to see what they're doing: traits, mood and its biggest reasons, stress and needs; *Show more* adds every reason, how they feel about each colleague and what they want. Guests show their order and patience.
 - When the place shuts, the day's recap appears.
-- **Staff** has four tabs. **Team**: today's numbers; each card has a **Station** and an **In a rush** station, *Shift* (hours and days off), *Break now*, *Send home*, *Edit* (name, looks, traits and catchphrases), *Live in* (once there's a staff flat) and *Lead* (one shift lead, +£1.50/h: a lead in good spirits steadies the team, one in a foul mood drags it down). **Jobs**: work priorities, and walking time per task (long walks mean the layout is costing you). **Hire**: applicants, with their passions and asking wage. **Log**.
+- **Staff** has four tabs. **Team**: today's numbers; each card has a **Station** and an **In a rush** station, *Shift* (hours and days off), *Break now*, *Send home*, *Edit* (name, looks, traits and catchphrases) and *Lead* (one shift lead, +£1.50/h: a lead in good spirits steadies the team, one in a foul mood drags it down). **Jobs**: work priorities, and walking time per task (long walks mean the layout is costing you). **Hire**: applicants, with their passions and asking wage. **Log**.
 - **Who's on what:** every member of staff at work has a badge over their head and a ring at their feet in the colour of what they're doing: green till (counter), brown cup (barista), blue tray (floor), teal suds (dishes), purple mop (cleaning). Solid means their own station, a white badge with a dashed ring means they're helping out, and faded means they're waiting at their post. The person sheet shows the same as a coloured chip (On / Helping / Waiting), the Jobs columns carry the colours, and the station pickers on Team cards are edged in theirs.
 - **Who does what:** staff stick to their station: when it's quiet they wait at their post, and only help elsewhere after about 8 in-game minutes with nothing to do, straight away if another area is in a rush (4+ queuing, 4+ drinks waiting, 3+ dirty tables, 8+ cups by the sink, 2+ spills) or nobody covers it, or when a need gets urgent. Without a station they settle into whatever they start (4 minutes before drifting; a better-priority job wins after a 20-minute stint). Helping shows as "(helping out)".
 - **Name tags**: every staff member has a small name tag under them (gold when selected).
-- **Café** has **Menu** (prices and on/off switches), **Place** (stars and capacity, how it feels, *Build and rearrange*, machines, the staff flat, running costs, regulars), **Goals** (goals, the diary, weekly reports, scrapbook, hall of fame) and **Save**. The game also saves itself on this device every day and when you leave.
-- **Build mode**: **Furniture** (drag to move, tap to sell, pick from the row to buy, *Footfall* shows where people walk), **Walls** (straight walls £25 a tile, doors £60, knock out for free) and **Floors** (£5 a tile, just for looks) and **Zones** (free: queue, pickup, staff only, flat, screen). The outer walls, shop front and pavement stay put, and anything that would cut people off is refused. *Undo* takes back the last stroke. Two fingers (or right-drag) move the view.
+- **Café** has **Menu** (prices and on/off switches), **Place** (stars and capacity, how it feels, *Build and rearrange*, machines, running costs, regulars), **Goals** (goals, the diary, weekly reports, scrapbook, hall of fame) and **Save**. The game also saves itself on this device every day and when you leave.
+- **Build mode**: **Furniture** (drag to move, tap to sell, pick from the row to buy, *Footfall* shows where people walk), **Walls** (straight walls £25 a tile, doors £60, knock out for free) and **Floors** (£5 a tile, just for looks) and **Zones** (free: queue, pickup, staff only, screen). The outer walls, shop front and pavement stay put, and anything that would cut people off is refused. *Undo* takes back the last stroke. Two fingers (or right-drag) move the view.
 
 ## Goals and big days
 
@@ -139,9 +138,9 @@ You run the place; your staff decide what to do. The puzzle is keeping it runnin
 - When someone leaves, a close friend who isn't happy either may follow (unless you talk them round). Good people ask for raises, and from two stars rivals try to poach them. Work anniversaries every 30 days.
 - **Catchphrases**: up to three lines per person in the character editor, for recreating real colleagues. They come out in conversation.
 
-## The staff flat
+## The back plot
 
-Every venue has an empty plot alongside, 20 tiles wide, for a flat, a bigger building or a second screen. Older saves get theirs widened when loaded. Build a flat there by hand (walls, a **Staff flat** zone, beds, a telly, sofas, a fridge) or in one go for £1,500 from the Place tab. Staff can then **live in** (one per bed): they stay on site off shift and live there (telly, snacks, each other, bed at bedtime), pay £8 a night, and never miss a shift to the commute. The view only takes in the plot once something's built on it.
+Every venue has an empty plot alongside, 20 tiles wide: room for a bigger building or a second screen. Older saves get theirs widened when loaded, and the view only takes in the plot once something's built on it. (The staff flat and living in have been taken out: older saves lose any beds and tellies, and live-ins go home like everyone else.)
 
 ## Layout
 
@@ -168,7 +167,6 @@ src/
     calls.ts     the manager's direct orders
     careers.ts   raises, poaching, shift leads, anniversaries, friends following
     goals.ts     goals, the diary of big days, star unlocks, weekly reports
-    flat.ts      the staff flat and live-ins
     normalize.ts fills in new fields for new games and older saves
     structure.ts building work: walls, doors and floors, and what keeps the layout usable
     regulars.ts  guests who come back, remember, and hold grudges

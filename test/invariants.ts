@@ -93,9 +93,9 @@ export class StuckWatch {
   check(sim: Sim): string[] {
     const out: string[] = [];
     for (const p of sim.state.pawns) {
-      // Off shift, deliberately waiting at their post, at home in the flat (asleep, say), or sat
-      // watching a film until the credits (some run over two hours): not stuck.
-      if (!p.onMap || p.job?.idle || p.job?.home || (p.visit?.film && p.visit.state === 'eating' && sim.state.tick < p.visit.film.end)) {
+      // Off shift, deliberately waiting at their post, or sat watching a film until the
+      // credits (some run over two hours): not stuck.
+      if (!p.onMap || p.job?.idle || (p.visit?.film && p.visit.state === 'eating' && sim.state.tick < p.visit.film.end)) {
         this.last.delete(p.id);
         continue;
       }

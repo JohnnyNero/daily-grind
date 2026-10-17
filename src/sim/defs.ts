@@ -34,8 +34,6 @@ export interface OfferDef {
   sits?: boolean;
   /** Only considered once this need has fallen below the threshold (an autonomy threshold). */
   whenBelow: { need: NeedId; value: number };
-  /** Only off the clock (a bed in the staff flat). */
-  offShiftOnly?: boolean;
 }
 
 export interface ObjectDef {
@@ -116,15 +114,7 @@ const defs: ObjectDef[] = [
     id: 'toilet', price: 30000, label: 'Toilet', w: 1, h: 1, blocks: false, spots: [[0, 0]],
     offers: [{ id: 'loo', label: 'Use the loo', doing: 'In the loo', usableBy: EVERYONE, deltas: { bladder: 1 }, minutes: 3, sits: true, whenBelow: { need: 'bladder', value: 0.45 } }],
   },
-  // The staff flat.
-  {
-    id: 'bed', price: 18000, label: 'Bed', w: 1, h: 2, blocks: false, spots: [[0, 0]],
-    offers: [{ id: 'sleep', label: 'Sleep', doing: 'Asleep', usableBy: STAFF, deltas: { energy: 0.95, comfort: 0.5 }, minutes: 420, sits: true, whenBelow: { need: 'energy', value: 0.4 }, offShiftOnly: true }],
-  },
-  {
-    id: 'tv', price: 22000, label: 'TV', w: 1, h: 1, blocks: true, spots: [[0, 1]],
-    offers: [{ id: 'telly', label: 'Watch telly', doing: 'Watching telly', usableBy: STAFF, deltas: { comfort: 0.45 }, minutes: 40, whenBelow: { need: 'comfort', value: 0.7 }, offShiftOnly: true }],
-  },
+
 ];
 
 export const OBJECT_DEFS: Readonly<Record<string, ObjectDef>> = Object.fromEntries(defs.map((d) => [d.id, d]));

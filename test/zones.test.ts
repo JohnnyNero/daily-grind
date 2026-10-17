@@ -3,7 +3,6 @@ import { Sim } from '../src/sim/sim';
 import { buyObject, deserialize, moveObject, serialize } from '../src/sim/manage';
 import { buildAt } from '../src/sim/structure';
 import { guestBarred, paintZone, zoneOf } from '../src/sim/service';
-import { buildStaffFlat, hasFlat } from '../src/sim/flat';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, type SimState } from '../src/sim/state';
 
 describe('zones decide who goes where', () => {
@@ -73,12 +72,20 @@ describe('zones decide who goes where', () => {
     expect(idleBack).toBeGreaterThan(idleOut);
   });
 
-  it('builds the flat as a flat zone', () => {
-    const sim = new Sim(3);
-    sim.state.money = 1000000;
-    expect(buildStaffFlat(sim)).toBeNull();
-    expect(hasFlat(sim)).toBe(true);
-    expect(zoneOf(sim, sim.state.w - 18, 4)).toBe('flat');
+  it('drops the staff flat from older saves: its beds, telly, zone and live-ins', () => {
+    const fresh = new Sim(3);
+    const old = JSON.parse(serialize(fresh)) as SimState;
+    old.objects.push({ id: 900, def: 'bed', x: 18, y: 1 }, { id: 901, def: 'tv', x: 20, y: 4 });
+    (old.zones as SimState['zones'] & { flat?: number[] }).flat = [1 * old.w + 18];
+    for (const p of old.pawns) if (p.staff) (p.staff as typeof p.staff & { livesIn?: boolean }).livesIn = true;
+    const sim = deserialize(JSON.stringify(old));
+    expect(sim.state.objects.some((o) => o.def === 'bed' || o.def === 'tv')).toBe(false);
+    expect('flat' in sim.state.zones).toBe(false);
+    expect(sim.state.pawns.some((p) => p.staff && 'livesIn' in p.staff)).toBe(false);
+    sim.run(TICKS_PER_DAY);
+    // Everyone goes home at night.
+    sim.run(23 * 60 * 60 - (sim.state.tick % (24 * 60 * 60)));
+    expect(sim.state.pawns.filter((p) => p.staff && p.onMap)).toEqual([]);
   });
 
   it('gives older saves the rooms their floors used to mean', () => {
@@ -86,7 +93,6 @@ describe('zones decide who goes where', () => {
     const old = JSON.parse(serialize(fresh)) as SimState;
     const z = old.zones as Partial<SimState['zones']>;
     delete z.staff;
-    delete z.flat;
     delete z.screen;
     const sim = deserialize(JSON.stringify(old));
     expect(zoneOf(sim, 3, 5)).toBe('staff');

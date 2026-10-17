@@ -6,10 +6,8 @@ import type { FloorKind, ObjectInst, SimState, Tile } from './state';
 
 const FLOOR_CHARS: Record<string, FloorKind> = { K: 'K', S: 'S', B: 'B', F: 'F', C: 'C', T: 'T', P: 'P', Y: 'Y', R: 'R', X: 'X' };
 
-/** Columns of empty yard added to the side of every venue: room for a staff flat. */
+/** Columns of empty yard added to the side of every venue: room to grow. */
 export const PLOT_W = 20;
-/** How wide the plot was before it grew, and how wide the ready-made staff flat is. */
-export const FLAT_W = 9;
 
 /** The venue's map with the back plot alongside: yard, edged by wall, pavement along the front. */
 export function withPlot(rows: readonly string[]): string[] {

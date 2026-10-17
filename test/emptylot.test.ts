@@ -64,7 +64,7 @@ describe('empty lot', () => {
   it('starts empty, with money to fit out and nobody coming in until it can trade', () => {
     const sim = new Sim(5, undefined, 'cafe', 'empty');
     expect(sim.state.objects).toEqual([]);
-    expect(sim.state.zones).toEqual({ queue: [], pickup: [], staff: [], flat: [], screen: [] });
+    expect(sim.state.zones).toEqual({ queue: [], pickup: [], staff: [], screen: [] });
     expect(sim.state.money).toBe(EMPTY_LOT_MONEY);
     expect(sim.canTrade).toBe(false);
     expect(keepClear(sim)).toEqual(sim.entry);
