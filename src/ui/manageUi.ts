@@ -1,7 +1,7 @@
 // Management panels: the team (rota, breaks, editing, hiring) and the café (menu, saving).
 // Build mode lives in buildUi.ts. All changes go through sim/manage.ts, which validates them.
 
-import { MAX_STAFF, TRAITS, WORK_TYPES, objectDef, type TraitId, type WorkType } from '../sim/defs';
+import { MAX_STAFF, TRAITS, WORK_COLOURS, WORK_TYPES, objectDef, type TraitId, type WorkType } from '../sim/defs';
 import {
   editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setDaysOff, setEnabled, setPrice, setRushStation, setShift, setStation,
 } from '../sim/manage';
@@ -134,6 +134,7 @@ export class TeamUi {
     h('option', { value: '' }, 'Anywhere'),
     ...WORK_TYPES.map((w) => h('option', { value: w.id }, label(w.id))));
     select.value = p.staff!.station ?? '';
+    if (p.staff!.station) select.style.boxShadow = `inset 5px 0 0 ${WORK_COLOURS[p.staff!.station]}`;
     const rush = h('select', {
       'aria-label': `${p.name}'s station in a rush`,
       onchange: (e: Event) => {
@@ -145,6 +146,7 @@ export class TeamUi {
     h('option', { value: '' }, 'Same'),
     ...WORK_TYPES.map((w) => h('option', { value: w.id }, label(w.id))));
     rush.value = p.staff!.rushStation ?? '';
+    if (p.staff!.rushStation) rush.style.boxShadow = `inset 5px 0 0 ${WORK_COLOURS[p.staff!.rushStation]}`;
     return h('div', { className: 'stations' },
       h('label', { className: 'station' }, 'Station', select),
       h('label', { className: 'station' }, 'In a rush', rush));

@@ -169,6 +169,15 @@ export const WORK_TYPES: readonly WorkTypeDef[] = [
   { id: 'cleaning', label: 'Cleaning', description: 'Mops up spills' },
 ];
 
+/** One colour per kind of work, used for station badges on the map and in the panels. */
+export const WORK_COLOURS: Readonly<Record<WorkType, string>> = {
+  counter: '#3f8a52',
+  barista: '#8b5a3c',
+  floor: '#2e6f9e',
+  dishes: '#2f9aa0',
+  cleaning: '#7a5aa6',
+};
+
 export type Priorities = Record<WorkType, number>;
 export type Skills = Record<WorkType, number>;
 

@@ -2,7 +2,8 @@
 // Plain DOM over the canvas keeps text crisp.
 
 import { BREAK_LABELS } from '../sim/breaks';
-import { NEEDS, WORK_TYPES, traitDef, type WorkType } from '../sim/defs';
+import { NEEDS, WORK_COLOURS, WORK_TYPES, traitDef, type WorkType } from '../sim/defs';
+import { homeWork } from '../sim/work';
 import type { Sim } from '../sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, type DayStats, type LogEntry, type Pawn, type Recap } from '../sim/state';
 import { moodReasons } from '../sim/thoughts';
@@ -242,7 +243,10 @@ export class Hud {
     for (const w of WORK_TYPES) {
       const th = document.createElement('th');
       th.scope = 'col';
-      th.textContent = this.sim.venue.workLabels[w.id] ?? w.label;
+      const dot = document.createElement('i');
+      dot.className = 'work-dot';
+      dot.style.background = WORK_COLOURS[w.id];
+      th.append(dot, this.sim.venue.workLabels[w.id] ?? w.label);
       th.title = w.description;
       head.append(th);
     }
@@ -448,7 +452,7 @@ export class Hud {
       .map((o) => ({ o, op: this.sim.opinion(p, o), together: this.sim.together(p.id, o.id) }))
       .sort((a, b) => Number(b.together) - Number(a.together) || Math.abs(b.op) - Math.abs(a.op));
     const key = JSON.stringify([
-      p.id, this.showAll, staff.traits, staff.mentalBreak?.kind, staff.inspiration?.kind,
+      p.id, this.showAll, staff.traits, staff.mentalBreak?.kind, staff.inspiration?.kind, p.job?.work, p.job?.idle, p.job?.label,
       reasons.map((r) => [r.label, r.value]), others.map((x) => [x.o.name, x.op, x.together]), staff.wants.map((w) => w.label),
     ]);
     if (key === this.detailsKey) return;
@@ -473,6 +477,18 @@ export class Hud {
       const span = document.createElement('span');
       span.className = 'inspired';
       span.textContent = staff.inspiration.kind === 'latteArt' ? 'Inspired: latte art' : 'Inspired: charm';
+      chips.unshift(span);
+    }
+    // What they're on right now, in that work's colour (matches the badge over their head).
+    const work = p.job?.work;
+    if (work && this.sim.onShift(p) && !staff.mentalBreak) {
+      const home = homeWork(p, this.sim);
+      const span = document.createElement('span');
+      span.className = 'on-work';
+      span.style.setProperty('--work', WORK_COLOURS[work]);
+      const label = this.sim.venue.workLabels[work] ?? WORK_TYPES.find((w) => w.id === work)!.label;
+      span.textContent = p.job!.idle ? `Waiting: ${label}` : home && home !== work ? `Helping: ${label}` : `On: ${label}`;
+      if (home && home !== work && !p.job!.idle) span.classList.add('helping');
       chips.unshift(span);
     }
     this.traits.replaceChildren(...chips);

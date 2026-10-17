@@ -1,12 +1,13 @@
 // Draws the sim. Reads state only, never changes it.
 
-import { NEEDS, objectDef, type NeedId } from '../sim/defs';
+import { NEEDS, WORK_COLOURS, objectDef, type NeedId, type WorkType } from '../sim/defs';
 import type { Sim } from '../sim/sim';
 import type { ObjectInst, Pawn } from '../sim/state';
 import { drawFloorTile, drawObject } from './objectArt';
 import { isShell } from '../sim/structure';
 import { PLOT_W } from '../sim/world';
-import { drawBubble, drawItem, drawPawn, type BubbleKind } from './pawnArt';
+import { drawBubble, drawItem, drawPawn, drawStationBadge, type BadgeStyle, type BubbleKind } from './pawnArt';
+import { homeWork } from '../sim/work';
 
 /** World pixels per tile. */
 export const TILE = 32;
@@ -224,6 +225,19 @@ export class Renderer {
       const bob = p.moving ? Math.abs(Math.sin(timeMs / 110 + p.id)) * 2.2 : 0;
       const cx = (p.x + 0.5) * TILE;
       const cy = (p.y + 0.5) * TILE;
+      // A ring at their feet in the colour of the station they're on.
+      const badge = this.badgeFor(p);
+      if (badge) {
+        ctx.save();
+        ctx.globalAlpha = badge.style === 'waiting' ? 0.45 : 0.9;
+        ctx.strokeStyle = WORK_COLOURS[badge.work];
+        ctx.lineWidth = Math.max(2.5, 3 / this.camera.scale);
+        if (badge.style === 'helping') ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + TILE * 0.36, TILE * 0.42, TILE * 0.15, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
       drawPawn(ctx, p.look, cx, cy, size, bob, p.id === this.selectedId);
       const held = p.carrying;
       if (held && p.visit?.state !== 'eating') {
@@ -234,7 +248,23 @@ export class Renderer {
     for (const p of pawns) {
       const kind = bubbleFor(p);
       if (kind) drawBubble(ctx, kind, (p.x + 0.85) * TILE, (p.y - 0.15) * TILE, TILE * 0.7);
+      const badge = this.badgeFor(p);
+      if (badge) {
+        // Never smaller than a fingertip-readable 18 screen pixels, however far out you zoom.
+        const size = Math.max(TILE * 0.5, 18 / this.camera.scale);
+        drawStationBadge(ctx, badge.work, WORK_COLOURS[badge.work], badge.style, (p.x + 0.5) * TILE - size * 0.55, (p.y - 0.1) * TILE - size * 0.6, size);
+      }
     }
+  }
+
+  /** What station a staff member is on right now, and whether it's theirs (for the badge). */
+  private badgeFor(p: Pawn): { work: WorkType; style: BadgeStyle } | null {
+    if (!p.staff || !p.job || p.staff.mentalBreak || !this.sim.onShift(p)) return null;
+    const work = p.job.work;
+    if (!work) return null;
+    if (p.job.idle) return { work, style: 'waiting' };
+    const home = homeWork(p, this.sim);
+    return { work, style: home === null || home === work ? 'own' : 'helping' };
   }
 
   private drawBuildOverlay(): void {

@@ -195,7 +195,7 @@ export function standByJob(sim: Sim, p: Pawn): Job | null {
     steps.push(go);
   }
   steps.push(wait);
-  return { ...sim.makeJob(POST_LABELS[home] ?? 'Waiting for work', steps), idle: true };
+  return { ...sim.makeJob(POST_LABELS[home] ?? 'Waiting for work', steps), idle: true, work: home };
 }
 
 function scanTasks(sim: Sim, p: Pawn): Task[] {

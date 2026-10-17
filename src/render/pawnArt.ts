@@ -1,7 +1,7 @@
 // "Pawn" style characters: outlined capsule body, floating head, no face or arms.
 // Drawn in a 48 x 48 design box; the feet sit near y = 44.
 
-import type { ItemKind, NeedId } from '../sim/defs';
+import type { ItemKind, NeedId, WorkType } from '../sim/defs';
 import type { Look } from '../sim/state';
 
 export const OUTLINE = '#2a2a2a';
@@ -102,6 +102,90 @@ export function drawPawn(
       ctx.stroke();
       break;
     case 'bald':
+      break;
+  }
+  ctx.restore();
+}
+
+/** How a staff member relates to the work they're on: their own station, helping out, or waiting for it. */
+export type BadgeStyle = 'own' | 'helping' | 'waiting';
+
+/**
+ * A round badge above a staff member's head showing the kind of work they're on:
+ * till, cup, tray, suds or mop, in that work's colour. Solid for their own station,
+ * a white badge with a coloured ring when they're helping out, faded while they wait.
+ */
+export function drawStationBadge(
+  ctx: CanvasRenderingContext2D,
+  work: WorkType,
+  colour: string,
+  style: BadgeStyle,
+  cx: number,
+  cy: number,
+  size: number,
+): void {
+  const r = size / 2;
+  ctx.save();
+  ctx.globalAlpha = style === 'waiting' ? 0.55 : 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = style === 'helping' ? '#ffffff' : colour;
+  ctx.fill();
+  ctx.lineWidth = style === 'helping' ? r * 0.28 : r * 0.16;
+  ctx.strokeStyle = style === 'helping' ? colour : OUTLINE;
+  ctx.stroke();
+  const ink = style === 'helping' ? colour : '#ffffff';
+  ctx.fillStyle = ink;
+  ctx.strokeStyle = ink;
+  ctx.lineWidth = r * 0.16;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const u = r * 0.5;
+  ctx.beginPath();
+  switch (work) {
+    case 'counter':
+      // A till: screen on top, drawer below.
+      ctx.rect(cx - u * 0.9, cy - u * 0.15, u * 1.8, u);
+      ctx.fill();
+      ctx.fillRect(cx - u * 0.45, cy - u * 0.95, u * 0.9, u * 0.6);
+      break;
+    case 'barista':
+      // A cup with a handle.
+      ctx.moveTo(cx - u * 0.85, cy - u * 0.6);
+      ctx.lineTo(cx + u * 0.55, cy - u * 0.6);
+      ctx.lineTo(cx + u * 0.35, cy + u * 0.8);
+      ctx.lineTo(cx - u * 0.65, cy + u * 0.8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(cx + u * 0.65, cy - u * 0.05, u * 0.35, -Math.PI / 2, Math.PI / 2);
+      ctx.stroke();
+      break;
+    case 'floor':
+      // A tray with a cup on it.
+      ctx.moveTo(cx - u, cy + u * 0.55);
+      ctx.lineTo(cx + u, cy + u * 0.55);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy + u * 0.35, u * 0.6, Math.PI, 0);
+      ctx.fill();
+      break;
+    case 'dishes':
+      // Suds.
+      for (const [dx, dy, rr] of [[-0.45, 0.25, 0.42], [0.4, 0.3, 0.36], [0, -0.4, 0.38]] as const) {
+        ctx.moveTo(cx + u * dx + u * rr, cy + u * dy);
+        ctx.arc(cx + u * dx, cy + u * dy, u * rr, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+      break;
+    case 'cleaning':
+      // A mop.
+      ctx.moveTo(cx + u * 0.6, cy - u * 0.95);
+      ctx.lineTo(cx - u * 0.15, cy + u * 0.4);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(cx - u * 0.3, cy + u * 0.65, u * 0.65, u * 0.3, -0.5, 0, Math.PI * 2);
+      ctx.fill();
       break;
   }
   ctx.restore();
