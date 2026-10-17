@@ -1,6 +1,7 @@
 // The top bar, the selected-person sheet and the staff panel's jobs and log.
 // Plain DOM over the canvas keeps text crisp.
 
+import { showingsToday } from '../sim/cinema';
 import { BREAK_LABELS } from '../sim/breaks';
 import { NEEDS, WORK_COLOURS, WORK_TYPES, traitDef, type WorkType } from '../sim/defs';
 import { homeWork } from '../sim/work';
@@ -369,7 +370,12 @@ export class Hud {
     else {
       const condition = s.conditions.find((c) => c.until > s.tick);
       if (condition) this.status.textContent = this.sim.venue.text.conditions[condition.id];
-      else this.status.textContent = s.queue.length > 0 ? `${s.queue.length} queuing` : 'Open';
+      else {
+        const queuing = s.queue.length > 0 ? `${s.queue.length} queuing` : 'Open';
+        // A cinema always has an eye on the next film.
+        const next = this.sim.venue.cinema ? showingsToday(this.sim).find((sh) => sh.start >= this.sim.minuteOfDay) : undefined;
+        this.status.textContent = next ? `${queuing} · next film ${String(Math.floor(next.start / 60)).padStart(2, '0')}:${String(next.start % 60).padStart(2, '0')}` : queuing;
+      }
     }
     if (this.staffPanelOpen) {
       this.renderSummary(s.today);

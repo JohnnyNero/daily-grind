@@ -880,8 +880,9 @@ function guestIdleLabel(p: Pawn): string {
     case 'ordering': return 'Ordering';
     case 'waiting': return `Waiting for ${v.items.join(' and ')}`;
     case 'collecting': return 'Collecting their order';
-    case 'toSeat': return 'Finding a seat';
-    case 'eating': return `Enjoying ${v.items.join(' and ')}`;
+    case 'lobby': return `Waiting for ${v.film?.title ?? 'the film'}`;
+    case 'toSeat': return v.film ? `Going in to ${v.film.title}` : 'Finding a seat';
+    case 'eating': return v.film ? `Watching ${v.film.title}` : `Enjoying ${v.items.join(' and ')}`;
     case 'leaving': return 'Leaving';
   }
 }

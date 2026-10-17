@@ -2,12 +2,13 @@
 // queue → order → wait → collect → sit and eat, or take away → leave.
 // Patience drains while they queue and wait; at zero they walk out.
 
+import { MISSED_AFTER, doorsOpen, filmArrivals, findScreenSeat } from './cinema';
 import { canCook } from './kitchen';
 import { reservationKey } from './ai';
 import { GUEST_CLOTHES, HAIR_COLOURS, HAIR_STYLES, NEEDS, SKIN_TONES, objectDef, type NeedValues } from './defs';
 import { pick, randInt, random, randRange } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_MINUTE, type Pawn, type Visit } from './state';
+import { TICKS_PER_MINUTE, type FilmTicket, type Pawn, type Visit } from './state';
 import { addFame, demandFactor, guestCapacity, noteVisit, priceTolerance } from './business';
 import { arrivalFactor } from './storyteller';
 import { ambience, maybeSpill } from './ambience';
@@ -46,8 +47,38 @@ export function guestsEveryMinute(sim: Sim): void {
       v.patience = Math.max(0, v.patience - PATIENCE_DRAIN[v.state] * (hot ? 0.55 : 1));
       if (v.patience <= 0) walkOut(sim, p);
     }
+    // Still not served well after the film started: they've missed it, and want their money back.
+    if (v.film && (v.state === 'queuing' || v.state === 'ordering' || v.state === 'waiting' || v.state === 'collecting') && s.tick > v.film.start + MISSED_AFTER * TICKS_PER_MINUTE) {
+      if (random(s) < 0.3) sim.log(`${p.name} missed the start of ${v.film.title} stuck at the counter, and left.`, 'bad', null, 'missedFilm', 2);
+      walkOut(sim, p);
+    }
   }
   maybeSpawn(sim);
+  if (s.calls.closedUntil <= s.tick && sim.canTrade) filmArrivals(sim, (t) => arriveForFilm(sim, t));
+}
+
+/** Someone here for a film: a ticket, and often a drink or something to eat to take in. */
+function arriveForFilm(sim: Sim, t: FilmTicket): void {
+  const s = sim.state;
+  const c = sim.venue.cinema!;
+  if (s.queue.length >= sim.positions.queue.length) {
+    // The queue's out the door: they'll stream it at home instead.
+    s.today.turnedAway++;
+    judge(sim, 0.3);
+    noteVisit(sim, 'turnedAway');
+    return;
+  }
+  const g = spawnGuest(sim, false);
+  const v = g.visit!;
+  const on = s.menu.filter((m) => m.enabled);
+  const snacks = sim.hasCondition('noFood') ? [] : on.filter((m) => m.kind === 'food' || (m.kind === 'hot' && canCook(sim)));
+  const drinks = on.filter((m) => m.kind === 'drink');
+  v.items = [c.ticket];
+  if (snacks.length > 0 && random(s) < 0.5) v.items.push(pick(s, snacks).name);
+  if (drinks.length > 0 && random(s) < 0.6) v.items.push(pick(s, drinks).name);
+  v.film = t;
+  // With a film to catch, people are a little more patient in the queue.
+  v.patience = Math.min(1, v.patience + 0.1);
 }
 
 function maybeSpawn(sim: Sim): void {
@@ -64,7 +95,8 @@ export function tryArrive(sim: Sim): void {
   const s = sim.state;
   const canServe = s.menu.some((m) => m.enabled && (m.kind === 'drink' || !sim.hasCondition('noFood')));
   if (!canServe || !sim.canTrade) return;
-  const onSite = s.pawns.filter((p) => p.kind === 'guest').length;
+  // Film-goers have their own seats; it's the lounge and the queue that fill up.
+  const onSite = s.pawns.filter((p) => p.kind === 'guest' && !p.visit?.film).length;
   if (onSite >= guestCapacity(sim) || s.queue.length >= sim.positions.queue.length) {
     // They look in, see the chaos and keep walking, and tell their friends it's always rammed.
     s.today.turnedAway++;
@@ -165,6 +197,12 @@ export function guestTick(sim: Sim, p: Pawn): void {
       return;
     case 'waiting': {
       const order = s.orders.find((o) => o.id === v.orderId);
+      // Just a ticket: nothing to collect, straight on.
+      if (order && order.items.every((i) => i.kind === 'ticket')) {
+        releaseWaitSpot(sim, p);
+        collect(sim, p);
+        return;
+      }
       if (order && order.items.every((i) => i.status === 'ready')) {
         v.state = 'collecting';
         releaseWaitSpot(sim, p);
@@ -192,6 +230,38 @@ export function guestTick(sim: Sim, p: Pawn): void {
       collect(sim, p);
       return;
     }
+    case 'lobby': {
+      const film = v.film!;
+      if (s.tick >= film.end) {
+        leave(sim, p);
+        return;
+      }
+      if (doorsOpen(sim, film)) {
+        const seat = findScreenSeat(sim, p, film);
+        if (!seat) {
+          if (random(s) < 0.3) sim.log(`${p.name} couldn't find a seat for ${film.title}. Not a happy customer.`, 'bad', p.id, 'noSeat', 2);
+          noteVisit(sim, 'annoyed');
+          leave(sim, p);
+          return;
+        }
+        // Nobody likes sitting in the last lot's popcorn.
+        if (seat.dirty) {
+          judge(sim, 0.35);
+          if (random(s) < 0.1) sim.log(`${p.name} sat down in someone else's popcorn. The seats in ${film.title} need clearing between films.`, 'neutral', p.id, 'stickySeats', 2);
+        }
+        s.reservations[seat.key] = p.id;
+        v.seatKey = seat.key;
+        v.seatObject = seat.objectId;
+        v.state = 'toSeat';
+        goTo(sim, p, `Going in to ${film.title}`, seat.x, seat.y);
+        return;
+      }
+      // Doors not open yet: hang about in the lobby, out of the queue.
+      const aside = standAside(sim, p);
+      if (aside) goTo(sim, p, `Waiting for ${film.title}`, aside[0], aside[1]);
+      else p.job = sim.makeJob(`Waiting for ${film.title}`, [{ kind: 'wait', ticksLeft: TICKS_PER_MINUTE }]);
+      return;
+    }
     case 'toSeat': {
       const seat = seatTile(sim, v.seatKey);
       if (!seat) {
@@ -200,6 +270,8 @@ export function guestTick(sim: Sim, p: Pawn): void {
       }
       if (at(p, seat[0], seat[1])) {
         v.state = 'eating';
+        // In for the film: they stay until the credits.
+        if (v.film) v.eatTicks = Math.max(1, v.film.end - s.tick);
         return;
       }
       const go = sim.gotoStep(seat[0], seat[1]);
@@ -216,7 +288,9 @@ export function guestTick(sim: Sim, p: Pawn): void {
       maybeSpill(sim, p);
       v.eatTicks--;
       if (v.eatTicks <= 0) {
-        if (v.seatObject !== null) s.dirty[v.seatObject] = (s.dirty[v.seatObject] ?? 0) + v.items.length;
+        // Cups and tubs left behind (a ticket stub doesn't count).
+        const litter = v.items.filter((name) => s.menu.find((m) => m.name === name)?.kind !== 'ticket').length;
+        if (v.seatObject !== null && litter > 0) s.dirty[v.seatObject] = (s.dirty[v.seatObject] ?? 0) + litter;
         p.carrying = null;
         leave(sim, p);
       }
@@ -262,7 +336,7 @@ function standAside(sim: Sim, p: Pawn): [number, number] | null {
   const s = sim.state;
   const pos = sim.positions;
   const busy = new Set([...pos.queue, pos.tillStaff, pos.pickupStaff, pos.foodStaff, pos.pickupGuest].map(([x, y]) => y * s.w + x));
-  for (const o of s.pawns) if (o !== p && o.onMap && o.visit?.state === 'waiting') busy.add(Math.round(o.y) * s.w + Math.round(o.x));
+  for (const o of s.pawns) if (o !== p && o.onMap && (o.visit?.state === 'waiting' || o.visit?.state === 'lobby')) busy.add(Math.round(o.y) * s.w + Math.round(o.x));
   const [sx, sy] = pos.pickupGuest;
   const here = Math.round(p.y) * s.w + Math.round(p.x);
   if (!busy.has(here) && Math.abs(p.x - sx) + Math.abs(p.y - sy) <= 6) return null;
@@ -294,7 +368,9 @@ function collect(sim: Sim, p: Pawn): void {
     leave(sim, p);
     return;
   }
-  const quality = order.items.reduce((sum, i) => sum + i.quality, 0) / order.items.length;
+  // Tickets aren't made, so they don't count towards how good it all was.
+  const made = order.items.filter((i) => i.kind !== 'ticket');
+  const quality = made.length > 0 ? made.reduce((sum, i) => sum + i.quality, 0) / made.length : 6;
   // Value for money: paying over the usual price stings more than a discount pleases.
   const paid = order.items.reduce((sum, i) => sum + i.price, 0);
   const usual = order.items.reduce((sum, i) => sum + (s.menu.find((m) => m.name === i.name)?.basePrice ?? i.price), 0);
@@ -337,7 +413,13 @@ function collect(sim: Sim, p: Pawn): void {
   maybeBecomeRegular(sim, p, satisfaction, server);
   s.orders = s.orders.filter((o) => o.id !== order.id);
   v.orderId = null;
-  p.carrying = { kind: 'takeaway', item: order.items[0].kind };
+  p.carrying = made.length > 0 ? { kind: 'takeaway', item: made[0].kind } : null;
+  if (v.film) {
+    // Ticket in hand: into the lobby until the doors open.
+    v.state = 'lobby';
+    p.job = null;
+    return;
+  }
 
   if (!seat) {
     if (noSeat && random(s) < 0.15) sim.log(`${p.name} wanted to sit down but every seat was taken. They took it to go, grumbling.`, 'neutral', p.id, 'noSeat', 2);

@@ -21,6 +21,7 @@ export const PAINTABLE_FLOORS: readonly { kind: FloorKind; label: string }[] = [
   { kind: 'S', label: 'Staff room' },
   { kind: 'T', label: 'Toilets' },
   { kind: 'R', label: 'Staff flat' },
+  { kind: 'X', label: 'Screen' },
 ];
 
 const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
@@ -115,9 +116,12 @@ export function buildAt(sim: Sim, x: number, y: number, tool: StructureTool, led
   const i = y * s.w + x;
   const before = s.tiles[i];
   s.tiles[i] = p.tile;
+  // Walls and floors change who can reach what (and which rooms are screens).
+  sim.world.version++;
   const blocked = reachProblem(sim);
   if (blocked) {
     s.tiles[i] = before;
+    sim.world.version++;
     return blocked;
   }
   s.money -= p.cost;
@@ -155,9 +159,11 @@ export function restoreLayout(sim: Sim, snap: LayoutSnapshot): string | null {
     if (s.objects.some((o) => sim.world.tilesOf(o).some(([ox, oy]) => ox === x && oy === y))) return 'Furniture is in the way.';
   }
   s.tiles = snap.tiles.map((t) => ({ ...t }));
+  sim.world.version++;
   const blocked = reachProblem(sim);
   if (blocked) {
     s.tiles = current;
+    sim.world.version++;
     return blocked;
   }
   s.money += snap.spent;

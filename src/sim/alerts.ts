@@ -4,6 +4,7 @@
 import { DEBT_LIMIT, machineWear } from './business';
 import { openingShortfall } from './fitout';
 import { hotOnMenu } from './kitchen';
+import { showingsToday, ticketFor } from './cinema';
 import type { Sim } from './sim';
 import { STRESS_BURNT_OUT } from './stakes';
 import { TICKS_PER_MINUTE, type Pawn } from './state';
@@ -44,6 +45,13 @@ export function computeAlerts(sim: Sim): Alert[] {
     out.push({ id: 'incoming', text: `${s.story.incoming.n} arriving in ${mins} min`, level: 'high' });
   }
   if (s.queue.length >= 5) out.push({ id: 'queue', text: `${s.queue.length} queuing`, level: 'high' });
+  // A film about to start with people still stuck in the queue: they'll miss it.
+  if (sim.venue.cinema && open) {
+    const m = sim.minuteOfDay;
+    const soon = showingsToday(sim).find((sh) => sh.start >= m && sh.start - m <= 10);
+    const late = soon ? s.pawns.filter((p) => p.visit?.film && p.visit.film.start === ticketFor(sim, soon).start && (p.visit.state === 'queuing' || p.visit.state === 'waiting')).length : 0;
+    if (soon && late >= 3) out.push({ id: 'filmSoon', text: `${soon.title} starts in ${soon.start - m} min, ${late} not served`, level: 'high' });
+  }
   for (const p of s.pawns) {
     const staff = p.staff;
     if (!staff || staff.quit) continue;

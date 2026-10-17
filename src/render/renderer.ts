@@ -2,6 +2,7 @@
 
 import { NEEDS, WORK_COLOURS, objectDef, rotatedSize, rotationOf, serviceAt, type NeedId, type Rotation, type WorkType } from '../sim/defs';
 import { zoneAt } from '../sim/service';
+import { nowShowing } from '../sim/cinema';
 import type { Sim } from '../sim/sim';
 import type { ObjectInst, Pawn } from '../sim/state';
 import { drawFloorTile, drawObject } from './objectArt';
@@ -406,6 +407,24 @@ export class Renderer {
         drawItem(ctx, 'dirty', (o.x + dw / 2 + (i % 2 ? 0.22 : -0.22)) * TILE, (o.y + dh / 2 + (i > 1 ? 0.22 : -0.1)) * TILE, cup);
       }
     }
+    // What's on: the film's title glows on each screen that's showing.
+    if (this.sim.venue.cinema) {
+      for (const on of nowShowing(this.sim)) {
+        const o = on.screen.screen;
+        const [w, h] = rotatedSize(objectDef(o.def), rotationOf(o));
+        const cx = (o.x + w / 2) * TILE;
+        const cy = (o.y + h / 2) * TILE;
+        ctx.save();
+        ctx.fillStyle = 'rgba(255, 244, 200, 0.95)';
+        ctx.fillRect(o.x * TILE + TILE * 0.2, o.y * TILE + TILE * 0.22, w * TILE - TILE * 0.4, h * TILE - TILE * 0.44);
+        ctx.fillStyle = '#2b2e35';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `600 ${Math.round(TILE * 0.3)}px system-ui, sans-serif`;
+        ctx.fillText(on.title, cx, cy, w * TILE - TILE * 0.5);
+        ctx.restore();
+      }
+    }
     // Seated guests' cups sit on the table in front of them.
     for (const p of s.pawns) {
       const v = p.visit;
@@ -415,7 +434,7 @@ export class Renderer {
       const [dw, dh] = rotatedSize(objectDef(o.def), rotationOf(o));
       const tx = o.x + dw / 2 - 0.5;
       const ty = o.y + dh / 2 - 0.5;
-      const k = o.def === 'armchair' ? 0 : 0.55;
+      const k = o.def === 'armchair' || o.def === 'cinemaSeats' ? 0 : 0.55;
       drawItem(ctx, p.carrying.item, (p.x + (tx - p.x) * k + 0.5) * TILE, (p.y + (ty - p.y) * k + 0.5) * TILE, cup);
     }
     let slot = 0;

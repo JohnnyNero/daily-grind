@@ -18,6 +18,7 @@ import { KITCHEN_KIT, canCook, hotBacklog } from './kitchen';
 
 const MAX_WASH_BATCH = 6;
 
+
 interface Task {
   work: WorkType;
   x: number;
@@ -303,8 +304,11 @@ function scanTasks(sim: Sim, p: Pawn): Task[] {
   const sinks = s.objects.filter((o) => o.def === 'sink').map((o) => ({ o, spot: sim.world.spots(o)[0] }))
     .filter(({ spot }) => sim.world.passable(spot[0], spot[1]));
 
-  // Floor: clear dirty cups from tables, taking them to the nearest sink.
-  if (enabled.has('floor') && sinks.length > 0) {
+  // Floor: clear dirty cups from tables, taking them to the nearest sink. Litter left in
+  // the screens is throwaway, so it goes in the nearest bin (or a sink if that's closer).
+  const bins = s.objects.filter((o) => o.def === 'bin').map((o) => ({ o, spot: sim.world.spots(o)[0] }))
+    .filter(({ spot }) => sim.world.passable(spot[0], spot[1]));
+  if (enabled.has('floor') && (sinks.length > 0 || bins.length > 0)) {
     for (const o of s.objects) {
       if (!(s.dirty[o.id] > 0)) continue;
       const key = `dish:${o.id}`;
@@ -312,15 +316,18 @@ function scanTasks(sim: Sim, p: Pawn): Task[] {
       const spot = nearestPassableSpot(sim, o.id, p);
       if (!spot) continue;
       const [dx, dy] = spot;
-      const sinkSpot = sinks.reduce((best, k) => (Math.hypot(k.spot[0] - dx, k.spot[1] - dy) < Math.hypot(best[0] - dx, best[1] - dy) ? k.spot : best), sinks[0].spot);
+      const litter = o.def === 'cinemaSeats';
+      const targets = [...sinks.map((k) => ({ ...k, bin: false })), ...(litter ? bins.map((k) => ({ ...k, bin: true })) : [])];
+      if (targets.length === 0) continue;
+      const near = targets.reduce((best, k) => (Math.hypot(k.spot[0] - dx, k.spot[1] - dy) < Math.hypot(best.spot[0] - dx, best.spot[1] - dy) ? k : best), targets[0]);
       tasks.push({
         work: 'floor', x: dx, y: dy,
-        build: () => withPath(sim, p, 'Clearing a table', dx, dy, (job) => {
+        build: () => withPath(sim, p, litter ? 'Clearing up the screen' : 'Clearing a table', dx, dy, (job) => {
           sim.reserve(job, p, key);
           return [
             actStep(p, 'floor', { type: 'pickDishes', objectId: o.id }, TASK_MINUTES.pickDishes),
-            sim.gotoStep(sinkSpot[0], sinkSpot[1]),
-            actStep(p, 'floor', { type: 'dropDishes' }, TASK_MINUTES.dropDishes),
+            sim.gotoStep(near.spot[0], near.spot[1]),
+            actStep(p, 'floor', { type: 'dropDishes', bin: near.bin }, TASK_MINUTES.dropDishes),
           ];
         }),
       });
@@ -482,8 +489,12 @@ export function performAction(sim: Sim, p: Pawn, a: Action): void {
       const v = g.visit!;
       const items = v.items.map((name) => {
         const item = sim.menuItem(name);
-        return { name, kind: item.kind, price: item.price, status: 'todo' as const, quality: 0 };
+        // A ticket is printed there and then: nothing to make.
+        return { name, kind: item.kind, price: item.price, status: item.kind === 'ticket' ? 'ready' as const : 'todo' as const, quality: 0 };
       });
+      // The film's distributor takes their share of every ticket.
+      const hire = sim.venue.cinema?.hireShare ?? 0;
+      for (const i of items) if (i.kind === 'ticket') chargeIngredients(sim, i.price, hire);
       const id = s.nextId++;
       s.orders.push({ id, guestId: g.id, takenBy: p.id, items, placedAt: s.tick });
       const total = items.reduce((sum, i) => sum + i.price, 0);
@@ -538,7 +549,7 @@ export function performAction(sim: Sim, p: Pawn, a: Action): void {
       return;
     }
     case 'dropDishes': {
-      if (p.carrying?.kind === 'dishes') s.sinkDirty += p.carrying.count;
+      if (p.carrying?.kind === 'dishes' && !a.bin) s.sinkDirty += p.carrying.count;
       p.carrying = null;
       return;
     }

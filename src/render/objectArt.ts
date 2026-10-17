@@ -99,6 +99,15 @@ export function drawFloorTile(ctx: Ctx, kind: FloorKind, x: number, y: number, t
       ctx.fillRect(x + t - 2, y + t - 2, 2, 2);
       break;
     }
+    case 'X': {
+      // Cinema carpet: dark blue with a faint fleck, so the screen stands out.
+      ctx.fillStyle = '#2c3348';
+      ctx.fillRect(x, y, t, t);
+      ctx.fillStyle = '#353d55';
+      ctx.fillRect(x + t * 0.2, y + t * 0.3, 2, 2);
+      ctx.fillRect(x + t * 0.7, y + t * 0.65, 2, 2);
+      break;
+    }
     case 'P':
       ctx.fillStyle = '#a7a9ab';
       ctx.fillRect(x, y, t, t);
@@ -273,6 +282,30 @@ export function drawObject(ctx: Ctx, def: string, x: number, y: number, w: numbe
       box(ctx, x + W * 0.12, y + H * 0.18, W * 0.76, H * 0.6, 4, 'rgba(220,235,245,0.85)', 1.5);
       disc(ctx, x + W * 0.36, y + H * 0.5, t * 0.14, '#e8b0a8', 1.2);
       disc(ctx, x + W * 0.64, y + H * 0.5, t * 0.14, '#9a6b46', 1.2);
+      break;
+    case 'fountain':
+      box(ctx, x + p, y + p, W - 2 * p, H - 2 * p, 4, '#c43c3c');
+      box(ctx, x + W * 0.08, y + H * 0.15, W * 0.84, H * 0.3, 2, '#2b2e35', 1.2);
+      for (let i = 0; i < 4; i++) {
+        disc(ctx, x + W * (0.18 + i * 0.21), y + H * 0.66, t * 0.1, ['#3a2416', '#e8862c', '#f2f2f2', '#6fbf4a'][i], 1.2);
+      }
+      break;
+    case 'bin':
+      disc(ctx, x + W / 2, y + H / 2, t * 0.32, '#5f6670', 1.5);
+      disc(ctx, x + W / 2, y + H / 2, t * 0.2, '#2b2e35', 1);
+      break;
+    case 'screen':
+      // A wide pale screen in a black frame.
+      box(ctx, x + 2, y + p, W - 4, H - 2 * p, 2, '#151619');
+      box(ctx, x + t * 0.2, y + H * 0.22, W - t * 0.4, H * 0.5, 1, '#e9edf2', 1);
+      break;
+    case 'cinemaSeats':
+      // A row of red seats, backs towards the bottom so the row faces up the room.
+      for (let i = 0; i < w; i++) {
+        const sx = x + i * t;
+        box(ctx, sx + t * 0.12, y + t * 0.12, t * 0.76, t * 0.62, 4, '#a3283a', 1.5);
+        box(ctx, sx + t * 0.1, y + t * 0.66, t * 0.8, t * 0.24, 3, '#7a1f2b', 1.5);
+      }
       break;
     case 'taps':
       box(ctx, x + p, y + p, W - 2 * p, H - 2 * p, 4, '#2b2e35');

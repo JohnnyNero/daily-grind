@@ -3,6 +3,7 @@
 // until the layout and the team become the limit, and growth should cost money.
 
 import { OBJECT_DEFS, WORK_TYPES, objectDef, type Skills } from './defs';
+import { seatTotal } from './cinema';
 import type { Sim } from './sim';
 import type { DayStats, WeeklyReport } from './state';
 
@@ -80,6 +81,11 @@ export function guestCapacity(sim: Sim): number {
   return sim.positions.queue.length + seatCount(sim) + 3;
 }
 
+/** Cinema seats, across every screen. */
+export function screenSeats(sim: Sim): number {
+  return sim.venue.cinema ? seatTotal(sim) : 0;
+}
+
 /** What people will happily pay, as a multiple of the usual price. Grows with the stars. */
 export function priceTolerance(sim: Sim): number {
   return 1 + (stars(sim) - 1) * 0.08;
@@ -103,8 +109,9 @@ export function priceDraw(sim: Sim): number {
 /** Share of an item's usual price that goes on ingredients. */
 export const INGREDIENT_SHARE = 0.18;
 
-export function chargeIngredients(sim: Sim, basePrice: number): void {
-  const cost = Math.round(basePrice * INGREDIENT_SHARE);
+/** What it cost to make (or, for a film ticket, the distributor's share). */
+export function chargeIngredients(sim: Sim, basePrice: number, share = INGREDIENT_SHARE): void {
+  const cost = Math.round(basePrice * share);
   sim.state.money -= cost;
   sim.state.today.ingredients += cost;
 }

@@ -3,8 +3,8 @@
 
 import type { HairStyle, ItemKind, NeedValues, PawnKind, Priorities, Skills, TraitId, WorkType } from './defs';
 
-/** Kitchen, Staff room, Behind the counter, wooden Floor, Carpet, Toilets, Pavement, Yard, Residential (the flat). */
-export type FloorKind = 'K' | 'S' | 'B' | 'F' | 'C' | 'T' | 'P' | 'Y' | 'R';
+/** Kitchen, Staff room, Behind the counter, wooden Floor, Carpet, Toilets, Pavement, Yard, Residential (the flat), cinema screen (X). */
+export type FloorKind = 'K' | 'S' | 'B' | 'F' | 'C' | 'T' | 'P' | 'Y' | 'R' | 'X';
 
 export interface Tile {
   floor: FloorKind;
@@ -45,7 +45,8 @@ export type Action =
   | { type: 'prepItem'; orderId: number; index: number }
   | { type: 'placeItem'; orderId: number; index: number }
   | { type: 'pickDishes'; objectId: number }
-  | { type: 'dropDishes' }
+  /** `bin`: throwaway litter from the screens, binned rather than washed. */
+  | { type: 'dropDishes'; bin?: boolean }
   | { type: 'wash'; count: number }
   | { type: 'argue'; guestId: number }
   | { type: 'repair' }
@@ -214,7 +215,8 @@ export interface MenuEntry {
   enabled: boolean;
 }
 
-export type VisitState = 'queuing' | 'ordering' | 'waiting' | 'collecting' | 'toSeat' | 'eating' | 'leaving';
+/** 'lobby': a film-goer with everything they need, waiting for the doors to open. */
+export type VisitState = 'queuing' | 'ordering' | 'waiting' | 'collecting' | 'lobby' | 'toSeat' | 'eating' | 'leaving';
 
 export interface Visit {
   state: VisitState;
@@ -237,6 +239,15 @@ export interface Visit {
   regularId: number | null;
   /** Spilt their drink already this visit (once is plenty). */
   spilt: boolean;
+  /** Here for a film: which screen (its key), what's on, and when it starts and ends (ticks). */
+  film?: FilmTicket;
+}
+
+export interface FilmTicket {
+  screen: number;
+  title: string;
+  start: number;
+  end: number;
 }
 
 export interface OrderItem {

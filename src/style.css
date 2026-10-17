@@ -535,3 +535,12 @@ body.starting .bar, body.starting .corner-buttons, body.starting .recentre { vis
   .sheet.panel { width: 440px; }
   .buildbar { left: auto; right: 16px; bottom: 16px; width: 440px; border-radius: 16px; }
 }
+.film-list { list-style: none; margin: 0 0 12px; padding: 0; }
+.film-list li { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; padding: 6px 0; border-bottom: 1px solid #ece5d8; font-size: 14px; }
+.film-list li:last-child { border-bottom: 0; }
+.film-list .time { font-variant-numeric: tabular-nums; font-weight: 600; grid-row: span 2; }
+.film-list .title small { color: #7a7266; }
+.film-list .status { color: #7a7266; font-size: 13px; }
+.film-list li.now .status { color: #7a1f2b; font-weight: 600; }
+.film-list li.done { opacity: 0.5; }
+#films h3 { margin: 4px 0; }

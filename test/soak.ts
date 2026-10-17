@@ -20,7 +20,7 @@ const report = (msg: string) => {
   if (failures <= 80) console.log('  !', msg);
 };
 
-for (const venue of ['cafe', 'pub']) {
+for (const venue of ['cafe', 'pub', 'cinema']) {
   for (let seed = 1; seed <= seeds; seed++) {
     let sim = new Sim(seed * 7919, undefined, venue);
     const rng = new FuzzRng(seed);

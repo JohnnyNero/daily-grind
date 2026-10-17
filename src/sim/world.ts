@@ -4,7 +4,7 @@ import { footprint, objectDef, rotationOf, spotsAt } from './defs';
 import type { PlacedObject } from './venues';
 import type { FloorKind, ObjectInst, SimState, Tile } from './state';
 
-const FLOOR_CHARS: Record<string, FloorKind> = { K: 'K', S: 'S', B: 'B', F: 'F', C: 'C', T: 'T', P: 'P', Y: 'Y', R: 'R' };
+const FLOOR_CHARS: Record<string, FloorKind> = { K: 'K', S: 'S', B: 'B', F: 'F', C: 'C', T: 'T', P: 'P', Y: 'Y', R: 'R', X: 'X' };
 
 /** Columns of empty yard added to the side of every venue: room for a staff flat. */
 export const PLOT_W = 9;

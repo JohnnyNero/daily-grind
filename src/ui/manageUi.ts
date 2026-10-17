@@ -1,6 +1,7 @@
 // Management panels: the team (rota, breaks, editing, hiring) and the café (menu, saving).
 // Build mode lives in buildUi.ts. All changes go through sim/manage.ts, which validates them.
 
+import { booked, doorsOpen, screens, showingsToday, ticketFor } from '../sim/cinema';
 import { canCook } from '../sim/kitchen';
 import { MAX_STAFF, TRAITS, WORK_COLOURS, WORK_TYPES, objectDef, type TraitId, type WorkType } from '../sim/defs';
 import {
@@ -17,7 +18,7 @@ import { FLAT_COST, FLAT_RENT, beds, buildStaffFlat, hasFlat, liveIns, setLivesI
 import { STRESS_STRAINED, WEEKDAYS, weekday } from '../sim/stakes';
 import { weekProfit } from '../sim/goals';
 import {
-  DEBT_LIMIT, INGREDIENT_SHARE, SERVICE_COST, dailyRent, guestCapacity, machineWear, priceTolerance, seatCount, serviceMachine, starProgress, starText, stars,
+  DEBT_LIMIT, INGREDIENT_SHARE, SERVICE_COST, dailyRent, guestCapacity, machineWear, priceTolerance, screenSeats, seatCount, serviceMachine, starProgress, starText, stars,
 } from '../sim/business';
 import { exportSave, importSave, saveToDevice } from './save';
 
@@ -374,12 +375,35 @@ export class CafeUi {
     this.panel.hidden = true;
   }
 
+  /** The cinema's timetable: what's on, what's next and how full each one is. */
+  private renderFilms(): void {
+    const box = el('films');
+    box.hidden = !this.sim.venue.cinema;
+    if (box.hidden) return;
+    const list = showingsToday(this.sim);
+    const sc = screens(this.sim);
+    const m = this.sim.minuteOfDay;
+    const t = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+    el('films-hint').textContent = sc.length === 0
+      ? 'No working screens. A screen is a room of Screen floor with a cinema screen in it; rows of seats in the room are its audience.'
+      : `${sc.length} screen${sc.length === 1 ? '' : 's'}, ${screenSeats(this.sim)} seats. People arrive in the half hour before each film, busiest just before it starts, and all leave together at the end.`;
+    el('film-list').replaceChildren(...list.map((sh) => {
+      const ticket = ticketFor(this.sim, sh);
+      const status = m >= sh.end ? 'Finished' : m >= sh.start ? 'Showing now' : doorsOpen(this.sim, ticket) ? 'Doors open' : `Starts ${t(sh.start)}`;
+      return h('li', { className: m >= sh.end ? 'done' : m >= sh.start ? 'now' : '' },
+        h('span', { className: 'time' }, `${t(sh.start)}–${t(sh.end)}`),
+        h('span', { className: 'title' }, sh.title, h('small', {}, ` ${sh.screenName}`)),
+        h('span', { className: 'status' }, m >= sh.end ? status : `${status} · ${booked(this.sim, ticket)}/${sh.capacity}`));
+    }));
+  }
+
   render(): void {
     el('cafe-title').textContent = this.sim.venue.name.charAt(0).toUpperCase() + this.sim.venue.name.slice(1);
     this.renderExtras();
     const ratio = priceRatio(this.sim);
     const tolerance = priceTolerance(this.sim);
     const fine = tolerance > 1.001 ? `At ${starText(stars(this.sim))} people will pay up to ${Math.round((tolerance - 1) * 100)}% over the usual without minding.` : 'More stars and people will pay more.';
+    this.renderFilms();
     el('price-hint').textContent = (ratio > tolerance + 0.04
       ? `Prices are ${Math.round((ratio - 1) * 100)}% above usual: more than people will happily pay, so fewer come and they grumble about value. `
       : ratio < 0.95

@@ -91,6 +91,15 @@ const defs: ObjectDef[] = [
     id: 'taps', price: 90000, floors: ['K', 'B'], label: 'Beer taps', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'lemonade', label: 'Pour yourself a lemonade', doing: 'Sneaking a lemonade', usableBy: STAFF, deltas: { energy: 0.12, bladder: -0.08 }, minutes: 3, whenBelow: { need: 'energy', value: 0.75 } }],
   },
+  {
+    id: 'fountain', price: 70000, floors: ['K', 'B'], label: 'Drinks fountain', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
+    offers: [{ id: 'cola', label: 'Pour yourself a cola', doing: 'Sneaking a cola', usableBy: STAFF, deltas: { energy: 0.14, bladder: -0.08 }, minutes: 3, whenBelow: { need: 'energy', value: 0.75 } }],
+  },
+  // A cinema screen: a room of Screen floor with one of these in it shows films; seats in the room are its audience.
+  { id: 'screen', price: 150000, floors: ['X'], label: 'Cinema screen', w: 6, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'cinemaSeats', price: 60000, floors: ['X'], label: 'Row of seats', w: 4, h: 1, blocks: false, spots: [[0, 0], [1, 0], [2, 0], [3, 0]], offers: [] },
+  // Rubbish from the screens goes in here instead of the sink.
+  { id: 'bin', price: 4000, floors: ['F', 'C', 'X', 'B', 'K'], label: 'Litter bin', w: 1, h: 1, blocks: true, spots: [[0, 1]], offers: [] },
   { id: 'kegs', price: 15000, floors: ['K'], label: 'Kegs', w: 2, h: 1, blocks: true, spots: [], offers: [] },
   { id: 'poolTable', price: 45000, floors: ['F', 'C'], label: 'Pool table', w: 3, h: 2, blocks: true, spots: [], offers: [] },
   { id: 'dartboard', price: 6000, floors: ['F', 'C'], label: 'Dartboard', w: 1, h: 1, blocks: true, spots: [], offers: [] },
@@ -265,8 +274,8 @@ export const TASK_MINUTES = {
 
 // ------------------------------------------------------------------ menu
 
-/** Drinks from the machine, food plated at the counter, hot food cooked in the kitchen. */
-export type ItemKind = 'drink' | 'food' | 'hot';
+/** Drinks from the machine, food plated at the counter, hot food cooked in the kitchen, film tickets (sold at the till, nothing to make). */
+export type ItemKind = 'drink' | 'food' | 'hot' | 'ticket';
 
 export interface MenuItem {
   name: string;

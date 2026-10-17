@@ -37,7 +37,7 @@ The start screen offers **Continue** (your saved place), **New game** and **Impo
 
 ## Venues
 
-There are two so far: **the café** (mornings, flat whites, cake) and **the pub** (evenings, pints, crisps, quiz night, stag dos). To switch, open the venue panel's **Save** tab and tap *New game*. Or add `?venue=pub` to the address to skip straight in. Venues live in `src/sim/venues.ts`, so adding one is mostly data.
+There are three: **the café** (mornings, flat whites, cake, a kitchen), **the pub** (evenings, pints, crisps, quiz night, stag dos) and **the cinema** (films on a timetable, tickets, popcorn, a lounge). To switch, open the venue panel's **Save** tab and tap *New game*. Or add `?venue=pub` or `?venue=cinema` to the address to skip straight in. Venues live in `src/sim/venues.ts`, so adding one is mostly data.
 
 ## Empty lot
 
@@ -72,6 +72,19 @@ The café cooks hot food to order: **bacon rolls** and **cheese toasties** from 
 - One oven and one prep counter cook one dish at a time. Buy more to have two cooks going at once.
 - No oven or prep counter (sold, or not built yet on an empty lot): hot food comes off the menu automatically. The Menu tab marks hot dishes "Cooked in the kitchen" or "Needs an oven and prep counter". An alert shows if hot food is on and nobody on shift can cook.
 - Older saves get the new dishes, and everyone gets a kitchen skill and priority 3.
+
+## The cinema
+
+Two screens of 16 seats each, a lobby with the box office and snacks, and a lounge.
+
+- **Films run on a timetable.** Each screen shows films back to back, with 20 minutes between one ending and the next starting. Screen 2 starts 40 minutes after Screen 1, so their rushes don't land at the same time. Today's films are listed at the top of the **Menu** tab with how many seats are booked; the top bar shows when the next one starts.
+- **Film-goers swell in before each start.** They start arriving about 50 minutes before, busiest 10 minutes before the start. Each buys a **ticket** at the till (no making, the till prints it), and about half add popcorn, nachos or a drink to collect from the pickup. Then they wait in the lobby until the **doors open** 12 minutes before the start, once the last audience is out. They go in, watch, and **all leave together** when it ends.
+- **Miss it and they walk.** Anyone still queuing or waiting for snacks 10 minutes after the start gives up and wants their money back. A red alert warns when a film is about to start with people still not served. The queue out the door before a big film is the puzzle: who's on the box office, who's on drinks, and how long the queue zone is.
+- **Clearing up between films.** People leave cups and tubs on the seats. Floor staff take it to the nearest litter bin (there's one in each screen) or sink. The next audience grumbles if they sit in it.
+- **Some people just come for the lounge**: a drink and a sit-down, like café customers.
+- **Money:** a ticket is £9.50, but the film's distributor takes 60% of it. Snacks are where the margin is. Rent is higher than the café's.
+- **Building screens**: a screen is a room of **Screen** floor (Floors tab) with a **cinema screen** in it (£1,500). Every **row of seats** (£600, four seats) on that floor in the same room is its audience. More screens or seats means more showings and bigger audiences; the timetable adapts on its own. An empty-lot cinema starts with none.
+- The opening team has a box office person on the morning and afternoon shifts, and drinks in the evening.
 
 ## How it plays
 
@@ -150,6 +163,7 @@ src/
     ambience.ts  cleanliness, looks, spills and slips
     venues.ts    each venue as data: map, furniture, menu, hours, rhythm, wording; the empty shell
     kitchen.ts   hot food: whether the kitchen can cook, and its backlog
+    cinema.ts    screens, the film timetable and the swell of film-goers before each start
     service.ts   where service happens: till, pickup and food counter pieces, queue and pickup zones
     fitout.ts    what a place needs before it can open
     path.ts      A* pathfinding

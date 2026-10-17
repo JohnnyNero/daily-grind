@@ -10,6 +10,7 @@
 
 import type { ItemKind, WorkType } from './defs';
 import type { ConditionId } from './state';
+import type { CinemaDef } from './cinema';
 
 export interface PlacedObject {
   def: string;
@@ -82,6 +83,8 @@ export interface VenueDef {
   uniform: { shirt: string; apron: string | null };
   workLabels: Partial<Record<WorkType, string>>;
   text: VenueText;
+  /** Cinemas only: the films and their timetable. */
+  cinema?: CinemaDef;
 }
 
 const h = (hours: number, minutes = 0) => hours * 60 + minutes;
@@ -375,7 +378,154 @@ const PUB: VenueDef = {
   },
 };
 
-export const VENUES: Readonly<Record<string, VenueDef>> = { cafe: CAFE, pub: PUB };
+
+// The cinema: a lobby with the box office and snacks, a lounge, and two screens.
+// The counter faces the lobby; staff work it from the strip behind.
+const CINEMA: VenueDef = {
+  id: 'cinema',
+  name: 'The cinema',
+  tagline: 'Tickets, popcorn and the rush before the trailers.',
+  map: [
+    '################',
+    '#KKKK#SS#XXXXXX#',
+    '#KKKKdSS#XXXXXX#',
+    '##d####d#XXXXXX#',
+    '#BBBBBBB#XXXXXX#',
+    '#BBBBBBB#XXXXXX#',
+    '#BBBBBBB#XXXXXX#',
+    '#FFFFFFF#XXXXXX#',
+    '#FFFFFFF#XXXXXX#',
+    '#FFFFFFFdXXXXXX#',
+    '#FFFFFFF########',
+    '#FFFFFFF#XXXXXX#',
+    '#FFFFFFF#XXXXXX#',
+    '#FFFFFFF#XXXXXX#',
+    '#FFFFFFF#XXXXXX#',
+    '#FFFFFFF#XXXXXX#',
+    '#FFFFFFF#XXXXXX#',
+    '###FFFFF#XXXXXX#',
+    '#TT#FFFFdXXXXXX#',
+    '#TTdFFFF#XXXXXX#',
+    '#TT#FFFF########',
+    '######DD########',
+    'PPPPPPPPPPPPPPPP',
+    'PPPPPPPPPPPPPPPP',
+  ],
+  objects: [
+    { def: 'sink', x: 1, y: 1 },
+    { def: 'fridge', x: 3, y: 1 },
+    { def: 'staffSofa', x: 6, y: 1 },
+    { def: 'fountain', x: 1, y: 4 },
+    // A gap at the end of the counter lets staff through to the back.
+    ...['counter', 'foodCounter', 'pickup', 'counter', 'till', 'counter'].map((def, i) => ({ def, x: 1 + i, y: 6 })),
+    { def: 'armchair', x: 1, y: 11 },
+    { def: 'armchair', x: 1, y: 13 },
+    { def: 'armchair', x: 1, y: 15 },
+    { def: 'table2', x: 3, y: 12 },
+    { def: 'table2', x: 3, y: 15 },
+    { def: 'toilet', x: 1, y: 18 },
+    { def: 'toilet', x: 1, y: 20 },
+    { def: 'screen', x: 9, y: 1 },
+    { def: 'bin', x: 14, y: 2 },
+    ...[3, 5, 7, 9].map((y) => ({ def: 'cinemaSeats', x: 10, y })),
+    { def: 'screen', x: 9, y: 11 },
+    { def: 'bin', x: 14, y: 12 },
+    ...[13, 15, 17, 19].map((y) => ({ def: 'cinemaSeats', x: 10, y })),
+  ],
+  drinkStation: 'fountain',
+  counter: 'counter',
+  drinkMinutes: 0.5,
+  entry: ENTRY,
+  zones: {
+    queue: [[5, 8], [5, 9], [5, 10], [5, 11], [5, 12], [5, 13], [5, 14], [5, 15], [5, 16]],
+    pickup: [[4, 7], [2, 7], [1, 7], [4, 8], [3, 8], [2, 8], [1, 8]],
+  },
+  guestSeating: ['table4', 'table2', 'armchair'],
+  frontFloors: ['F'],
+  menu: [
+    { name: 'film ticket', kind: 'ticket', price: 950 },
+    { name: 'popcorn', kind: 'food', price: 550 },
+    { name: 'nachos', kind: 'food', price: 500 },
+    { name: 'cola', kind: 'drink', price: 380 },
+    { name: 'fizzy orange', kind: 'drink', price: 360 },
+    { name: 'bottle of water', kind: 'drink', price: 220 },
+  ],
+  unlocks: [
+    { stars: 2, name: 'pick and mix', kind: 'food', price: 450 },
+    { stars: 3, name: 'slushie', kind: 'drink', price: 400 },
+    { stars: 4, name: 'hot dog', kind: 'hot', price: 600 },
+    { stars: 5, name: 'posh popcorn', kind: 'food', price: 750 },
+  ],
+  hours: { open: h(11), close: h(23, 30), lastArrival: h(22) },
+  // Lounge visitors only: film-goers come on the timetable (see cinema.ts).
+  arrivals: (m) => {
+    if (m < h(11) || m >= h(22)) return 0;
+    if (m < h(17)) return 4;
+    return 6;
+  },
+  cinema: {
+    ticket: 'film ticket',
+    films: [
+      { title: 'Space Badgers 3', minutes: 95, draw: 1.3 },
+      { title: 'The Long Quiet', minutes: 120, draw: 1 },
+      { title: 'Murder at the Allotment', minutes: 110, draw: 1 },
+      { title: 'Robot Uprising: Reloaded', minutes: 135, draw: 1.2 },
+      { title: 'The Haunting of Flat 4B', minutes: 100, draw: 1.1 },
+      { title: 'Love, Probably', minutes: 105, draw: 0.9 },
+      { title: 'Pigeon Detective', minutes: 90, draw: 0.8 },
+      { title: 'Ninety Minutes in Leeds', minutes: 90, draw: 0.7 },
+    ],
+    turnaround: 20,
+    firstShow: h(11, 30),
+    stagger: 40,
+    doorsOpen: 12,
+    hireShare: 0.6,
+  },
+  // Screens are big rooms: the rent reflects it, and tickets carry it.
+  rentPerDay: 22000,
+  shifts: [
+    // Someone on the box office all day, and on drinks for the evening crowd.
+    { start: h(10, 30), end: h(17, 30), station: 'counter' },
+    { start: h(11), end: h(19) },
+    { start: h(14, 30), end: h(22, 30), station: 'counter' },
+    { start: h(17), end: h(23, 45), station: 'barista' },
+    { start: h(18), end: h(23, 45) },
+  ],
+  uniform: { shirt: '#7a1f2b', apron: null },
+  workLabels: { counter: 'Box office', barista: 'Drinks', floor: 'Ushers' },
+  text: {
+    noun: 'cinema',
+    rush: (n) => `A school trip of ${n} has arrived for the matinee. The teacher looks exhausted already.`,
+    rushWarning: (n, minutes) => `Heads up: a school trip of about ${n} is on its way, ${minutes} minutes out.`,
+    stationBroken: 'The drinks fountain is spitting foam. Somebody needs to sort the syrup lines.',
+    stationFixed: (name) => `${name} got the fountain going again. Sticky, but working.`,
+    repairJob: 'Fixing the drinks fountain',
+    noFood: "The popcorn delivery hasn't turned up. The kernels are gone.",
+    heatwave: "Heatwave. Everyone wants the air conditioning and a slushie.",
+    critic: (name) => `${name} from the film blog is here, and they've opinions about popcorn.`,
+    busker: 'A film club has taken over the lounge to argue about endings.',
+    freebies: 'The distributor sent posters and free snacks for the staff. Morale: restored.',
+    shoutOut: 'A local paper called it "the comfiest seats in town". Word gets round.',
+    quietSpell: 'A quiet spell between films. Someone is quietly eating the broken popcorn.',
+    conditions: {
+      stationBroken: 'Fountain broken',
+      noFood: 'Out of popcorn',
+      heatwave: 'Heatwave',
+      busker: 'Film club in',
+      quietSpell: 'Quiet spell',
+    },
+    rudeLines: [
+      'asked for the seat "with the best view, obviously".',
+      'tried to bring in a full Sunday roast.',
+      'asked if the film had "a good bit".',
+      'wanted a refund for the trailers.',
+      'asked for popcorn "with nothing on it, but nice".',
+      'demanded to know how the film ends before buying.',
+    ],
+  },
+};
+
+export const VENUES: Readonly<Record<string, VenueDef>> = { cafe: CAFE, pub: PUB, cinema: CINEMA };
 
 export function venueDef(id: string | undefined): VenueDef {
   return VENUES[id ?? 'cafe'] ?? CAFE;
