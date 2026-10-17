@@ -43,7 +43,7 @@ function zoneTiles(s: SimState, kind: ZoneKind): Tile[] {
 
 /** Everything furniture and walls must leave clear: service spots, both zones and the way in. */
 export function reservedTiles(sim: Sim): Tile[] {
-  return [...pieceSpots(sim), ...zoneTiles(sim.state, 'queue'), ...zoneTiles(sim.state, 'pickup'), ...sim.venue.entry];
+  return [...pieceSpots(sim), ...zoneTiles(sim.state, 'queue'), ...zoneTiles(sim.state, 'pickup'), ...sim.entry];
 }
 
 /** Service spots that must stay reachable from the door. */
@@ -56,7 +56,7 @@ function reachable(sim: Sim): Uint8Array {
   const s = sim.state;
   const seen = new Uint8Array(s.w * s.h);
   const stack: Tile[] = [];
-  for (const [x, y] of sim.venue.entry) {
+  for (const [x, y] of sim.entry) {
     if (!sim.world.passable(x, y) || seen[y * s.w + x]) continue;
     seen[y * s.w + x] = 1;
     stack.push([x, y]);
@@ -81,7 +81,7 @@ function reachable(sim: Sim): Uint8Array {
  */
 export function computePositions(sim: Sim): ServicePositions {
   const s = sim.state;
-  const entry = sim.venue.entry;
+  const entry = sim.entry;
   const find = (def: string) => {
     const o = s.objects.find((x) => x.def === def);
     return o ? serviceAt(o.def, o.x, o.y, rotationOf(o)) : null;

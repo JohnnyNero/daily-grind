@@ -6,7 +6,8 @@ import { computeAlerts } from '../src/sim/alerts';
 import { paintZone } from '../src/sim/service';
 import { rotateOffset, objectDef, spotsAt } from '../src/sim/defs';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type SimState } from '../src/sim/state';
-import { VENUES, emptyShell } from '../src/sim/venues';
+import { VENUES, bareLot } from '../src/sim/venues';
+import { isShell } from '../src/sim/structure';
 
 const paint = (sim: Sim, kind: 'B' | 'K' | 'T', tiles: [number, number][]) => {
   for (const [x, y] of tiles) expect(buildAt(sim, x, y, { floor: kind })).toBeNull();
@@ -28,15 +29,33 @@ function fitOut(sim: Sim): void {
 }
 
 describe('empty lot', () => {
-  it('keeps only the outside walls and the front door', () => {
+  it('is bare ground with no walls or doors: the pavement is all that is fixed', () => {
     for (const v of Object.values(VENUES)) {
-      const rows = emptyShell(v.map, v.frontFloors[0]);
-      expect(rows.join('')).not.toMatch(/[dKSBT]/);
-      expect(rows[0]).toBe(v.map[0]);
-      expect(rows[21]).toBe(v.map[21]);
-      expect(rows[6]).toBe(`#${v.frontFloors[0].repeat(14)}#`);
-      expect(rows.every((r, y) => r[0] === v.map[y][0] && r[15] === v.map[y][15])).toBe(true);
+      const rows = bareLot(v.map, v.frontFloors[0], 9);
+      expect(rows.join('')).not.toMatch(/[#dD]/);
+      expect(rows[22]).toBe('P'.repeat(25));
     }
+    const sim = new Sim(5, undefined, 'cafe', 'empty');
+    expect(sim.state.tiles.some((t) => t.wall || t.door)).toBe(false);
+    // Corners, edges and the shop front are all buildable; the pavement isn't.
+    expect(isShell(sim, 0, 0)).toBe(false);
+    expect(isShell(sim, 7, 21)).toBe(false);
+    expect(isShell(sim, 7, 22)).toBe(true);
+    expect(buildAt(sim, 0, 0, 'wall')).toBeNull();
+    // People arrive anywhere along the pavement.
+    expect(sim.entry.length).toBe(sim.state.w);
+  });
+
+  it('lets the player wall it in and choose where the front door goes', () => {
+    const sim = new Sim(5, undefined, 'cafe', 'empty');
+    for (let x = 0; x < sim.state.w; x++) expect(buildAt(sim, x, 21, 'wall')).toBeNull();
+    expect(buildAt(sim, 12, 21, 'door')).toBeNull();
+    fitOut(sim);
+    sim.run(TICKS_PER_DAY);
+    expect(sim.state.yesterday!.served).toBeGreaterThan(20);
+    // Bricking up the only door would shut everyone out.
+    const blocked = buildAt(sim, 12, 21, 'wall');
+    expect(blocked).toMatch(/cut off|block|shut/);
   });
 
   it('starts empty, with money to fit out and nobody coming in until it can trade', () => {
@@ -45,7 +64,7 @@ describe('empty lot', () => {
     expect(sim.state.zones).toEqual({ queue: [], pickup: [] });
     expect(sim.state.money).toBe(EMPTY_LOT_MONEY);
     expect(sim.canTrade).toBe(false);
-    expect(keepClear(sim)).toEqual(sim.venue.entry);
+    expect(keepClear(sim)).toEqual(sim.entry);
     expect(computeAlerts(sim).find((a) => a.id === 'fitout')?.text).toMatch(/a till, a pickup counter and espresso machine/);
     sim.run(TICKS_PER_DAY);
     expect(sim.state.pawns.filter((p) => p.onMap)).toEqual([]);
@@ -96,7 +115,8 @@ describe('empty lot', () => {
     expect(buyObject(sim, 'till', 8, 12)).toMatch(/already/);
     const till = sim.state.objects.find((o) => o.def === 'till')!;
     expect(sellObject(sim, till.id)).toMatch(/at least one/);
-    // Against the back wall there's nowhere for staff to stand.
+    // Against a wall there's nowhere for staff to stand.
+    expect(buildAt(sim, 4, 0, 'wall')).toBeNull();
     expect(moveObject(sim, till.id, 4, 1)).toMatch(/open floor behind/);
     // A table where customers would stand blocks it.
     expect(buyObject(sim, 'table2', 7, 16)).toBeNull();
@@ -121,6 +141,7 @@ describe('empty lot', () => {
 describe('zones', () => {
   it('only marks open floor inside, and keeps furniture and walls off it', () => {
     const sim = new Sim(5, undefined, 'cafe', 'empty');
+    expect(buildAt(sim, 0, 5, 'wall')).toBeNull();
     expect(paintZone(sim, 0, 5, 'queue')).toMatch(/open floor/);
     expect(paintZone(sim, 7, 22, 'queue')).toMatch(/inside/);
     expect(paintZone(sim, 5, 15, 'queue')).toBeNull();

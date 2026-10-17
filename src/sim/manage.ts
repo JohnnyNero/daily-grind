@@ -325,7 +325,7 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
 export function reachProblem(sim: Sim): string | null {
   const s = sim.state;
   const seen = new Uint8Array(s.w * s.h);
-  const [ex, ey] = sim.venue.entry[0];
+  const [ex, ey] = sim.entry[0];
   const stack: [number, number][] = [[ex, ey]];
   seen[ey * s.w + ex] = 1;
   while (stack.length > 0) {

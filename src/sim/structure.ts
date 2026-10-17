@@ -30,8 +30,10 @@ export function isShell(sim: Sim, x: number, y: number): boolean {
   const w = sim.world;
   if (!w.inBounds(x, y)) return true;
   const s = sim.state;
-  if (x === 0 || y === 0 || x === s.w - 1 || y === s.h - 1) return true;
   if (w.tile(x, y).floor === 'P') return true;
+  // On an open lot everything off the pavement is yours to build on, edges and shop front too.
+  if (s.openLot) return false;
+  if (x === 0 || y === 0 || x === s.w - 1 || y === s.h - 1) return true;
   return SIDES.some(([dx, dy]) => w.inBounds(x + dx, y + dy) && w.tile(x + dx, y + dy).floor === 'P');
 }
 

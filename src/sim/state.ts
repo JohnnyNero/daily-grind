@@ -421,6 +421,8 @@ export interface SimState {
   h: number;
   tiles: Tile[];
   zones: Zones;
+  /** Started as an empty lot: no building shell, so walls and doors can go anywhere off the pavement. */
+  openLot?: boolean;
   objects: ObjectInst[];
   pawns: Pawn[];
   /** Reservation key -> pawn id. Keys look like "obj:12:0" (object 12, spot 0). */

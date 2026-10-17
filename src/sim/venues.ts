@@ -108,18 +108,11 @@ export const LEGACY_COUNTER_W = 9;
 export { standardCounter as counterPieces };
 
 /**
- * The same building with nothing in it: the outside walls and the front door stay,
- * every inside wall and door comes out, and it's bare floor throughout.
+ * An empty lot: the pavement out front and bare ground everywhere else, the back plot
+ * included. No walls, no doors: where the building goes is up to the player.
  */
-export function emptyShell(rows: readonly string[], floor: string): string[] {
-  const outside = (x: number, y: number) => y < 0 || y >= rows.length || x < 0 || x >= rows[y].length || rows[y][x] === 'P';
-  return rows.map((row, y) => [...row].map((c, x) => {
-    if (c === 'P' || c === 'D') return c;
-    if (c === '#') {
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (outside(x + dx, y + dy)) return '#';
-    }
-    return floor;
-  }).join(''));
+export function bareLot(rows: readonly string[], floor: string, plotWidth: number): string[] {
+  return rows.map((row) => (row[0] === 'P' ? 'P'.repeat(row.length + plotWidth) : floor.repeat(row.length) + 'Y'.repeat(plotWidth)));
 }
 
 const CAFE: VenueDef = {

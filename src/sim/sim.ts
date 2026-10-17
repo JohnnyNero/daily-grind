@@ -13,7 +13,7 @@ import { buildRecap } from './tales';
 import { randomTraits, refreshApplicants } from './manage';
 import { checkSlip } from './ambience';
 import { checkWants, topUpWants } from './wants';
-import { emptyShell, venueDef, type ServicePositions, type VenueDef } from './venues';
+import { bareLot, venueDef, type ServicePositions, type VenueDef } from './venues';
 import { SERVICE_DEFS, computePositions, zonesFrom } from './service';
 import { clamp01, moodFromNeeds, worstNeed } from './mood';
 import { findPath } from './path';
@@ -25,7 +25,7 @@ import {
 } from './state';
 import { addMemory, driftMood, expireMemories, hasTrait, opinionFromMemories } from './thoughts';
 import { abandonAction, findWork, performAction, standByJob, updateRushes, validateAction } from './work';
-import { World, addPlotToSave, parseMap, withPlot } from './world';
+import { PLOT_W, World, addPlotToSave, parseMap, withPlot } from './world';
 import { askingWage, emptyDay } from './business';
 import { morningBooks } from './books';
 import { friendsMayFollow } from './careers';
@@ -42,8 +42,8 @@ const IDLE_RECHECK_TICKS = 10;
 /** A step running longer than this is treated as stuck and abandoned. */
 const STEP_TIMEOUT_TICKS = 2 * TICKS_PER_HOUR;
 const START_TICK = 6 * TICKS_PER_HOUR;
-/** Money to fit out an empty lot: about what the standard fit-out, walls and floors cost, and a bit over. */
-export const EMPTY_LOT_MONEY = 800000;
+/** Money to build on an empty lot: about what the standard fit-out, its walls and floors cost, and a bit over. */
+export const EMPTY_LOT_MONEY = 1000000;
 
 /** How a new place starts: fitted out and ready to open, or an empty shell to build from scratch. */
 export type StartLayout = 'fitted' | 'empty';
@@ -72,6 +72,7 @@ export class Sim {
   walkYesterday: WalkStats | null = null;
   private positionsCache: ServicePositions | null = null;
   private positionsAt = -1;
+  private entryCache: { w: number; tiles: (readonly [number, number])[] } | null = null;
 
   /** A new venue from a seed, or a saved one restored as-is. */
   constructor(seed: number, saved?: SimState, venueId = 'cafe', layout: StartLayout = 'fitted') {
@@ -84,7 +85,7 @@ export class Sim {
     }
     const venue = venueDef(venueId);
     const empty = layout === 'empty';
-    const map = parseMap(withPlot(empty ? emptyShell(venue.map, venue.frontFloors[0]) : venue.map));
+    const map = parseMap(empty ? bareLot(venue.map, venue.frontFloors[0], PLOT_W) : withPlot(venue.map));
     this.state = {
       version: SAVE_VERSION,
       venue: venue.id,
@@ -120,6 +121,7 @@ export class Sim {
       spills: [],
       hallOfFame: [],
     } as Partial<SimState> as SimState;
+    if (empty) this.state.openLot = true;
     this.state.zones = empty ? { queue: [], pickup: [] } : zonesFrom(this.state, venue.zones);
     this.world = new World(this.state);
     refreshApplicants(this);
@@ -156,6 +158,20 @@ export class Sim {
       this.positionsAt = v;
     }
     return this.positionsCache;
+  }
+
+  /**
+   * Pavement tiles where people arrive and leave. On an open lot that's the whole
+   * pavement, so they find their own way to wherever the door ends up.
+   */
+  get entry(): readonly (readonly [number, number])[] {
+    const s = this.state;
+    if (!s.openLot) return this.venue.entry;
+    if (this.entryCache?.w !== s.w) {
+      const y = s.h - 1;
+      this.entryCache = { w: s.w, tiles: Array.from({ length: s.w }, (_, x) => [x, y] as const) };
+    }
+    return this.entryCache.tiles;
   }
 
   /** A till, a pickup counter and something to make drinks with: the least it takes to open. */
@@ -503,7 +519,7 @@ export class Sim {
   }
 
   placeAtEntry(p: Pawn): void {
-    const entry = this.venue.entry;
+    const entry = this.entry;
     const [ex, ey] = entry[randInt(this.state, 0, entry.length - 1)];
     p.x = ex;
     p.y = ey;
@@ -535,7 +551,7 @@ export class Sim {
   }
 
   leaveJob(label: string): Job {
-    const entry = this.venue.entry;
+    const entry = this.entry;
     const [ex, ey] = entry[randInt(this.state, 0, entry.length - 1)];
     return this.makeJob(label, [this.gotoStep(ex, ey), { kind: 'exit' }]);
   }
