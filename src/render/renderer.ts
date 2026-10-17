@@ -26,6 +26,8 @@ export interface BuildView {
   ghost: { def: string; x: number; y: number; rot: Rotation; ok: boolean } | null;
   /** Show the queue and pickup zones. */
   zones: boolean;
+  /** Also show the room zones (staff only, flat, screens). */
+  rooms: boolean;
   /** Shade the parts of the building that can't be changed (walls and floors modes). */
   shell: boolean;
   /** Show where people walk: a heat map of footsteps. */
@@ -49,7 +51,7 @@ export class Renderer {
   private dpr = 1;
   selectedId: number | null = null;
   /** Build mode: draw a grid and outline the selected object. */
-  buildSelection: BuildView = { objectId: null, active: false, ghost: null, zones: false, shell: false, footfall: false, version: 0 };
+  buildSelection: BuildView = { objectId: null, active: false, ghost: null, zones: false, rooms: false, shell: false, footfall: false, version: 0 };
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly sim: Sim) {
     const ctx = canvas.getContext('2d');
@@ -310,7 +312,7 @@ export class Renderer {
     }
     const id = view.objectId;
     const o = id !== null ? this.sim.world.objectById(id) : undefined;
-    if (view.zones) this.drawZones();
+    if (view.zones) this.drawZones(view.rooms);
     if (o) {
       const [w, h] = rotatedSize(objectDef(o.def), rotationOf(o));
       ctx.strokeStyle = '#f2c46d';
@@ -344,11 +346,23 @@ export class Renderer {
   }
 
   /** Queue floor in amber with the place in line, pickup floor in blue. */
-  private drawZones(): void {
+  private drawZones(rooms: boolean): void {
     const ctx = this.ctx;
     const s = this.sim.state;
     const order = new Map(this.sim.positions.queue.map(([x, y], i) => [y * s.w + x, i]));
     ctx.save();
+    if (rooms) {
+      // Rooms: staff only in red, the flat in purple, screens in blue, with a striped edge.
+      for (const [kind, fill] of [['staff', 'rgba(214, 90, 70, 0.28)'], ['flat', 'rgba(150, 100, 200, 0.3)'], ['screen', 'rgba(90, 120, 235, 0.32)']] as const) {
+        ctx.fillStyle = fill;
+        for (const i of s.zones[kind]) {
+          const x = i % s.w;
+          const y = Math.floor(i / s.w);
+          if (s.tiles[i].wall) continue;
+          ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        }
+      }
+    }
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `600 ${Math.round(TILE * 0.32)}px system-ui, sans-serif`;

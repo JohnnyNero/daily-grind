@@ -41,7 +41,7 @@ There are three: **the café** (mornings, flat whites, cake, a kitchen), **the p
 
 ## Empty lot
 
-Pick **Empty lot** instead of *Ready to open* to start from bare ground (a bigger lot than the ready-made buildings: 36 by 32 tiles), the pavement and £10,000 (the standard start has £500 and everything fitted). There are no walls and no front door: build them wherever you like (or don't), right up to the pavement and the edges of the plot, which aren't fixed on an empty lot. Customers arrive anywhere along the pavement and find their own way in. The game opens paused in build mode. Lay out the rooms with walls, doors and floors, then buy everything. Nobody comes in, gets paid or orders anything until there's a **till, a pickup counter and a drinks machine**; a red alert lists what's still missing, and the build bar suggests what to do next (queue and pickup areas, a food counter, sink, toilet, seats, staff sofa). Machines and sinks need counter or kitchen floor, toilets need toilet floor, and staff furniture needs staff room floor. Rent still runs while you build. Add `?layout=empty` to the address (with `?venue=`) to skip straight in.
+Pick **Empty lot** instead of *Ready to open* to start from bare ground (a bigger lot than the ready-made buildings: 36 by 32 tiles), the pavement and £10,000 (the standard start has £500 and everything fitted). There are no walls and no front door: build them wherever you like (or don't), right up to the pavement and the edges of the plot, which aren't fixed on an empty lot. Customers arrive anywhere along the pavement and find their own way in. The game opens paused in build mode. Lay out the rooms with walls and doors, mark what they're for with zones, then buy everything. Nobody comes in, gets paid or orders anything until there's a **till, a pickup counter and a drinks machine**; a red alert lists what's still missing, and the build bar suggests what to do next (queue and pickup areas, a staff-only area, a food counter, sink, toilet, seats, staff sofa). Furniture can go on any floor. Rent still runs while you build. Add `?layout=empty` to the address (with `?venue=`) to skip straight in.
 
 ## The counter, the queue and pickup
 
@@ -54,12 +54,24 @@ The counter comes in pieces, each one tile, so it can be any shape or split into
 
 There's one till, one pickup and one food counter per place. In build mode, dashed squares show where people stand: green for staff, amber for customers. Service pieces need open floor on both sides and can only be moved while no customers are in.
 
-The **Zones** tab marks floor (free) for:
+## Floors and zones
+
+**Floors are only for looks**: wood, carpets, lino, tiles, steel or boards, £5 a tile, under furniture too. What a room is *for* comes from **zones**, painted for free in build mode's **Zones** tab. A tile is in one zone at most:
+
+- **Staff only**: the back of house (behind the counter, the kitchen, the staff room). Customers never walk in, and their seats don't count. Staff hang about here when there's nothing to do, and sulk here when they're upset. You can't mark the customer side of a till or pickup as staff only, or fence customers off from them.
+- **Staff flat**: where live-ins live (see *The staff flat*). Off-limits to customers too.
+- **Screen**: a cinema screen room (see *The cinema*).
+- **Queue** and **Pickup area**: below.
+- **Clear** removes any zone.
+
+The ready-made places and older saves get their zones from what the floors used to mean: kitchen, behind-the-counter and staff room floors became staff only, flat floor became the flat, screen floor became a screen. Furniture stands in staff-only, flat and screen zones as normal, but not on the queue or pickup.
+
+The queue and pickup zones:
 
 - **Queue**: the queue starts at the spot in front of the till and runs back along joined-up queue floor, nearest first. Numbers show each place in line; faded tiles aren't joined up to the till, so nobody queues there. A longer queue lets more people wait (up to 16), but they still lose patience.
 - **Pickup area**: where customers wait for their order, nearest the pickup first. If it's full or missing, people stand off to the side, clear of the queue.
 
-Furniture and walls can't go on zones or service spots. Older saves are converted automatically: the old one-piece counter becomes pieces in the same places, with the old queue and waiting spots marked as zones.
+Furniture and walls can't go on the queue, the pickup area or service spots. Older saves are converted automatically: the old one-piece counter becomes pieces in the same places, with the old queue and waiting spots marked as zones.
 
 **Rotating**: select furniture (or something you're buying) and tap **Rotate**, or press **R**. Where people sit or stand to use it turns with it, so a till turned sideways serves from the side.
 
@@ -83,7 +95,7 @@ Two screens of 16 seats each, a lobby with the box office and snacks, and a loun
 - **Clearing up between films.** People leave cups and tubs on the seats. Floor staff take it to the nearest litter bin (there's one in each screen) or sink. The next audience grumbles if they sit in it.
 - **Some people just come for the lounge**: a drink and a sit-down, like café customers.
 - **Money:** a ticket is £9.50, but the film's distributor takes 60% of it. Snacks are where the margin is. Rent is higher than the café's.
-- **Building screens**: a screen is a room of **Screen** floor (Floors tab) with a **cinema screen** in it (£1,500). Every **row of seats** (£600, four seats) on that floor in the same room is its audience. More screens or seats means more showings and bigger audiences; the timetable adapts on its own. An empty-lot cinema starts with none.
+- **Building screens**: a screen is a room marked as a **Screen** zone (Zones tab) with a **cinema screen** in it (£1,500). Every **row of seats** (£600, four seats) in that zone is its audience. More screens or seats means more showings and bigger audiences; the timetable adapts on its own. An empty-lot cinema starts with none.
 - The opening team has a box office person on the morning and afternoon shifts, and drinks in the evening.
 
 ## How it plays
@@ -112,7 +124,7 @@ You run the place; your staff decide what to do. The puzzle is keeping it runnin
 - **Who does what:** staff stick to their station: when it's quiet they wait at their post, and only help elsewhere after about 8 in-game minutes with nothing to do, straight away if another area is in a rush (4+ queuing, 4+ drinks waiting, 3+ dirty tables, 8+ cups by the sink, 2+ spills) or nobody covers it, or when a need gets urgent. Without a station they settle into whatever they start (4 minutes before drifting; a better-priority job wins after a 20-minute stint). Helping shows as "(helping out)".
 - **Name tags**: every staff member has a small name tag under them (gold when selected).
 - **Café** has **Menu** (prices and on/off switches), **Place** (stars and capacity, how it feels, *Build and rearrange*, machines, the staff flat, running costs, regulars), **Goals** (goals, the diary, weekly reports, scrapbook, hall of fame) and **Save**. The game also saves itself on this device every day and when you leave.
-- **Build mode**: **Furniture** (drag to move, tap to sell, pick from the row to buy, *Footfall* shows where people walk), **Walls** (straight walls £25 a tile, doors £60, knock out for free) and **Floors** (£5 a tile; kitchen, staff room, toilet and staff flat floors decide what goes where). The outer walls, shop front and pavement stay put, and anything that would cut people off is refused. *Undo* takes back the last stroke. Two fingers (or right-drag) move the view.
+- **Build mode**: **Furniture** (drag to move, tap to sell, pick from the row to buy, *Footfall* shows where people walk), **Walls** (straight walls £25 a tile, doors £60, knock out for free) and **Floors** (£5 a tile, just for looks) and **Zones** (free: queue, pickup, staff only, flat, screen). The outer walls, shop front and pavement stay put, and anything that would cut people off is refused. *Undo* takes back the last stroke. Two fingers (or right-drag) move the view.
 
 ## Goals and big days
 
@@ -129,7 +141,7 @@ You run the place; your staff decide what to do. The puzzle is keeping it runnin
 
 ## The staff flat
 
-Every venue has an empty plot alongside, 20 tiles wide, for a flat, a bigger building or a second screen. Older saves get theirs widened when loaded. Build a flat there by hand (Staff flat floor, beds, a telly, sofas, a fridge) or in one go for £1,500 from the Place tab. Staff can then **live in** (one per bed): they stay on site off shift and live there (telly, snacks, each other, bed at bedtime), pay £8 a night, and never miss a shift to the commute. The view only takes in the plot once something's built on it.
+Every venue has an empty plot alongside, 20 tiles wide, for a flat, a bigger building or a second screen. Older saves get theirs widened when loaded. Build a flat there by hand (walls, a **Staff flat** zone, beds, a telly, sofas, a fridge) or in one go for £1,500 from the Place tab. Staff can then **live in** (one per bed): they stay on site off shift and live there (telly, snacks, each other, bed at bedtime), pay £8 a night, and never miss a shift to the commute. The view only takes in the plot once something's built on it.
 
 ## Layout
 

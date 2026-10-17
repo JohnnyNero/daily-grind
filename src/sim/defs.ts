@@ -52,8 +52,6 @@ export interface ObjectDef {
    * and where customers stand to be served, relative to the top-left. One of each per place.
    */
   service?: { staff: readonly [number, number]; guest?: readonly [number, number] };
-  /** Floors it may stand on (staff kit behind the scenes, guest furniture out front). */
-  floors?: readonly string[];
   w: number;
   h: number;
   /** Blocking objects can't be walked through; non-blocking ones (sofas, toilets) are stood or sat on. */
@@ -66,67 +64,65 @@ export interface ObjectDef {
 const STAFF = ['staff'] as const;
 const EVERYONE = ['staff', 'guest'] as const;
 
-const COUNTER_FLOORS = ['B', 'F', 'C', 'K'];
-
 const defs: ObjectDef[] = [
   {
-    id: 'fridge', price: 40000, floors: ['K', 'B', 'S', 'R'], label: 'Fridge', w: 1, h: 1, blocks: true, spots: [[0, 1]],
+    id: 'fridge', price: 40000, label: 'Fridge', w: 1, h: 1, blocks: true, spots: [[0, 1]],
     offers: [{ id: 'snack', label: 'Grab a snack', doing: 'Grabbing a snack', usableBy: STAFF, deltas: { hunger: 0.25 }, minutes: 4, whenBelow: { need: 'hunger', value: 0.5 } }],
   },
-  { id: 'oven', price: 30000, floors: ['K'], label: 'Oven', w: 1, h: 1, blocks: true, spots: [[0, 1]], offers: [] },
-  { id: 'prep', price: 20000, floors: ['K', 'B'], label: 'Prep counter', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]], offers: [] },
-  { id: 'sink', price: 35000, floors: ['K', 'B'], label: 'Sink', w: 1, h: 1, blocks: true, spots: [[0, 1]], offers: [] },
+  { id: 'oven', price: 30000, label: 'Oven', w: 1, h: 1, blocks: true, spots: [[0, 1]], offers: [] },
+  { id: 'prep', price: 20000, label: 'Prep counter', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]], offers: [] },
+  { id: 'sink', price: 35000, label: 'Sink', w: 1, h: 1, blocks: true, spots: [[0, 1]], offers: [] },
   {
-    id: 'espresso', price: 90000, floors: ['K', 'B'], label: 'Espresso machine', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
+    id: 'espresso', price: 90000, label: 'Espresso machine', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'coffee', label: 'Make yourself a coffee', doing: 'Sneaking a coffee', usableBy: STAFF, deltas: { energy: 0.2, bladder: -0.08 }, minutes: 4, whenBelow: { need: 'energy', value: 0.75 } }],
   },
   // The counter comes in pieces: plain sections, and the service points staff work from
   // the back (the top, unrotated) while customers stand at the front.
-  { id: 'counter', price: 8000, counterSection: true, floors: COUNTER_FLOORS, label: 'Counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'bar', price: 8000, counterSection: true, floors: COUNTER_FLOORS, label: 'Bar', w: 1, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'till', price: 40000, service: { staff: [0, -1], guest: [0, 1] }, floors: COUNTER_FLOORS, label: 'Till', w: 1, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'pickup', price: 15000, service: { staff: [0, -1], guest: [0, 1] }, floors: COUNTER_FLOORS, label: 'Pickup counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'foodCounter', price: 25000, service: { staff: [0, -1] }, floors: COUNTER_FLOORS, label: 'Food counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'counter', price: 8000, counterSection: true, label: 'Counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'bar', price: 8000, counterSection: true, label: 'Bar', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'till', price: 40000, service: { staff: [0, -1], guest: [0, 1] }, label: 'Till', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'pickup', price: 15000, service: { staff: [0, -1], guest: [0, 1] }, label: 'Pickup counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'foodCounter', price: 25000, service: { staff: [0, -1] }, label: 'Food counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
   {
-    id: 'taps', price: 90000, floors: ['K', 'B'], label: 'Beer taps', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
+    id: 'taps', price: 90000, label: 'Beer taps', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'lemonade', label: 'Pour yourself a lemonade', doing: 'Sneaking a lemonade', usableBy: STAFF, deltas: { energy: 0.12, bladder: -0.08 }, minutes: 3, whenBelow: { need: 'energy', value: 0.75 } }],
   },
   {
-    id: 'fountain', price: 70000, floors: ['K', 'B'], label: 'Drinks fountain', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
+    id: 'fountain', price: 70000, label: 'Drinks fountain', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'cola', label: 'Pour yourself a cola', doing: 'Sneaking a cola', usableBy: STAFF, deltas: { energy: 0.14, bladder: -0.08 }, minutes: 3, whenBelow: { need: 'energy', value: 0.75 } }],
   },
-  // A cinema screen: a room of Screen floor with one of these in it shows films; seats in the room are its audience.
-  { id: 'screen', price: 150000, floors: ['X'], label: 'Cinema screen', w: 6, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'cinemaSeats', price: 60000, floors: ['X'], label: 'Row of seats', w: 4, h: 1, blocks: false, spots: [[0, 0], [1, 0], [2, 0], [3, 0]], offers: [] },
+  // A cinema screen: a Screen zone with one of these in it shows films; seats in the zone are its audience.
+  { id: 'screen', price: 150000, label: 'Cinema screen', w: 6, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'cinemaSeats', price: 60000, label: 'Row of seats', w: 4, h: 1, blocks: false, spots: [[0, 0], [1, 0], [2, 0], [3, 0]], offers: [] },
   // Rubbish from the screens goes in here instead of the sink.
-  { id: 'bin', price: 4000, floors: ['F', 'C', 'X', 'B', 'K'], label: 'Litter bin', w: 1, h: 1, blocks: true, spots: [[0, 1]], offers: [] },
-  { id: 'kegs', price: 15000, floors: ['K'], label: 'Kegs', w: 2, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'poolTable', price: 45000, floors: ['F', 'C'], label: 'Pool table', w: 3, h: 2, blocks: true, spots: [], offers: [] },
-  { id: 'dartboard', price: 6000, floors: ['F', 'C'], label: 'Dartboard', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'bin', price: 4000, label: 'Litter bin', w: 1, h: 1, blocks: true, spots: [[0, 1]], offers: [] },
+  { id: 'kegs', price: 15000, label: 'Kegs', w: 2, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'poolTable', price: 45000, label: 'Pool table', w: 3, h: 2, blocks: true, spots: [], offers: [] },
+  { id: 'dartboard', price: 6000, label: 'Dartboard', w: 1, h: 1, blocks: true, spots: [], offers: [] },
   {
-    id: 'staffSofa', price: 25000, floors: ['S', 'R'], label: 'Staff sofa', w: 2, h: 1, blocks: false, spots: [[0, 0], [1, 0]],
+    id: 'staffSofa', price: 25000, label: 'Staff sofa', w: 2, h: 1, blocks: false, spots: [[0, 0], [1, 0]],
     offers: [{ id: 'rest', label: 'Put feet up', doing: 'Feet up on the sofa', usableBy: STAFF, deltas: { comfort: 0.7, energy: 0.08 }, minutes: 15, sits: true, whenBelow: { need: 'comfort', value: 0.55 } }],
   },
   {
-    id: 'staffTable', price: 18000, floors: ['S', 'R'], label: 'Staff table', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
+    id: 'staffTable', price: 18000, label: 'Staff table', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'lunch', label: 'Eat lunch', doing: 'Eating lunch', usableBy: STAFF, deltas: { hunger: 0.85, comfort: 0.25 }, minutes: 20, sits: true, whenBelow: { need: 'hunger', value: 0.4 } }],
   },
-  { id: 'lockers', price: 12000, floors: ['S', 'R'], label: 'Lockers', w: 1, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'table4', price: 22000, floors: ['F', 'C'], label: 'Four-top', w: 2, h: 2, blocks: true, spots: [[0, -1], [1, -1], [0, 2], [1, 2]], offers: [] },
-  { id: 'table2', price: 12000, floors: ['F', 'C'], label: 'Two-top', w: 1, h: 1, blocks: true, spots: [[0, -1], [0, 1]], offers: [] },
-  { id: 'armchair', price: 15000, floors: ['F', 'C'], label: 'Armchair', w: 1, h: 1, blocks: false, spots: [[0, 0]], offers: [] },
-  { id: 'plant', price: 4000, floors: ['F', 'C', 'K', 'B', 'S', 'R'], label: 'Plant', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'lockers', price: 12000, label: 'Lockers', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'table4', price: 22000, label: 'Four-top', w: 2, h: 2, blocks: true, spots: [[0, -1], [1, -1], [0, 2], [1, 2]], offers: [] },
+  { id: 'table2', price: 12000, label: 'Two-top', w: 1, h: 1, blocks: true, spots: [[0, -1], [0, 1]], offers: [] },
+  { id: 'armchair', price: 15000, label: 'Armchair', w: 1, h: 1, blocks: false, spots: [[0, 0]], offers: [] },
+  { id: 'plant', price: 4000, label: 'Plant', w: 1, h: 1, blocks: true, spots: [], offers: [] },
   {
-    id: 'toilet', price: 30000, floors: ['T'], label: 'Toilet', w: 1, h: 1, blocks: false, spots: [[0, 0]],
+    id: 'toilet', price: 30000, label: 'Toilet', w: 1, h: 1, blocks: false, spots: [[0, 0]],
     offers: [{ id: 'loo', label: 'Use the loo', doing: 'In the loo', usableBy: EVERYONE, deltas: { bladder: 1 }, minutes: 3, sits: true, whenBelow: { need: 'bladder', value: 0.45 } }],
   },
   // The staff flat.
   {
-    id: 'bed', price: 18000, floors: ['R'], label: 'Bed', w: 1, h: 2, blocks: false, spots: [[0, 0]],
+    id: 'bed', price: 18000, label: 'Bed', w: 1, h: 2, blocks: false, spots: [[0, 0]],
     offers: [{ id: 'sleep', label: 'Sleep', doing: 'Asleep', usableBy: STAFF, deltas: { energy: 0.95, comfort: 0.5 }, minutes: 420, sits: true, whenBelow: { need: 'energy', value: 0.4 }, offShiftOnly: true }],
   },
   {
-    id: 'tv', price: 22000, floors: ['R', 'S'], label: 'TV', w: 1, h: 1, blocks: true, spots: [[0, 1]],
+    id: 'tv', price: 22000, label: 'TV', w: 1, h: 1, blocks: true, spots: [[0, 1]],
     offers: [{ id: 'telly', label: 'Watch telly', doing: 'Watching telly', usableBy: STAFF, deltas: { comfort: 0.45 }, minutes: 40, whenBelow: { need: 'comfort', value: 0.7 }, offShiftOnly: true }],
   },
 ];

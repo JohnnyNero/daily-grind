@@ -68,7 +68,7 @@ export interface VenueDef {
   /** The standard layout's queue and pickup areas. */
   zones: { queue: readonly Tile[]; pickup: readonly Tile[] };
   guestSeating: readonly string[];
-  /** Floor kinds that count as front of house (for looks). */
+  /** The floor an empty lot starts with (floors are only for looks). */
   frontFloors: readonly string[];
   menu: readonly { name: string; kind: ItemKind; price: number }[];
   /** Menu items that unlock at a star rating. */

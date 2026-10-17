@@ -4,8 +4,9 @@
 
 import { MISSED_AFTER, doorsOpen, filmArrivals, findScreenSeat } from './cinema';
 import { canCook } from './kitchen';
+import { guestBarred } from './service';
 import { reservationKey } from './ai';
-import { GUEST_CLOTHES, HAIR_COLOURS, HAIR_STYLES, NEEDS, SKIN_TONES, objectDef, type NeedValues } from './defs';
+import { GUEST_CLOTHES, HAIR_COLOURS, HAIR_STYLES, NEEDS, SKIN_TONES, type NeedValues } from './defs';
 import { pick, randInt, random, randRange } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_MINUTE, type FilmTicket, type Pawn, type Visit } from './state';
@@ -440,8 +441,8 @@ export function freeSeats(sim: Sim): number {
   let n = 0;
   for (const o of s.objects) {
     if (!sim.venue.guestSeating.includes(o.def) || (s.dirty[o.id] ?? 0) > 0) continue;
-    objectDef(o.def).spots.forEach((_, i) => {
-      if (s.reservations[reservationKey(o.id, i)] === undefined) n++;
+    sim.world.spots(o).forEach(([x, y], i) => {
+      if (s.reservations[reservationKey(o.id, i)] === undefined && !guestBarred(sim, x, y)) n++;
     });
   }
   return n;
@@ -457,7 +458,8 @@ function findSeat(sim: Sim, p: Pawn): { key: string; objectId: number; x: number
     if ((s.dirty[o.id] ?? 0) > 0) continue;
     sim.world.spots(o).forEach(([x, y], i) => {
       const key = reservationKey(o.id, i);
-      if (s.reservations[key] !== undefined || !sim.world.passable(x, y)) return;
+      // Seats out the back (staff only, the flat) aren't for customers.
+      if (s.reservations[key] !== undefined || !sim.world.passable(x, y) || guestBarred(sim, x, y)) return;
       const d = Math.hypot(x - p.x, y - p.y);
       if (d < bestD) {
         bestD = d;

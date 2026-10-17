@@ -1,8 +1,8 @@
 // Build mode. Four tabs:
 //   Furniture: drag anything to move it, rotate it, tap to sell, pick from the palette to buy.
 //   Walls:     drag to build walls, put doors in them, or knock them out.
-//   Floors:    drag to lay floor; a room is whatever its floor says (kitchen, staff room...).
-//   Zones:     drag to mark where the queue runs and where customers wait for pickup.
+//   Floors:    drag to lay floor. Just for looks.
+//   Zones:     drag to mark the queue, the pickup area, staff-only areas, the flat and cinema screens.
 // Every change goes through sim/manage.ts or sim/structure.ts, which validate it.
 
 import { OBJECT_DEFS, objectDef, rotatedSize, rotationOf, type Rotation } from '../sim/defs';
@@ -29,6 +29,10 @@ const WALL_TOOLS: readonly { id: WallTool; label: string; price: number; hint: s
   { id: 'door', label: 'Door', price: BUILD_PRICES.door, hint: 'Tap a wall to put a door in it.' },
   { id: 'remove', label: 'Knock out', price: 0, hint: 'Drag a box over walls and doors to knock them out.' },
 ];
+
+function copyZones(z: Zones): Zones {
+  return { queue: [...z.queue], pickup: [...z.pickup], staff: [...z.staff], flat: [...z.flat], screen: [...z.screen] };
+}
 
 const MOVE_HINT = 'Two fingers (or right-drag) move the view.';
 
@@ -139,7 +143,7 @@ export class BuildUi {
     const [tx, ty] = this.renderer.screenToTile(sx, sy);
     if (this.mode === 'zones') {
       const z = this.sim.state.zones;
-      this.zoneStroke = { before: { queue: [...z.queue], pickup: [...z.pickup] }, start: [tx, ty], last: null, problem: null };
+      this.zoneStroke = { before: copyZones(z), start: [tx, ty], last: null, problem: null };
       this.paintZonesTo(tx, ty);
       return true;
     }
@@ -337,7 +341,7 @@ export class BuildUi {
     const st = this.zoneStroke!;
     if (st.last && st.last[0] === tx && st.last[1] === ty) return;
     st.last = [tx, ty];
-    this.sim.state.zones = { queue: [...st.before.queue], pickup: [...st.before.pickup] };
+    this.sim.state.zones = copyZones(st.before);
     st.problem = null;
     const [sx, sy] = st.start;
     for (let y = Math.min(sy, ty); y <= Math.max(sy, ty); y++) {
@@ -355,7 +359,7 @@ export class BuildUi {
     const st = this.zoneStroke!;
     this.zoneStroke = null;
     const z = this.sim.state.zones;
-    const changed = z.queue.join() !== st.before.queue.join() || z.pickup.join() !== st.before.pickup.join();
+    const changed = JSON.stringify(z) !== JSON.stringify(st.before);
     if (changed) this.zoneUndo = st.before;
     else if (st.problem) this.hooks.notify(st.problem, 'bad');
     const stray = strayQueueTiles(this.sim);
@@ -493,7 +497,7 @@ export class BuildUi {
   private hintText(o: ObjectInst | undefined): string {
     if (this.mode === 'walls') return `${WALL_TOOLS.find((t) => t.id === this.wallTool)!.hint} ${MOVE_HINT}`;
     if (this.mode === 'floors') {
-      return `Drag a box to lay floor. Kitchen, staff room and toilet floors decide what goes where. ${MOVE_HINT}`;
+      return `Drag a box to lay floor. Floors are just for looks: Zones say what a room is for. ${MOVE_HINT}`;
     }
     if (this.mode === 'zones') {
       const pos = this.sim.positions;
@@ -512,7 +516,7 @@ export class BuildUi {
       return d.fixed ? `The ${d.label.toLowerCase()} is fixed in place.` : `Drag the ${d.label.toLowerCase()} to move it, or sell it for ${pounds(sellValue(o.def))}.`;
     }
     const todo = fitOut(this.sim).filter((i) => !i.done);
-    if (!this.sim.canTrade) return `${openingShortfall(this.sim)} Pick it below, drag it into place and buy it (machines need counter or kitchen floor: paint some in Floors).${todo.some((i) => !i.needed) ? ` Then: ${todo.filter((i) => !i.needed).map((i) => i.label.toLowerCase()).join(', ')}.` : ''}`;
+    if (!this.sim.canTrade) return `${openingShortfall(this.sim)} Pick it below, drag it into place and buy it.${todo.some((i) => !i.needed) ? ` Then: ${todo.filter((i) => !i.needed).map((i) => i.label.toLowerCase()).join(', ')}.` : ''}`;
     if (todo.length > 0) return `Still to get: ${todo.map((i) => i.label.toLowerCase()).join(', ')}. Drag furniture to move it, or pick something below.`;
     return 'Drag furniture to move it, tap it to rotate or sell, or pick something below to buy.';
   }
@@ -525,6 +529,7 @@ export class BuildUi {
     view.ghost = this.ghost;
     view.shell = this.active && (this.mode === 'walls' || this.mode === 'floors');
     view.zones = this.active && (this.mode === 'zones' || this.mode === 'furniture');
+    view.rooms = this.active && this.mode === 'zones';
     view.footfall = this.active && this.footfall;
     el('build-footfall').setAttribute('aria-pressed', String(this.footfall));
     view.version++;

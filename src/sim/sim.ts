@@ -14,7 +14,7 @@ import { randomTraits, refreshApplicants } from './manage';
 import { checkSlip } from './ambience';
 import { checkWants, topUpWants } from './wants';
 import { bareLot, venueDef, type ServicePositions, type VenueDef } from './venues';
-import { SERVICE_DEFS, computePositions, zonesFrom } from './service';
+import { SERVICE_DEFS, computePositions, guestBarred, guestPassable, zoneFloor, zonesFrom } from './service';
 import { clamp01, moodFromNeeds, worstNeed } from './mood';
 import { findPath } from './path';
 import { pick, random, randInt, randRange } from './rng';
@@ -49,7 +49,6 @@ const EMPTY_LOT_EXTRA_ROWS = 10;
 
 /** How a new place starts: fitted out and ready to open, or an empty shell to build from scratch. */
 export type StartLayout = 'fitted' | 'empty';
-const IDLE_FLOORS = new Set(['K', 'S', 'B']);
 /** Below this, a need beats work. */
 const URGENT_NEED = 0.3;
 
@@ -124,7 +123,7 @@ export class Sim {
       hallOfFame: [],
     } as Partial<SimState> as SimState;
     if (empty) this.state.openLot = true;
-    this.state.zones = empty ? { queue: [], pickup: [] } : zonesFrom(this.state, venue.zones);
+    this.state.zones = zonesFrom(this.state, empty ? { queue: [], pickup: [] } : venue.zones);
     this.world = new World(this.state);
     refreshApplicants(this);
     if (!empty) for (const o of venue.objects) this.world.placeObject(o);
@@ -657,10 +656,11 @@ export class Sim {
 
   private idle(p: Pawn): void {
     const s = this.state;
-    for (let tries = 0; tries < 12; tries++) {
-      const x = randInt(s, 0, s.w - 1);
-      const y = randInt(s, 0, s.h - 1);
-      if (!this.world.passable(x, y) || !IDLE_FLOORS.has(this.world.tile(x, y).floor)) continue;
+    // Staff hang about out the back: anywhere marked staff only.
+    const back = zoneFloor(this, 'staff');
+    for (let tries = 0; tries < 12 && back.length > 0; tries++) {
+      const [x, y] = back[randInt(s, 0, back.length - 1)];
+      if (!this.world.passable(x, y)) continue;
       const g = this.gotoStep(x, y);
       g.path = this.pathFrom(p, x, y);
       if (!g.path) continue;
@@ -687,7 +687,13 @@ export class Sim {
 
   pathFrom(p: Pawn, x: number, y: number): [number, number][] | null {
     const from = [Math.round(p.x), Math.round(p.y)] as const;
-    const found = findPath(this.state.w, this.state.h, this.world.passable, from, [x, y]);
+    // Customers keep out of staff-only zones and the flat. One who's somehow inside (a zone
+    // painted around them) may still walk out through it.
+    const passable = p.kind === 'guest' ? guestPassable(this) : this.world.passable;
+    let found = findPath(this.state.w, this.state.h, passable, from, [x, y]);
+    if (!found && p.kind === 'guest' && guestBarred(this, from[0], from[1]) && !guestBarred(this, x, y)) {
+      found = findPath(this.state.w, this.state.h, this.world.passable, from, [x, y]);
+    }
     if (!found) return null;
     const path: [number, number][] = found.map(([px, py]) => [px, py]);
     // Re-routed mid-step: if we're already heading past the start tile, don't hop back to its centre.

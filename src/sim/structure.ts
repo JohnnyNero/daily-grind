@@ -13,15 +13,16 @@ export type StructureTool = 'wall' | 'door' | 'remove' | { floor: FloorKind };
 /** Pence per tile. Knocking things down is free. */
 export const BUILD_PRICES = { wall: 2500, door: 6000, floor: 500 } as const;
 
+/** Floors are only for looks; zones (build mode, Zones) say what a room is for. */
 export const PAINTABLE_FLOORS: readonly { kind: FloorKind; label: string }[] = [
   { kind: 'F', label: 'Wood' },
-  { kind: 'C', label: 'Carpet' },
-  { kind: 'B', label: 'Counter' },
-  { kind: 'K', label: 'Kitchen' },
-  { kind: 'S', label: 'Staff room' },
-  { kind: 'T', label: 'Toilets' },
-  { kind: 'R', label: 'Staff flat' },
-  { kind: 'X', label: 'Screen' },
+  { kind: 'C', label: 'Red carpet' },
+  { kind: 'X', label: 'Dark carpet' },
+  { kind: 'S', label: 'Lino' },
+  { kind: 'K', label: 'Check tiles' },
+  { kind: 'T', label: 'White tiles' },
+  { kind: 'B', label: 'Steel' },
+  { kind: 'R', label: 'Boards' },
 ];
 
 const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
@@ -95,11 +96,8 @@ function plan(sim: Sim, x: number, y: number, tool: StructureTool): { tile: Tile
     return { tile: { floor: t.wall ? neighbourFloor(sim, x, y) : t.floor, wall: false, door: false }, cost: 0 };
   }
 
+  // Floors are only for looks: lay any of them anywhere, under furniture too.
   if (t.wall || t.door || t.floor === tool.floor) return { tile: null, cost: 0 };
-  for (const o of objects) {
-    const d = objectDef(o.def);
-    if (d.floors && !d.floors.includes(tool.floor)) return `The ${d.label.toLowerCase()} can't stand on that floor.`;
-  }
   return { tile: { ...t, floor: tool.floor }, cost: BUILD_PRICES.floor };
 }
 

@@ -1,4 +1,4 @@
-// The cinema. A screen is a room of Screen floor with a cinema screen in it; the rows of
+// The cinema. A screen is a room marked as a Screen zone with a cinema screen in it; the rows of
 // seats in that room are its audience. Each screen runs films back to back on a timetable,
 // with a gap between for the audience to leave and the staff to clear up. People arrive in
 // a swell before each start (most of them in the last quarter of an hour), buy a ticket and
@@ -7,6 +7,7 @@
 import { demandFactor } from './business';
 import { objectDef, rotationOf } from './defs';
 import { random } from './rng';
+import { zoneOf } from './service';
 import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, type FilmTicket, type ObjectInst, type Pawn } from './state';
 
@@ -68,15 +69,17 @@ const DENSITY_TOTAL = (() => {
 
 const screenCache = new WeakMap<Sim, { version: number; screens: Screen[] }>();
 
-/** Every working screen: a connected room of Screen floor that has a cinema screen in it. */
+/** Every working screen: a connected Screen zone that has a cinema screen in it. */
 export function screens(sim: Sim): Screen[] {
   const cached = screenCache.get(sim);
   if (cached && cached.version === sim.world.version) return cached.screens;
   const s = sim.state;
   const region = new Int32Array(s.w * s.h).fill(-1);
+  // A screen room is connected Screen zone (walls built over it don't count).
+  const inScreen = (i: number) => !s.tiles[i].wall && zoneOf(sim, i % s.w, Math.floor(i / s.w)) === 'screen';
   const found: { key: number; tiles: Set<number> }[] = [];
   for (let i = 0; i < s.tiles.length; i++) {
-    if (region[i] !== -1 || s.tiles[i].floor !== 'X' || s.tiles[i].wall) continue;
+    if (region[i] !== -1 || !inScreen(i)) continue;
     const tiles = new Set<number>([i]);
     region[i] = found.length;
     const stack = [i];
@@ -89,7 +92,7 @@ export function screens(sim: Sim): Screen[] {
         const ny = y + dy;
         if (!sim.world.inBounds(nx, ny)) continue;
         const k = ny * s.w + nx;
-        if (region[k] !== -1 || s.tiles[k].floor !== 'X' || s.tiles[k].wall || s.tiles[k].door) continue;
+        if (region[k] !== -1 || !inScreen(k)) continue;
         region[k] = found.length;
         tiles.add(k);
         stack.push(k);

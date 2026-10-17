@@ -1,9 +1,10 @@
-// Where service happens. The till, the pickup counter and the food counter are pieces of
-// furniture with a staff side and a customer side; the queue and the pickup waiting area
-// are floor zones the manager paints. Everything here is worked out from those, so moving
-// a till or repainting the queue changes where people stand.
+// Where service happens, and zones. The till, the pickup counter and the food counter are
+// pieces of furniture with a staff side and a customer side; the queue and the pickup
+// waiting area are zones the manager paints, and so are the staff-only areas, the flat and
+// cinema screens. Floors are just for looks: zones say who may go where and what happens there.
 
 import { objectDef, rotationOf, serviceAt } from './defs';
+import { guestReachProblem } from './manage';
 import type { Sim } from './sim';
 import type { SimState, Zones } from './state';
 import { LEGACY_COUNTER_W, counterPieces, type ServicePositions } from './venues';
@@ -19,8 +20,54 @@ export type ZoneTool = ZoneKind | 'clear';
 export const ZONE_TOOLS: readonly { id: ZoneTool; label: string; hint: string }[] = [
   { id: 'queue', label: 'Queue', hint: 'Mark where the queue runs back from the till. It has to join the spot in front of the till.' },
   { id: 'pickup', label: 'Pickup area', hint: 'Mark where customers wait for their order, near the pickup counter.' },
-  { id: 'clear', label: 'Clear', hint: 'Unmark queue and pickup floor.' },
+  { id: 'staff', label: 'Staff only', hint: "Mark the back of house: behind the counter, the kitchen, the staff room. Customers can't go in." },
+  { id: 'flat', label: 'Staff flat', hint: 'Mark where live-in staff live. Customers can\'t go in.' },
+  { id: 'screen', label: 'Screen', hint: 'Mark a cinema screen room: put a cinema screen in it, and its rows of seats are the audience.' },
+  { id: 'clear', label: 'Clear', hint: 'Unmark zones.' },
 ];
+
+const ZONE_KINDS: readonly ZoneKind[] = ['queue', 'pickup', 'staff', 'flat', 'screen'];
+/** Zones furniture can't stand on (people stand there); the rest are rooms that hold furniture. */
+const SPOT_ZONES: ReadonlySet<ZoneKind> = new Set(['queue', 'pickup']);
+/** Customers keep out of these. */
+const BARRED: ReadonlySet<ZoneKind> = new Set(['staff', 'flat']);
+
+/** Every tile's zone (index into ZONE_KINDS, or -1), cached until the layout changes. */
+const gridCache = new WeakMap<Sim, { version: number; grid: Int8Array }>();
+function zoneGrid(sim: Sim): Int8Array {
+  const hit = gridCache.get(sim);
+  if (hit && hit.version === sim.world.version) return hit.grid;
+  const s = sim.state;
+  const grid = new Int8Array(s.w * s.h).fill(-1);
+  ZONE_KINDS.forEach((k, n) => { for (const i of s.zones[k] ?? []) grid[i] = n; });
+  gridCache.set(sim, { version: sim.world.version, grid });
+  return grid;
+}
+
+export function zoneOf(sim: Sim, x: number, y: number): ZoneKind | null {
+  if (!sim.world.inBounds(x, y)) return null;
+  const n = zoneGrid(sim)[y * sim.state.w + x];
+  return n < 0 ? null : ZONE_KINDS[n];
+}
+
+/** Customers can't walk here: staff only, or the flat. */
+export function guestBarred(sim: Sim, x: number, y: number): boolean {
+  const z = zoneOf(sim, x, y);
+  return z !== null && BARRED.has(z);
+}
+
+/** Where customers may walk: like `passable`, minus staff-only zones and the flat. */
+export function guestPassable(sim: Sim): (x: number, y: number) => boolean {
+  const grid = zoneGrid(sim);
+  const barred = new Set(ZONE_KINDS.map((k, n) => (BARRED.has(k) ? n : -2)));
+  const w = sim.state.w;
+  return (x, y) => sim.world.passable(x, y) && !barred.has(grid[y * w + x]);
+}
+
+/** Open floor in this zone (walls built over a zone don't count). */
+export function zoneFloor(sim: Sim, kind: ZoneKind): Tile[] {
+  return zoneTiles(sim.state, kind).filter(([x, y]) => !sim.world.tile(x, y).wall);
+}
 
 /** The service pieces, by role. One of each per place. */
 export const SERVICE_DEFS = { till: 'till', pickup: 'pickup', food: 'foodCounter' } as const;
@@ -152,8 +199,11 @@ export function zoneProblem(sim: Sim, x: number, y: number, tool: ZoneTool): str
   const t = w.tile(x, y);
   if (t.wall || t.door) return 'Zones go on open floor.';
   if (t.floor === 'P' || t.floor === 'Y') return 'Zones go inside.';
-  if (sim.state.objects.some((o) => w.tilesOf(o).some(([ox, oy]) => ox === x && oy === y))) return 'Something is standing there.';
-  if (pieceSpots(sim).some(([sx, sy]) => sx === x && sy === y)) return "That's where staff or customers stand to be served.";
+  if (SPOT_ZONES.has(tool)) {
+    if (sim.state.objects.some((o) => w.tilesOf(o).some(([ox, oy]) => ox === x && oy === y))) return 'Something is standing there.';
+    if (pieceSpots(sim).some(([sx, sy]) => sx === x && sy === y)) return "That's where staff or customers stand to be served.";
+  }
+  if (BARRED.has(tool) && guestSpots(sim).some(([sx, sy]) => sx === x && sy === y)) return 'Customers stand there to be served.';
   return null;
 }
 
@@ -163,27 +213,64 @@ export function paintZone(sim: Sim, x: number, y: number, tool: ZoneTool): strin
   if (problem) return problem;
   const s = sim.state;
   const i = y * s.w + x;
-  const had = s.zones.queue.includes(i) || s.zones.pickup.includes(i);
-  if (tool !== 'clear' && s.zones[tool].includes(i)) return null;
-  s.zones.queue = s.zones.queue.filter((n) => n !== i);
-  s.zones.pickup = s.zones.pickup.filter((n) => n !== i);
+  const now = zoneOf(sim, x, y);
+  if ((tool === 'clear' && now === null) || tool === now) return null;
+  const before = ZONE_KINDS.map((k) => s.zones[k]);
+  for (const k of ZONE_KINDS) s.zones[k] = s.zones[k].filter((n) => n !== i);
   if (tool !== 'clear') s.zones[tool].push(i);
-  if (had || tool !== 'clear') sim.world.rebuild();
+  sim.world.rebuild();
+  // Fencing customers off from the till or the pickup is refused.
+  const blocked = BARRED.has(tool as ZoneKind) ? guestReachProblem(sim) : null;
+  if (blocked) {
+    ZONE_KINDS.forEach((k, n) => { s.zones[k] = before[n]; });
+    sim.world.rebuild();
+    return blocked;
+  }
   return null;
+}
+
+/** The customer side of every till and pickup: customers must be able to stand there. */
+function guestSpots(sim: Sim): Tile[] {
+  return sim.state.objects.flatMap((o) => {
+    const at = serviceAt(o.def, o.x, o.y, rotationOf(o));
+    return at?.guest ? [at.guest] : [];
+  });
 }
 
 export function zoneAt(s: SimState, x: number, y: number): ZoneKind | null {
   const i = y * s.w + x;
-  if (s.zones.queue.includes(i)) return 'queue';
-  if (s.zones.pickup.includes(i)) return 'pickup';
-  return null;
+  return ZONE_KINDS.find((k) => s.zones[k]?.includes(i)) ?? null;
 }
 
 // ------------------------------------------------------------------ new games and old saves
 
+/** Rooms worked out from the old floor kinds: kitchen, behind the counter and staff room were staff only. */
+const FLOOR_ZONES: Readonly<Record<string, ZoneKind>> = { K: 'staff', B: 'staff', S: 'staff', R: 'flat', X: 'screen' };
+
+/** The room zones a map's floors imply, for the ready-made layouts and for saves from before zones. */
+function areaZonesFromFloors(s: SimState, taken: ReadonlySet<number>): Pick<Zones, 'staff' | 'flat' | 'screen'> {
+  const out: Pick<Zones, 'staff' | 'flat' | 'screen'> = { staff: [], flat: [], screen: [] };
+  s.tiles.forEach((t, i) => {
+    const kind = FLOOR_ZONES[t.floor];
+    if (!kind || t.wall || t.door || taken.has(i)) return;
+    out[kind as 'staff' | 'flat' | 'screen'].push(i);
+  });
+  return out;
+}
+
 export function zonesFrom(s: SimState, zones: { queue: readonly Tile[]; pickup: readonly Tile[] }, dx = 0, dy = 0): Zones {
   const at = ([x, y]: Tile) => (y + dy) * s.w + (x + dx);
-  return { queue: zones.queue.map(at), pickup: zones.pickup.map(at) };
+  const queue = zones.queue.map(at);
+  const pickup = zones.pickup.map(at);
+  return { queue, pickup, ...areaZonesFromFloors(s, new Set([...queue, ...pickup])) };
+}
+
+/** Saves from before floors were only for looks get the rooms their floors used to mean. */
+export function migrateAreaZones(sim: Sim): void {
+  const z = sim.state.zones;
+  if (z.staff) return;
+  Object.assign(z, areaZonesFromFloors(sim.state, new Set([...z.queue, ...z.pickup])));
+  sim.world.rebuild();
 }
 
 /**
@@ -196,7 +283,7 @@ export function migrateCounter(sim: Sim): void {
   const v = sim.venue;
   const old = s.objects.find((o) => o.def === v.counter && objectDef(o.def).counterSection);
   if (!old || s.objects.some((o) => o.def === SERVICE_DEFS.till)) {
-    s.zones = { queue: [], pickup: [] };
+    s.zones = zonesFrom(s, { queue: [], pickup: [] });
     return;
   }
   s.objects = s.objects.filter((o) => o !== old);

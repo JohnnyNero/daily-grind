@@ -12,7 +12,7 @@ import { askingWage, canSpend } from './business';
 import { passionsFor } from './normalize';
 import { Sim } from './sim';
 import { isShell } from './structure';
-import { SERVICE_DEFS, reservedTiles, serviceSpots } from './service';
+import { SERVICE_DEFS, guestBarred, guestPassable, reservedTiles, serviceSpots } from './service';
 import { SAVE_VERSION, type Applicant, type ObjectInst, type Pawn, type SimState } from './state';
 import { addMemory } from './thoughts';
 
@@ -295,7 +295,6 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
     const t = w.tile(tx, ty);
     if (t.wall) return "There's a wall in the way.";
     if (t.door) return "That would block a door.";
-    if (d.floors && !d.floors.includes(t.floor)) return `${d.label}s don't go there.`;
     if (clear.some(([kx, ky]) => kx === tx && ky === ty)) return 'That spot has to stay clear for service.';
     for (const o of sim.state.objects) {
       if (o === ignore) continue;
@@ -317,6 +316,35 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
       const blocker = sim.state.objects.find((o) => o !== ignore && w.tilesOf(o).some(([ox, oy]) => ox === tx && oy === ty));
       if (blocker) return `The ${objectDef(blocker.def).label.toLowerCase()} is in the way of where people stand to use it.`;
     }
+    if (at.guest && guestBarred(sim, at.guest[0], at.guest[1])) return "Customers would have to stand in a staff-only area to use it.";
+  }
+  return null;
+}
+
+/** Customers keep out of staff-only zones: can they still get from the pavement to the till and the pickup? */
+export function guestReachProblem(sim: Sim): string | null {
+  const s = sim.state;
+  const ok = guestPassable(sim);
+  const seen = new Uint8Array(s.w * s.h);
+  const stack: [number, number][] = [];
+  for (const [x, y] of sim.entry) {
+    if (!ok(x, y) || seen[y * s.w + x]) continue;
+    seen[y * s.w + x] = 1;
+    stack.push([x, y]);
+  }
+  while (stack.length > 0) {
+    const [x, y] = stack.pop()!;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (!ok(nx, ny) || seen[ny * s.w + nx]) continue;
+      seen[ny * s.w + nx] = 1;
+      stack.push([nx, ny]);
+    }
+  }
+  for (const o of s.objects) {
+    const at = serviceAt(o.def, o.x, o.y, rotationOf(o));
+    if (at?.guest && !seen[at.guest[1] * s.w + at.guest[0]]) return `Customers couldn't get to the ${objectDef(o.def).label.toLowerCase()} without going through a staff-only area.`;
   }
   return null;
 }
@@ -340,6 +368,8 @@ export function reachProblem(sim: Sim): string | null {
   }
   const reach = (x: number, y: number) => sim.world.inBounds(x, y) && seen[y * s.w + x] === 1;
   if (serviceSpots(sim).some(([x, y]) => !reach(x, y))) return 'That would cut off the till or the pickup.';
+  const customers = guestReachProblem(sim);
+  if (customers) return customers;
   // Nobody on the premises may be shut in. Someone between tiles counts if either side is open.
   for (const p of s.pawns) {
     if (!p.onMap) continue;

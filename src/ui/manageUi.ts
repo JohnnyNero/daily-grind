@@ -385,7 +385,7 @@ export class CafeUi {
     const m = this.sim.minuteOfDay;
     const t = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
     el('films-hint').textContent = sc.length === 0
-      ? 'No working screens. A screen is a room of Screen floor with a cinema screen in it; rows of seats in the room are its audience.'
+      ? 'No working screens. A screen is a room marked as a Screen zone (build mode, Zones) with a cinema screen in it; rows of seats in the room are its audience.'
       : `${sc.length} screen${sc.length === 1 ? '' : 's'}, ${screenSeats(this.sim)} seats. People arrive in the half hour before each film, busiest just before it starts, and all leave together at the end.`;
     el('film-list').replaceChildren(...list.map((sh) => {
       const ticket = ticketFor(this.sim, sh);

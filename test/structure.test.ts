@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Sim } from '../src/sim/sim';
 import { buildAt, isShell, restoreLayout, snapshotLayout, BUILD_PRICES } from '../src/sim/structure';
 import { deserialize, serialize } from '../src/sim/manage';
+import { zoneOf } from '../src/sim/service';
 import { TICKS_PER_HOUR } from '../src/sim/state';
 
 const tile = (sim: Sim, x: number, y: number) => sim.world.tile(x, y);
@@ -40,11 +41,13 @@ describe('building work', () => {
     expect(tile(sim, 6, 6)).toMatchObject({ wall: false, door: true });
   });
 
-  it('paints floors, but not under furniture that needs a particular floor', () => {
+  it('paints any floor anywhere, under furniture too: floors are only for looks', () => {
     const sim = new Sim(3);
     expect(buildAt(sim, 6, 15, { floor: 'C' })).toBeNull();
     expect(tile(sim, 6, 15).floor).toBe('C');
-    expect(buildAt(sim, 2, 1, { floor: 'F' })).toMatch(/oven can't stand/);
+    expect(buildAt(sim, 2, 1, { floor: 'F' })).toBeNull();
+    // The kitchen is still the kitchen: it's the zone that says so, not the floor.
+    expect(zoneOf(sim, 2, 2)).toBe('staff');
   });
 
   it('undoes a stroke, refunding it, and survives a save', () => {

@@ -3,6 +3,7 @@
 // band for a while, then on a random roll that gets more likely the worse the band.
 // Every break names its "final straw", the worst reason at the time.
 
+import { zoneFloor } from './service';
 import { random, pick, randInt } from './rng';
 import type { Sim } from './sim';
 import { witness } from './social';
@@ -117,7 +118,7 @@ export function breakJob(sim: Sim, p: Pawn): ReturnType<Sim['makeJob']> | null {
       return sim.leaveJob(label);
     case 'sulk':
     case 'cry': {
-      const target = b.kind === 'cry' ? fridgeSpot(sim) : randomTile(sim, 'S');
+      const target = b.kind === 'cry' ? fridgeSpot(sim) : backOfHouse(sim);
       const steps: ReturnType<Sim['makeJob']>['steps'] = [];
       if (target) {
         const go = sim.gotoStep(target[0], target[1]);
@@ -147,12 +148,10 @@ function fridgeSpot(sim: Sim): [number, number] | null {
   return fridge ? sim.world.spots(fridge)[0] : null;
 }
 
-function randomTile(sim: Sim, floor: string): [number, number] | null {
-  const s = sim.state;
-  for (let i = 0; i < 20; i++) {
-    const x = randInt(s, 0, s.w - 1);
-    const y = randInt(s, 0, s.h - 1);
-    if (sim.world.passable(x, y) && sim.world.tile(x, y).floor === floor) return [x, y];
-  }
-  return null;
+/** Somewhere out the back to sulk: a free tile in a staff-only zone. */
+function backOfHouse(sim: Sim): [number, number] | null {
+  const open = zoneFloor(sim, 'staff').filter(([x, y]) => sim.world.passable(x, y));
+  if (open.length === 0) return null;
+  const [x, y] = open[randInt(sim.state, 0, open.length - 1)];
+  return [x, y];
 }

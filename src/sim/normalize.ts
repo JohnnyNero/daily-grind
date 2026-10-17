@@ -1,7 +1,7 @@
 // Fills in anything a state is missing: new games get their defaults here, and older
 // saves pick up new systems without a version bump. Safe to run more than once.
 
-import { migrateCounter } from './service';
+import { migrateAreaZones, migrateCounter } from './service';
 import { STARTING_FAME, askingWage, emptyDay, emptyWeek } from './business';
 import { WORK_TYPES, type WorkType } from './defs';
 import type { Sim } from './sim';
@@ -70,6 +70,7 @@ export function normalize(sim: Sim): void {
   s.week ??= emptyWeek(sim, Math.floor((day - 1) / 7) + 1, day);
   s.story.incoming ??= null;
   migrateCounter(sim);
+  migrateAreaZones(sim);
   // Anything new on the venue's standard menu (the kitchen's hot food, say) reaches older saves.
   for (const m of [...sim.venue.menu, ...sim.venue.unlocks.filter((u) => s.unlocked.includes(u.name))]) {
     const have = s.menu.find((x) => x.name === m.name);

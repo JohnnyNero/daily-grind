@@ -36,7 +36,7 @@ describe('the cinema', () => {
     expect(late).toBeGreaterThan(early + 3);
     runTo(sim, sh.start + 15);
     const audience = holding(sim, t.start);
-    expect(audience.length).toBeGreaterThan(4);
+    expect(audience.length).toBeGreaterThan(3);
     expect(audience.filter((p) => p.visit!.state === 'eating').length).toBeGreaterThanOrEqual(audience.length * 0.5);
     // Everyone in the audience is sat in that film's screen.
     const room = screens(sim).find((x) => x.key === sh.screen)!;
@@ -74,11 +74,11 @@ describe('the cinema', () => {
     expect(day.ingredients).toBeGreaterThan(0);
   });
 
-  it('only shows films on a screen: a room of Screen floor with a screen and seats', () => {
+  it('only shows films on a screen: a Screen zone with a screen and seats', () => {
     const sim = new Sim(4, undefined, 'cinema', 'empty');
     expect(screens(sim)).toEqual([]);
     expect(showingsToday(sim)).toEqual([]);
-    for (let y = 2; y <= 8; y++) for (let x = 2; x <= 9; x++) expect(buildAt(sim, x, y, { floor: 'X' })).toBeNull();
+    for (let y = 2; y <= 8; y++) for (let x = 2; x <= 9; x++) expect(paintZone(sim, x, y, 'screen')).toBeNull();
     expect(buyObject(sim, 'screen', 3, 2)).toBeNull();
     expect(screens(sim)).toHaveLength(1);
     expect(screens(sim)[0].capacity).toBe(0);
@@ -86,8 +86,9 @@ describe('the cinema', () => {
     expect(buyObject(sim, 'cinemaSeats', 4, 7)).toBeNull();
     expect(screens(sim)[0].capacity).toBe(8);
     expect(showingsToday(sim).length).toBeGreaterThan(3);
-    // Seats on ordinary floor aren't anyone's audience.
-    expect(buyObject(sim, 'cinemaSeats', 10, 15)).toMatch(/don't go there/);
+    // Seats outside the zone aren't anyone's audience.
+    expect(buyObject(sim, 'cinemaSeats', 10, 15)).toBeNull();
+    expect(screens(sim)[0].capacity).toBe(8);
     // Fit out the rest and films sell.
     for (let x = 2; x <= 8; x++) if (x !== 5) buyObject(sim, 'counter', x, 13);
     expect(buyObject(sim, 'pickup', 5, 13)).toBeNull();

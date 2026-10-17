@@ -3,6 +3,7 @@
 // driven by the same needs and object offers as everything else. They pay a little rent,
 // never miss a shift to the commute, and are never quite off the clock.
 
+import { zoneFloor, zoneOf } from './service';
 import { canSpend } from './business';
 import { reachProblem } from './manage';
 import { randInt } from './rng';
@@ -19,7 +20,7 @@ export function beds(sim: Sim): number {
 }
 
 export function hasFlat(sim: Sim): boolean {
-  return beds(sim) > 0 && sim.state.tiles.some((t) => t.floor === 'R' && !t.wall);
+  return beds(sim) > 0 && zoneFloor(sim, 'flat').length > 0;
 }
 
 export function liveIns(sim: Sim): Pawn[] {
@@ -75,13 +76,7 @@ export function homeJob(sim: Sim, p: Pawn, needJob: (bed: boolean) => boolean): 
     return p.job;
   }
   const s = sim.state;
-  const home: [number, number][] = [];
-  for (let y = 0; y < s.h; y++) {
-    for (let x = 0; x < s.w; x++) {
-      const t = sim.world.tile(x, y);
-      if (t.floor === 'R' && !t.wall && sim.world.passable(x, y)) home.push([x, y]);
-    }
-  }
+  const home = zoneFloor(sim, 'flat').filter(([x, y]) => sim.world.passable(x, y));
   if (home.length === 0) return null;
   const [x, y] = home[randInt(s, 0, home.length - 1)];
   const go = sim.gotoStep(x, y);
@@ -99,7 +94,7 @@ function plotIsBare(sim: Sim): boolean {
     for (let x = x0; x < x0 + FLAT_W; x++) {
       const t = sim.world.tile(x, y);
       if (t.floor === 'P') continue;
-      if (t.floor !== 'Y' || t.wall) return false;
+      if (t.floor !== 'Y' || t.wall || zoneOf(sim, x, y) !== null) return false;
     }
   }
   return !s.objects.some((o) => o.x >= x0 && o.x < x0 + FLAT_W);
@@ -133,6 +128,15 @@ export function buildStaffFlat(sim: Sim): string | null {
     return inside.floor === 'S' && !inside.wall && sim.world.tile(x0 - 1, y).wall;
   }) ?? 3;
   set(x0 - 1, doorY, 'S', false, true);
+  // The flat's floor is the flat zone: customers keep out, live-ins live here.
+  const zonesBefore = JSON.parse(JSON.stringify(s.zones)) as typeof s.zones;
+  for (let y = top; y < bottom; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = y * s.w + x;
+      for (const k of ['queue', 'pickup', 'staff', 'screen'] as const) s.zones[k] = s.zones[k].filter((n) => n !== i);
+      if (!s.zones.flat.includes(i)) s.zones.flat.push(i);
+    }
+  }
   const objects = [
     { def: 'bed', x: x0, y: top }, { def: 'bed', x: x0 + 1, y: top }, { def: 'bed', x: x0 + 2, y: top },
     { def: 'fridge', x: x0 + 5, y: top }, { def: 'toilet', x: x1 - 1, y: top },
@@ -144,6 +148,7 @@ export function buildStaffFlat(sim: Sim): string | null {
     for (const o of objects) placed.push(sim.world.placeObject(o).id);
   } catch {
     s.tiles = before;
+    s.zones = zonesBefore;
     s.objects = s.objects.filter((o) => !placed.includes(o.id));
     sim.world.rebuild();
     return "The flat wouldn't fit. Try building it by hand.";
@@ -151,6 +156,7 @@ export function buildStaffFlat(sim: Sim): string | null {
   const blocked = reachProblem(sim);
   if (blocked) {
     s.tiles = before;
+    s.zones = zonesBefore;
     s.objects = s.objects.filter((o) => !placed.includes(o.id));
     sim.world.rebuild();
     return blocked;

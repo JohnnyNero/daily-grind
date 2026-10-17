@@ -3,7 +3,7 @@
 
 import { objectDef } from './defs';
 import { canCook } from './kitchen';
-import { SERVICE_DEFS } from './service';
+import { SERVICE_DEFS, zoneFloor } from './service';
 import type { Sim } from './sim';
 
 export interface FitOutItem {
@@ -28,6 +28,7 @@ export function fitOut(sim: Sim): FitOutItem[] {
     { label: 'A pickup area', done: sim.positions.wait.length > 0, needed: false },
     { label: 'A food counter', done: has(SERVICE_DEFS.food), needed: false },
     { label: 'An oven and prep counter for hot food', done: canCook(sim), needed: false },
+    { label: 'A staff-only area', done: zoneFloor(sim, 'staff').length > 0, needed: false },
     { label: 'A sink for the washing up', done: has('sink'), needed: false },
     { label: 'A toilet', done: has('toilet'), needed: false },
     { label: 'Somewhere to sit', done: seats, needed: false },

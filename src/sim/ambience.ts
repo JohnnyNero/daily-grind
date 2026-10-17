@@ -1,6 +1,7 @@
 // How the café feels: cleanliness (dirty cups, spills) and looks (plants, comfy seats).
 // Guests notice when they judge their visit; staff notice in their mood.
 
+import { guestBarred } from './service';
 import { random } from './rng';
 import type { Sim } from './sim';
 import type { Pawn } from './state';
@@ -20,8 +21,8 @@ export function looks(sim: Sim): number {
   const s = sim.state;
   let score = 0.35;
   for (const o of s.objects) {
-    const floor = sim.world.tile(o.x, o.y).floor;
-    if (!sim.venue.frontFloors.includes(floor)) continue;
+    // Only what customers see counts: nothing out the back.
+    if (guestBarred(sim, o.x, o.y)) continue;
     if (o.def === 'plant') score += 0.1;
     if (o.def === 'armchair') score += 0.06;
     if (o.def === 'poolTable') score += 0.12;

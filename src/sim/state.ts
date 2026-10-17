@@ -21,12 +21,21 @@ export interface ObjectInst {
   rot?: number;
 }
 
-/** Floor areas the manager marks out, as tile indices (y * w + x). */
+/**
+ * Floor areas the manager marks out, as tile indices (y * w + x). A tile is in one zone at
+ * most. Floors are only for looks; zones say who may go where and what happens there.
+ */
 export interface Zones {
   /** Where the queue runs back from the till. */
   queue: number[];
   /** Where customers wait for their order to come up at the pickup. */
   pickup: number[];
+  /** Back of house: customers can't go in. Staff hang about and take themselves off here. */
+  staff: number[];
+  /** The staff flat: live-ins' home, and off-limits to customers. */
+  flat: number[];
+  /** A cinema screen room: a screen in it shows films, seats in it are the audience. */
+  screen: number[];
 }
 
 export interface Look {
