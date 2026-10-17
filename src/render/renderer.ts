@@ -6,6 +6,7 @@ import type { ObjectInst, Pawn } from '../sim/state';
 import { drawFloorTile, drawObject } from './objectArt';
 import { isShell } from '../sim/structure';
 import { PLOT_W } from '../sim/world';
+import { servicePositions, type ServicePositions } from '../sim/venues';
 import { drawBubble, drawItem, drawPawn, drawStationBadge, type BadgeStyle, type BubbleKind } from './pawnArt';
 import { homeWork } from '../sim/work';
 
@@ -299,6 +300,9 @@ export class Renderer {
       ctx.strokeRect(o.x * TILE + 1, o.y * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
     }
     const g = view.ghost;
+    // Where the till, queue and pickup go: they follow the counter, so show them while it moves.
+    if (g && objectDef(g.def).serviceCounter) this.drawServiceSpots(servicePositions(this.sim.venue, g.x, g.y));
+    else if (view.active && !view.shell && this.sim.counter) this.drawServiceSpots(this.sim.positions);
     if (g) {
       const d = objectDef(g.def);
       if (o && (o.x !== g.x || o.y !== g.y)) {
@@ -316,6 +320,21 @@ export class Renderer {
       ctx.lineWidth = 3;
       ctx.strokeRect(g.x * TILE + 1, g.y * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
     }
+  }
+
+  /** Service spots as dashed squares: staff behind the counter, customers in front. */
+  private drawServiceSpots(p: ServicePositions): void {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 4]);
+    const mark = (tiles: readonly (readonly [number, number])[], colour: string) => {
+      ctx.strokeStyle = colour;
+      for (const [x, y] of tiles) ctx.strokeRect(x * TILE + 4, y * TILE + 4, TILE - 8, TILE - 8);
+    };
+    mark([p.tillStaff, p.foodStaff, p.pickupStaff], 'rgba(143, 209, 158, 0.9)');
+    mark([...p.queue, p.pickupGuest, ...p.wait], 'rgba(242, 196, 109, 0.85)');
+    ctx.restore();
   }
 
   /** Footsteps per tile as warm colour: busy routes glow, so long walks and pinch points show. */
@@ -376,7 +395,7 @@ export class Renderer {
     for (const order of s.orders) {
       for (const item of order.items) {
         if (item.status !== 'ready') continue;
-        const [px, py] = this.sim.venue.positions.pickupStaff;
+        const [px, py] = this.sim.positions.pickupStaff;
         const x = px - 0.3 + (slot % 4) * 0.32;
         const y = py + 1 + (slot >= 4 ? 0.3 : 0);
         drawItem(ctx, item.kind, (x + 0.5) * TILE, (y + 0.45) * TILE, cup);

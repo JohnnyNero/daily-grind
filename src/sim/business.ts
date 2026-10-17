@@ -77,7 +77,7 @@ export function seatCount(sim: Sim): number {
 
 /** How many guests fit at once: the queue, the seats and a few standing. More tables, more trade. */
 export function guestCapacity(sim: Sim): number {
-  return sim.venue.positions.queue.length + seatCount(sim) + 3;
+  return sim.positions.queue.length + seatCount(sim) + 3;
 }
 
 /** What people will happily pay, as a multiple of the usual price. Grows with the stars. */

@@ -19,14 +19,16 @@ const FAST_FORWARD = 500;
 const MAX_TICKS_PER_FRAME = 20000;
 const AUTOSAVE_MS = 60_000;
 
-// ?seed=123 or ?venue=pub skip the start screen and open somewhere fresh;
+// ?seed=123 or ?venue=pub skip the start screen and open somewhere fresh (add ?layout=empty
+// for an empty lot);
 // ?new opens the start screen at "What are you opening?".
 async function chooseSim(): Promise<Sim> {
   const params = new URLSearchParams(location.search);
   const seedParam = Number(params.get('seed'));
   const venueParam = params.get('venue');
   if (seedParam > 0 || venueParam !== null) {
-    const sim = new Sim(seedParam || Math.floor(Math.random() * 2 ** 31), undefined, venueParam ?? 'cafe');
+    const layout = params.get('layout') === 'empty' ? 'empty' : 'fitted';
+    const sim = new Sim(seedParam || Math.floor(Math.random() * 2 ** 31), undefined, venueParam ?? 'cafe', layout);
     if (venueParam !== null) {
       // Drop the parameter so a reload carries on with this place instead of starting again.
       history.replaceState(null, '', location.pathname);
@@ -93,7 +95,12 @@ function play(sim: Sim): void {
       hud.closePanels();
       selectedId = id;
     },
-    openPanel: (panel) => document.getElementById(panel === 'staff' ? 'staff-open' : 'cafe-open')!.click(),
+    openPanel: (panel) => {
+      if (panel === 'build') {
+        hud.closePanels();
+        build.start();
+      } else document.getElementById(panel === 'staff' ? 'staff-open' : 'cafe-open')!.click();
+    },
   };
   const alerts = new AlertsUi(sim, inboxHooks);
   const inbox = new InboxUi(sim, inboxHooks);
@@ -118,6 +125,13 @@ function play(sim: Sim): void {
   window.addEventListener('resize', onResize);
   onResize();
   document.getElementById('recentre')!.addEventListener('click', fitView);
+  // An empty lot opens straight into build mode: there's nothing to do until it's fitted out.
+  // Paused, so the first day isn't gone before the counter is in.
+  if (!sim.canTrade) {
+    build.start();
+    speed = 0;
+    hud.setSpeed(speed);
+  }
 
   attachInput(canvas, renderer.camera, {
     onDragStart: (x, y) => build.dragStart(x, y),

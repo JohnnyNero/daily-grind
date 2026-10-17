@@ -166,7 +166,7 @@ export function findWork(sim: Sim, p: Pawn): Job | null {
 /** Somewhere to wait for the next bit of home work: by the till, the machine or the sink. */
 function postFor(sim: Sim, work: WorkType): [number, number] | null {
   const s = sim.state;
-  if (work === 'counter') return [...sim.venue.positions.tillStaff] as [number, number];
+  if (work === 'counter') return [...sim.positions.tillStaff] as [number, number];
   const def = work === 'barista' ? sim.venue.drinkStation : work === 'dishes' ? 'sink' : null;
   const o = def ? s.objects.find((x) => x.def === def) : undefined;
   const spot = o ? sim.world.spots(o).find(([x, y]) => sim.world.passable(x, y)) : undefined;
@@ -235,9 +235,9 @@ function scanTasks(sim: Sim, p: Pawn): Task[] {
   // Counter: serve the guest at the front of the queue.
   if (enabled.has('counter') && !sim.isReservedByOther('till', p)) {
     const front = s.queue.length > 0 ? sim.pawnById(s.queue[0]) : undefined;
-    const [qx, qy] = sim.venue.positions.queue[0];
+    const [qx, qy] = sim.positions.queue[0];
     if (front?.visit?.state === 'queuing' && at(front, qx, qy)) {
-      const [tx, ty] = sim.venue.positions.tillStaff;
+      const [tx, ty] = sim.positions.tillStaff;
       tasks.push({
         work: 'counter', x: tx, y: ty,
         build: () => withPath(sim, p, 'Taking an order', tx, ty, (job) => {
@@ -256,7 +256,7 @@ function scanTasks(sim: Sim, p: Pawn): Task[] {
       if (sim.isReservedByOther(key, p)) return;
       if (item.kind === 'food') {
         if (!enabled.has('counter') || sim.isReservedByOther('cake', p)) return;
-        const [cx, cy] = sim.venue.positions.foodStaff;
+        const [cx, cy] = sim.positions.foodStaff;
         tasks.push({
           work: 'counter', x: cx, y: cy,
           build: () => withPath(sim, p, `Plating ${withArticle(item.name)}`, cx, cy, (job) => {
@@ -264,7 +264,7 @@ function scanTasks(sim: Sim, p: Pawn): Task[] {
             sim.reserve(job, p, 'cake');
             return [
               actStep(p, 'counter', { type: 'makeItem', orderId: order.id, index }, TASK_MINUTES.plateCake),
-              sim.gotoStep(sim.venue.positions.pickupStaff[0], sim.venue.positions.pickupStaff[1]),
+              sim.gotoStep(sim.positions.pickupStaff[0], sim.positions.pickupStaff[1]),
               actStep(p, 'counter', { type: 'placeItem', orderId: order.id, index }, TASK_MINUTES.placeItem),
             ];
           }),
@@ -284,7 +284,7 @@ function scanTasks(sim: Sim, p: Pawn): Task[] {
               sim.reserve(job, p, reservationKey(machine.id, spotIndex));
               return [
                 actStep(p, 'barista', { type: 'makeItem', orderId: order.id, index }, sim.venue.drinkMinutes),
-                sim.gotoStep(sim.venue.positions.pickupStaff[0], sim.venue.positions.pickupStaff[1]),
+                sim.gotoStep(sim.positions.pickupStaff[0], sim.positions.pickupStaff[1]),
                 actStep(p, 'barista', { type: 'placeItem', orderId: order.id, index }, TASK_MINUTES.placeItem),
               ];
             }),

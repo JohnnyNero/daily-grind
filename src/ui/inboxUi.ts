@@ -10,7 +10,7 @@ import type { ManageHooks } from './manageUi';
 
 export interface InboxHooks extends ManageHooks {
   select(pawnId: number): void;
-  openPanel(panel: 'staff' | 'cafe'): void;
+  openPanel(panel: 'staff' | 'cafe' | 'build'): void;
 }
 
 const ALERT_REFRESH_MS = 400;

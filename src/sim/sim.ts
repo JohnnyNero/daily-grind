@@ -13,14 +13,14 @@ import { buildRecap } from './tales';
 import { randomTraits, refreshApplicants } from './manage';
 import { checkSlip } from './ambience';
 import { checkWants, topUpWants } from './wants';
-import { venueDef, type VenueDef } from './venues';
+import { emptyShell, servicePositions, venueDef, type ServicePositions, type VenueDef } from './venues';
 import { clamp01, moodFromNeeds, worstNeed } from './mood';
 import { findPath } from './path';
 import { pick, random, randInt, randRange } from './rng';
 import { canoodle, socialEveryMinute } from './social';
 import {
   TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE,
-  SAVE_VERSION, type Applicant, type ConditionId, type Job, type LogEntry, type Pawn, type Relation, type Shift, type SimState, type StaffInfo, type Step,
+  SAVE_VERSION, type Applicant, type ConditionId, type Job, type LogEntry, type ObjectInst, type Pawn, type Relation, type Shift, type SimState, type StaffInfo, type Step,
 } from './state';
 import { addMemory, driftMood, expireMemories, hasTrait, opinionFromMemories } from './thoughts';
 import { abandonAction, findWork, performAction, standByJob, updateRushes, validateAction } from './work';
@@ -41,6 +41,11 @@ const IDLE_RECHECK_TICKS = 10;
 /** A step running longer than this is treated as stuck and abandoned. */
 const STEP_TIMEOUT_TICKS = 2 * TICKS_PER_HOUR;
 const START_TICK = 6 * TICKS_PER_HOUR;
+/** Money to fit out an empty lot: about what the standard fit-out, walls and floors cost, and a bit over. */
+export const EMPTY_LOT_MONEY = 800000;
+
+/** How a new place starts: fitted out and ready to open, or an empty shell to build from scratch. */
+export type StartLayout = 'fitted' | 'empty';
 const IDLE_FLOORS = new Set(['K', 'S', 'B']);
 /** Below this, a need beats work. */
 const URGENT_NEED = 0.3;
@@ -66,7 +71,7 @@ export class Sim {
   walkYesterday: WalkStats | null = null;
 
   /** A new venue from a seed, or a saved one restored as-is. */
-  constructor(seed: number, saved?: SimState, venueId = 'cafe') {
+  constructor(seed: number, saved?: SimState, venueId = 'cafe', layout: StartLayout = 'fitted') {
     if (saved) {
       this.state = saved;
       addPlotToSave(saved, venueDef(saved.venue).map);
@@ -75,7 +80,8 @@ export class Sim {
       return;
     }
     const venue = venueDef(venueId);
-    const map = parseMap(withPlot(venue.map));
+    const empty = layout === 'empty';
+    const map = parseMap(withPlot(empty ? emptyShell(venue.map, venue.frontFloors[0]) : venue.map));
     this.state = {
       version: SAVE_VERSION,
       venue: venue.id,
@@ -89,7 +95,7 @@ export class Sim {
       pawns: [],
       reservations: {},
       nextId: 1,
-      money: BUSINESS.startingMoney,
+      money: empty ? EMPTY_LOT_MONEY : BUSINESS.startingMoney,
       reputation: BUSINESS.startingReputation,
       queue: [],
       orders: [],
@@ -113,7 +119,7 @@ export class Sim {
     } as Partial<SimState> as SimState;
     this.world = new World(this.state);
     refreshApplicants(this);
-    for (const o of venue.objects) this.world.placeObject(o);
+    if (!empty) for (const o of venue.objects) this.world.placeObject(o);
     normalize(this);
     // The opening team all work day one, and take their days off on different days after.
     venue.shifts.forEach((shift, i) => {
@@ -123,6 +129,24 @@ export class Sim {
 
   get venue(): VenueDef {
     return venueDef(this.state.venue);
+  }
+
+  /** The service counter, if there is one yet (an empty lot starts without). */
+  get counter(): ObjectInst | undefined {
+    const def = this.venue.counter;
+    return this.state.objects.find((o) => o.def === def);
+  }
+
+  /** Where service happens: the till, queue and pickup sit around the counter, wherever it stands. */
+  get positions(): ServicePositions {
+    const c = this.counter;
+    return c ? servicePositions(this.venue, c.x, c.y) : this.venue.positions;
+  }
+
+  /** A counter and something to make drinks with: the least it takes to open the doors. */
+  get canTrade(): boolean {
+    const drinks = this.venue.drinkStation;
+    return this.counter !== undefined && this.state.objects.some((o) => o.def === drinks);
   }
 
   // ---------------------------------------------------------------- time
@@ -299,6 +323,8 @@ export class Sim {
     const m = this.minuteOfDay;
     const staff = p.staff;
     if (staff && (staff.homeEarlyDay === this.day || staff.sickDay === this.day || isDayOff(this, p))) return false;
+    // While the place is still being fitted out, nobody comes in (or gets paid).
+    if (staff && !this.canTrade) return false;
     return m >= p.shift.start && m < p.shift.end;
   }
 
@@ -376,7 +402,8 @@ export class Sim {
   /** Once the café has shut and emptied, write up the day. */
   private maybeRecap(): void {
     const s = this.state;
-    if (s.story.recapDay === this.day) return;
+    // Nothing to write up while it's still being fitted out.
+    if (s.story.recapDay === this.day || !this.canTrade) return;
     const m = this.minuteOfDay;
     const emptied = m >= this.venue.hours.close && s.pawns.every((p) => !p.onMap);
     if (emptied || m === 24 * 60 - 1) {
@@ -461,7 +488,7 @@ export class Sim {
   }
 
   placeAtEntry(p: Pawn): void {
-    const entry = this.venue.positions.entry;
+    const entry = this.positions.entry;
     const [ex, ey] = entry[randInt(this.state, 0, entry.length - 1)];
     p.x = ex;
     p.y = ey;
@@ -493,7 +520,7 @@ export class Sim {
   }
 
   leaveJob(label: string): Job {
-    const entry = this.venue.positions.entry;
+    const entry = this.positions.entry;
     const [ex, ey] = entry[randInt(this.state, 0, entry.length - 1)];
     return this.makeJob(label, [this.gotoStep(ex, ey), { kind: 'exit' }]);
   }

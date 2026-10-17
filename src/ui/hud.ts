@@ -363,7 +363,8 @@ export class Hud {
     this.money.classList.toggle('negative', s.money < 0);
     this.rep.textContent = `${stars(this.sim)}★`;
     this.rep.title = `Reputation ${Math.round(s.reputation)}, fame ${Math.round(s.fame)}`;
-    if (fastForwarding) this.status.textContent = 'Closed · skipping to morning';
+    if (!this.sim.canTrade) this.status.textContent = 'Fitting out';
+    else if (fastForwarding) this.status.textContent = 'Closed · skipping to morning';
     else if (!this.sim.isOpen()) this.status.textContent = 'Closed';
     else {
       const condition = s.conditions.find((c) => c.until > s.tick);

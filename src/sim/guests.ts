@@ -60,9 +60,9 @@ function maybeSpawn(sim: Sim): void {
 export function tryArrive(sim: Sim): void {
   const s = sim.state;
   const canServe = s.menu.some((m) => m.enabled && (m.kind === 'drink' || !sim.hasCondition('noFood')));
-  if (!canServe) return;
+  if (!canServe || !sim.canTrade) return;
   const onSite = s.pawns.filter((p) => p.kind === 'guest').length;
-  if (onSite >= guestCapacity(sim) || s.queue.length >= sim.venue.positions.queue.length) {
+  if (onSite >= guestCapacity(sim) || s.queue.length >= sim.positions.queue.length) {
     // They look in, see the chaos and keep walking, and tell their friends it's always rammed.
     s.today.turnedAway++;
     judge(sim, 0.3);
@@ -152,7 +152,7 @@ export function guestTick(sim: Sim, p: Pawn): void {
   switch (v.state) {
     case 'queuing': {
       const index = s.queue.indexOf(p.id);
-      const [qx, qy] = sim.venue.positions.queue[Math.min(index, sim.venue.positions.queue.length - 1)];
+      const [qx, qy] = sim.positions.queue[Math.min(index, sim.positions.queue.length - 1)];
       if (!at(p, qx, qy)) goTo(sim, p, 'Queuing', qx, qy);
       return;
     }
@@ -163,21 +163,21 @@ export function guestTick(sim: Sim, p: Pawn): void {
       if (order && order.items.every((i) => i.status === 'ready')) {
         v.state = 'collecting';
         releaseWaitSpot(sim, p);
-        goTo(sim, p, 'Collecting their order', sim.venue.positions.pickupGuest[0], sim.venue.positions.pickupGuest[1]);
+        goTo(sim, p, 'Collecting their order', sim.positions.pickupGuest[0], sim.positions.pickupGuest[1]);
         return;
       }
       if (!holdsWaitSpot(sim, p)) {
-        const i = sim.venue.positions.wait.findIndex((_, n) => s.reservations[`wait:${n}`] === undefined);
+        const i = sim.positions.wait.findIndex((_, n) => s.reservations[`wait:${n}`] === undefined);
         if (i >= 0) {
           s.reservations[`wait:${i}`] = p.id;
-          goTo(sim, p, `Waiting for ${v.items.join(' and ')}`, sim.venue.positions.wait[i][0], sim.venue.positions.wait[i][1]);
+          goTo(sim, p, `Waiting for ${v.items.join(' and ')}`, sim.positions.wait[i][0], sim.positions.wait[i][1]);
         }
       }
       return;
     }
     case 'collecting': {
-      if (!at(p, sim.venue.positions.pickupGuest[0], sim.venue.positions.pickupGuest[1])) {
-        goTo(sim, p, 'Collecting their order', sim.venue.positions.pickupGuest[0], sim.venue.positions.pickupGuest[1]);
+      if (!at(p, sim.positions.pickupGuest[0], sim.positions.pickupGuest[1])) {
+        goTo(sim, p, 'Collecting their order', sim.positions.pickupGuest[0], sim.positions.pickupGuest[1]);
         return;
       }
       collect(sim, p);
@@ -237,11 +237,11 @@ function seatTile(sim: Sim, key: string | null): [number, number] | null {
 }
 
 function holdsWaitSpot(sim: Sim, p: Pawn): boolean {
-  return sim.venue.positions.wait.some((_, n) => sim.state.reservations[`wait:${n}`] === p.id);
+  return sim.positions.wait.some((_, n) => sim.state.reservations[`wait:${n}`] === p.id);
 }
 
 function releaseWaitSpot(sim: Sim, p: Pawn): void {
-  sim.venue.positions.wait.forEach((_, n) => {
+  sim.positions.wait.forEach((_, n) => {
     if (sim.state.reservations[`wait:${n}`] === p.id) delete sim.state.reservations[`wait:${n}`];
   });
 }

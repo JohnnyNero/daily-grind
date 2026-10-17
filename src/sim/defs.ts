@@ -45,6 +45,8 @@ export interface ObjectDef {
   price?: number;
   /** Fixtures can't be moved or sold. */
   fixed?: boolean;
+  /** A service counter: one per venue, and only the venue's own kind is sold. */
+  serviceCounter?: boolean;
   /** Floors it may stand on (staff kit behind the scenes, guest furniture out front). */
   floors?: readonly string[];
   w: number;
@@ -71,8 +73,9 @@ const defs: ObjectDef[] = [
     id: 'espresso', price: 90000, floors: ['K', 'B'], label: 'Espresso machine', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'coffee', label: 'Make yourself a coffee', doing: 'Sneaking a coffee', usableBy: STAFF, deltas: { energy: 0.2, bladder: -0.08 }, minutes: 4, whenBelow: { need: 'energy', value: 0.75 } }],
   },
-  { id: 'counter', fixed: true, label: 'Counter', w: 9, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'bar', fixed: true, label: 'Bar', w: 9, h: 1, blocks: true, spots: [], offers: [] },
+  // The till, the queue and the pickup point are worked out from where the counter stands.
+  { id: 'counter', price: 120000, serviceCounter: true, floors: ['B', 'F', 'C', 'K'], label: 'Counter', w: 9, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'bar', price: 120000, serviceCounter: true, floors: ['B', 'F', 'C', 'K'], label: 'Bar', w: 9, h: 1, blocks: true, spots: [], offers: [] },
   {
     id: 'taps', price: 90000, floors: ['K', 'B'], label: 'Beer taps', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'lemonade', label: 'Pour yourself a lemonade', doing: 'Sneaking a lemonade', usableBy: STAFF, deltas: { energy: 0.12, bladder: -0.08 }, minutes: 3, whenBelow: { need: 'energy', value: 0.75 } }],

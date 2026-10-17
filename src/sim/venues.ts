@@ -19,6 +19,16 @@ export interface PlacedObject {
 
 type Tile = readonly [number, number];
 
+export interface ServicePositions {
+  entry: readonly Tile[];
+  tillStaff: Tile;
+  queue: readonly Tile[];
+  foodStaff: Tile;
+  pickupStaff: Tile;
+  pickupGuest: Tile;
+  wait: readonly Tile[];
+}
+
 export interface VenueText {
   /** "café", "pub": used in sentences. */
   noun: string;
@@ -49,16 +59,10 @@ export interface VenueDef {
   drinkStation: string;
   /** Minutes to make one drink at skill 5. */
   drinkMinutes: number;
-  /** Where things happen during service. */
-  positions: {
-    entry: readonly Tile[];
-    tillStaff: Tile;
-    queue: readonly Tile[];
-    foodStaff: Tile;
-    pickupStaff: Tile;
-    pickupGuest: Tile;
-    wait: readonly Tile[];
-  };
+  /** The service counter (counter, bar): the till, the queue and pickup are worked out from where it stands. */
+  counter: string;
+  /** Where things happen during service, with the counter at its usual spot (COUNTER_HOME). */
+  positions: ServicePositions;
   guestSeating: readonly string[];
   /** Floor kinds that count as front of house (for looks). */
   frontFloors: readonly string[];
@@ -89,6 +93,50 @@ const SERVICE = {
   pickupGuest: [5, 10] as Tile,
   wait: [[3, 10], [4, 10], [6, 10], [2, 10], [4, 11], [5, 11], [8, 11], [9, 11]] as readonly Tile[],
 };
+
+/** Where the counter stands in the standard layouts; the service spots above are drawn around it. */
+export const COUNTER_HOME: Tile = [1, 9];
+
+const shifted = new Map<string, ServicePositions>();
+
+/** The service spots for a counter standing at (x, y). The front door doesn't move. */
+export function servicePositions(venue: VenueDef, x: number, y: number): ServicePositions {
+  const dx = x - COUNTER_HOME[0];
+  const dy = y - COUNTER_HOME[1];
+  const p = venue.positions;
+  if (dx === 0 && dy === 0) return p;
+  const key = `${venue.id}:${x}:${y}`;
+  let out = shifted.get(key);
+  if (!out) {
+    const at = ([tx, ty]: Tile): Tile => [tx + dx, ty + dy];
+    out = {
+      entry: p.entry, tillStaff: at(p.tillStaff), queue: p.queue.map(at), foodStaff: at(p.foodStaff),
+      pickupStaff: at(p.pickupStaff), pickupGuest: at(p.pickupGuest), wait: p.wait.map(at),
+    };
+    shifted.set(key, out);
+  }
+  return out;
+}
+
+/** Every service spot that has to be open floor, front door aside. */
+export function serviceTiles(p: ServicePositions): Tile[] {
+  return [p.tillStaff, p.foodStaff, p.pickupStaff, p.pickupGuest, ...p.queue, ...p.wait];
+}
+
+/**
+ * The same building with nothing in it: the outside walls and the front door stay,
+ * every inside wall and door comes out, and it's bare floor throughout.
+ */
+export function emptyShell(rows: readonly string[], floor: string): string[] {
+  const outside = (x: number, y: number) => y < 0 || y >= rows.length || x < 0 || x >= rows[y].length || rows[y][x] === 'P';
+  return rows.map((row, y) => [...row].map((c, x) => {
+    if (c === 'P' || c === 'D') return c;
+    if (c === '#') {
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (outside(x + dx, y + dy)) return '#';
+    }
+    return floor;
+  }).join(''));
+}
 
 const CAFE: VenueDef = {
   id: 'cafe',
@@ -143,6 +191,7 @@ const CAFE: VenueDef = {
     { def: 'toilet', x: 14, y: 17 },
   ],
   drinkStation: 'espresso',
+  counter: 'counter',
   drinkMinutes: 1.1,
   positions: SERVICE,
   guestSeating: ['table4', 'table2', 'armchair'],
@@ -266,6 +315,7 @@ const PUB: VenueDef = {
     { def: 'toilet', x: 14, y: 17 },
   ],
   drinkStation: 'taps',
+  counter: 'bar',
   drinkMinutes: 1,
   positions: SERVICE,
   guestSeating: ['table4', 'table2', 'armchair'],

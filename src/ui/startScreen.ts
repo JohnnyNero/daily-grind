@@ -1,9 +1,9 @@
 // The start screen: carry on, or start a new place. A new game picks the venue,
 // then builds the starting team in the character creator before the doors open.
 
-import { MAX_STAFF, WORK_TYPES, traitDef } from '../sim/defs';
+import { BUSINESS, MAX_STAFF, WORK_TYPES, traitDef } from '../sim/defs';
 import { addStarter, deserialize, editStaff, removeStarter, rerollStarter } from '../sim/manage';
-import { Sim } from '../sim/sim';
+import { EMPTY_LOT_MONEY, Sim, type StartLayout } from '../sim/sim';
 import type { Pawn } from '../sim/state';
 import { VENUES, type VenueDef } from '../sim/venues';
 import { changesOf, CharacterForm, draftOf, portrait } from './characterForm';
@@ -34,6 +34,7 @@ class StartScreen {
   private root = el('start');
   private body = el('start-body');
   private draft: Sim | null = null;
+  private layout: StartLayout = 'fitted';
   private heading: HTMLElement | null = null;
   // The creator's heading follows the name as it's typed.
   private form = new CharacterForm(() => {
@@ -113,13 +114,30 @@ class StartScreen {
 
   private venues(): void {
     this.draft = null;
+    const layouts: { id: StartLayout; label: string; hint: string }[] = [
+      { id: 'fitted', label: 'Ready to open', hint: `Fitted out and stocked, with ${pounds(BUSINESS.startingMoney)} in the bank. Open the doors on day one.` },
+      { id: 'empty', label: 'Empty lot', hint: `Four walls, a front door and ${pounds(EMPTY_LOT_MONEY)}. Lay out the rooms, buy every table and the counter yourself. The team start once there's a counter and a drinks machine.` },
+    ];
+    const layoutHint = h('p', { className: 'hint' });
+    const layoutButtons = h('div', { className: 'choices', role: 'group', 'aria-label': 'How to start' });
+    const paintLayout = () => {
+      layoutButtons.replaceChildren(...layouts.map((l) => h('button', {
+        type: 'button', 'aria-pressed': String(this.layout === l.id),
+        onclick: () => { this.layout = l.id; paintLayout(); },
+      }, l.label)));
+      layoutHint.textContent = layouts.find((l) => l.id === this.layout)!.hint;
+    };
+    paintLayout();
     this.show(
       h('p', { className: 'kicker' }, 'New game · 1 of 2'),
       h('h2', { tabindex: '-1' }, 'What are you opening?'),
+      h('h3', {}, 'Start with'),
+      layoutButtons,
+      layoutHint,
       h('div', { className: 'cards' }, ...Object.values(VENUES).map((v) => h('button', {
         type: 'button', className: 'card choice-card',
         onclick: () => {
-          this.draft = new Sim(Math.floor(Math.random() * 2 ** 31), undefined, v.id);
+          this.draft = new Sim(Math.floor(Math.random() * 2 ** 31), undefined, v.id, this.layout);
           this.team();
         },
       }, h('strong', {}, venueLabel(v)), h('span', {}, v.tagline),
@@ -169,7 +187,7 @@ class StartScreen {
         h('button', { type: 'button', onclick: () => { for (const p of staffOf(sim)) rerollStarter(sim, p); this.team(); } }, 'Shuffle everyone')),
       h('div', { className: 'row' },
         h('button', { type: 'button', onclick: () => this.venues() }, 'Back'),
-        h('button', { type: 'button', className: 'primary', onclick: () => this.open() }, 'Open the doors')),
+        h('button', { type: 'button', className: 'primary', onclick: () => this.open() }, sim.canTrade ? 'Open the doors' : 'Get the keys')),
     );
   }
 

@@ -11,6 +11,8 @@ import { pick, random, randRange } from './rng';
 import { askingWage, canSpend } from './business';
 import { passionsFor } from './normalize';
 import { Sim } from './sim';
+import { isShell } from './structure';
+import { serviceTiles, servicePositions } from './venues';
 import { SAVE_VERSION, type Applicant, type ObjectInst, type Pawn, type SimState } from './state';
 import { addMemory } from './thoughts';
 
@@ -242,19 +244,36 @@ export { priceRatio } from './business';
 
 /** Service spots that furniture and walls may never cover. */
 export function keepClear(sim: Sim): readonly (readonly [number, number])[] {
-  const v = sim.venue.positions;
-  return [v.tillStaff, v.foodStaff, v.pickupStaff, v.pickupGuest, ...v.queue, ...v.wait, ...v.entry];
+  const v = sim.positions;
+  // No counter yet: the only thing to keep clear is the way in.
+  if (!sim.counter) return v.entry;
+  return [...serviceTiles(v), ...v.entry];
 }
 
 /** Spots that must stay reachable from the door. */
 function mustReach(sim: Sim): readonly (readonly [number, number])[] {
-  const v = sim.venue.positions;
-  return [v.tillStaff, v.foodStaff, v.pickupStaff, v.pickupGuest, v.queue[0]];
+  const v = sim.positions;
+  return sim.counter ? serviceTiles(v) : [];
 }
 
 /** You can't sell the last one of these. */
 function essential(sim: Sim): string[] {
-  return [sim.venue.drinkStation, 'sink', 'toilet'];
+  return [sim.venue.counter, sim.venue.drinkStation, 'sink', 'toilet'];
+}
+
+/** Why the service counter can't go to (x, y): its till, queue and pickup spots need open floor. */
+function counterProblem(sim: Sim, x: number, y: number, ignore: ObjectInst | null): string | null {
+  const w = sim.world;
+  for (const [tx, ty] of serviceTiles(servicePositions(sim.venue, x, y))) {
+    if (!w.inBounds(tx, ty)) return 'No room in front for the queue.';
+    const t = w.tile(tx, ty);
+    if (t.wall || t.door || isShell(sim, tx, ty)) return 'It needs open floor behind it for staff and in front for the queue.';
+    for (const o of sim.state.objects) {
+      if (o === ignore) continue;
+      if (footprint(o.def, o.x, o.y).some(([ox, oy]) => ox === tx && oy === ty)) return `The ${objectDef(o.def).label.toLowerCase()} is in the way of the queue or the till.`;
+    }
+  }
+  return null;
 }
 
 export function footprint(def: string, x: number, y: number): [number, number][] {
@@ -287,13 +306,15 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
   const d = objectDef(def);
   const w = sim.world;
   const tiles = footprint(def, x, y);
+  if (d.serviceCounter && sim.state.pawns.some((p) => p.kind === 'guest')) return 'Wait until the customers have gone.';
   for (const [tx, ty] of tiles) {
     if (!w.inBounds(tx, ty)) return "That's off the edge.";
     const t = w.tile(tx, ty);
     if (t.wall) return "There's a wall in the way.";
     if (t.door) return "That would block a door.";
     if (d.floors && !d.floors.includes(t.floor)) return `${d.label}s don't go there.`;
-    if (keepClear(sim).some(([kx, ky]) => kx === tx && ky === ty)) return 'That spot has to stay clear for service.';
+    // A counter brings its own service spots along with it (checked below).
+    if (!d.serviceCounter && keepClear(sim).some(([kx, ky]) => kx === tx && ky === ty)) return 'That spot has to stay clear for service.';
     for (const o of sim.state.objects) {
       if (o === ignore) continue;
       if (footprint(o.def, o.x, o.y).some(([ox, oy]) => ox === tx && oy === ty)) return 'Something is already there.';
@@ -306,6 +327,7 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
     const sy = y + dy;
     if (!w.inBounds(sx, sy) || w.tile(sx, sy).wall) return "Nobody could get to it there.";
   }
+  if (d.serviceCounter) return counterProblem(sim, x, y, ignore);
   return null;
 }
 
@@ -313,7 +335,7 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
 export function reachProblem(sim: Sim): string | null {
   const s = sim.state;
   const seen = new Uint8Array(s.w * s.h);
-  const [ex, ey] = sim.venue.positions.entry[0];
+  const [ex, ey] = sim.positions.entry[0];
   const stack: [number, number][] = [[ex, ey]];
   seen[ey * s.w + ex] = 1;
   while (stack.length > 0) {
@@ -366,7 +388,8 @@ export function moveObject(sim: Sim, id: number, x: number, y: number): string |
 
 export function buyObject(sim: Sim, def: string, x: number, y: number): string | null {
   const d = objectDef(def);
-  if (d.price === undefined || d.fixed) return "That's not for sale.";
+  if (d.price === undefined || d.fixed || (d.serviceCounter && def !== sim.venue.counter)) return "That's not for sale.";
+  if (d.serviceCounter && sim.counter) return `There's already a ${d.label.toLowerCase()}. Drag it to move it.`;
   if (!canSpend(sim, d.price)) return "The bank won't lend any more. Get back in the black first.";
   const problem = placementProblem(sim, def, x, y);
   if (problem) return problem;

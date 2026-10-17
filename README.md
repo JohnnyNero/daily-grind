@@ -33,11 +33,17 @@ Open the site, then use your browser's *Add to Home Screen* (Share → Add to Ho
 
 ## Starting a game
 
-The start screen offers **Continue** (your saved place), **New game** and **Import save**. A new game asks what you're opening, then shows your starting team in the **character creator**: tap someone to change their name, skin, hair and up to three traits with a live preview, or use *New face* for a random person, *Add someone* (up to 8), *Remove* and *Shuffle everyone*. *Open the doors* starts day one.
+The start screen offers **Continue** (your saved place), **New game** and **Import save**. A new game asks what you're opening and how to start (see *Empty lot* below), then shows your starting team in the **character creator**: tap someone to change their name, skin, hair and up to three traits with a live preview, or use *New face* for a random person, *Add someone* (up to 8), *Remove* and *Shuffle everyone*. *Open the doors* starts day one.
 
 ## Venues
 
 There are two so far: **the café** (mornings, flat whites, cake) and **the pub** (evenings, pints, crisps, quiz night, stag dos). To switch, open the venue panel's **Save** tab and tap *New game*. Or add `?venue=pub` to the address to skip straight in. Venues live in `src/sim/venues.ts`, so adding one is mostly data.
+
+## Empty lot
+
+Pick **Empty lot** instead of *Ready to open* to start from four walls, a front door, bare floor and £8,000 (the standard start has £500 and everything fitted). The game opens paused in build mode. Lay out the rooms with walls, doors and floors, then buy everything, the counter included. Nobody comes in, gets paid or orders anything until there's a counter and a drinks machine; a red alert lists what's still missing, and the build bar suggests what to get next (sink, toilet, seats, staff sofa). Machines and sinks need counter or kitchen floor, toilets need toilet floor, and staff furniture needs staff room floor. Rent still runs while you build. Add `?layout=empty` to the address (with `?venue=`) to skip straight in.
+
+The till, queue and pickup point are worked out from the counter, so they move with it (shown as dashed squares in build mode: green for staff, amber for customers). The counter needs open floor behind it for staff and in front for the queue, can only be moved while no customers are in, and you can't sell your only one. This works in the standard layouts too.
 
 ## How it plays
 
@@ -114,7 +120,8 @@ src/
     regulars.ts  guests who come back, remember, and hold grudges
     wants.ts     what each staff member would like to happen
     ambience.ts  cleanliness, looks, spills and slips
-    venues.ts    each venue as data: map, furniture, menu, hours, rhythm, wording
+    venues.ts    each venue as data: map, furniture, menu, hours, rhythm, wording; the empty shell and counter-relative service spots
+    fitout.ts    what a place needs before it can open
     path.ts      A* pathfinding
   render/    canvas drawing in the Pawn style
   ui/        touch input, the HUD, the start screen and the character creator

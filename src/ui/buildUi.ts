@@ -5,6 +5,7 @@
 // Every change goes through sim/manage.ts or sim/structure.ts, which validate it.
 
 import { OBJECT_DEFS, objectDef } from '../sim/defs';
+import { openingShortfall, fitOut } from '../sim/fitout';
 import { buyObject, moveObject, placementProblem, sellObject, sellValue } from '../sim/manage';
 import type { Sim } from '../sim/sim';
 import type { ObjectInst } from '../sim/state';
@@ -331,12 +332,14 @@ export class BuildUi {
   private confirmBuy(): void {
     const b = this.buying;
     if (!b) return;
+    const wasReady = this.sim.canTrade;
     const err = buyObject(this.sim, b.def, b.x, b.y);
     if (err) {
       this.hooks.notify(err, 'bad');
       return;
     }
-    this.hooks.notify(`Bought a ${objectDef(b.def).label.toLowerCase()}.`, 'neutral');
+    if (!wasReady && this.sim.canTrade) this.hooks.notify('That\'s enough to open. The team come in for their next shift.', 'good');
+    else this.hooks.notify(`Bought a ${objectDef(b.def).label.toLowerCase()}.`, 'neutral');
     this.furnitureChanged();
     this.clear();
   }
@@ -355,7 +358,14 @@ export class BuildUi {
 
   private renderTools(): void {
     if (this.mode === 'furniture') {
-      const buyable = Object.values(OBJECT_DEFS).filter((d) => d.price !== undefined && !d.fixed);
+      // One service counter per place, and only the venue's own kind.
+      const buyable = Object.values(OBJECT_DEFS).filter((d) => d.price !== undefined && !d.fixed &&
+        (!d.serviceCounter || (d.id === this.sim.venue.counter && !this.sim.counter)));
+      // Until it can open, what it still needs goes first.
+      if (!this.sim.canTrade) {
+        const first = [this.sim.venue.counter, this.sim.venue.drinkStation];
+        buyable.sort((a, b) => Number(first.includes(b.id)) - Number(first.includes(a.id)));
+      }
       this.tools.replaceChildren(...buyable.map((d) => h('button', {
         type: 'button', 'aria-pressed': String(this.buying?.def === d.id),
         onclick: () => (this.buying?.def === d.id ? this.clear() : this.startBuying(d.id)),
@@ -390,8 +400,12 @@ export class BuildUi {
     }
     if (o) {
       const d = objectDef(o.def);
+      if (d.serviceCounter) return `Drag the ${d.label.toLowerCase()} to move it: the till, queue and pickup come with it. Only while there are no customers in.`;
       return d.fixed ? `The ${d.label.toLowerCase()} is fixed in place.` : `Drag the ${d.label.toLowerCase()} to move it, or sell it for ${pounds(sellValue(o.def))}.`;
     }
+    const todo = fitOut(this.sim).filter((i) => !i.done);
+    if (!this.sim.canTrade) return `${openingShortfall(this.sim)} Pick it below, drag it into place and buy it (machines need counter or kitchen floor: paint some in Floors).${todo.some((i) => !i.needed) ? ` Then: ${todo.filter((i) => !i.needed).map((i) => i.label.toLowerCase()).join(', ')}.` : ''}`;
+    if (todo.length > 0) return `Still to get: ${todo.map((i) => i.label.toLowerCase()).join(', ')}. Drag furniture to move it, or pick something below.`;
     return 'Drag furniture to move it, tap it to sell, or pick something below to buy.';
   }
 

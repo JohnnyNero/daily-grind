@@ -223,6 +223,12 @@ export function storytellerEveryMinute(sim: Sim): void {
   const s = sim.state;
   const story = s.story;
   s.conditions = s.conditions.filter((c) => c.until > s.tick);
+  // Still being fitted out: no customers, no inspectors, no drama.
+  if (!sim.canTrade) {
+    story.incoming = null;
+    story.pendingArrivals = 0;
+    return;
+  }
 
   // A rush that was announced lands.
   if (story.incoming && s.tick >= story.incoming.at) {
