@@ -114,8 +114,11 @@ export { standardCounter as counterPieces };
  * An empty lot: the pavement out front and bare ground everywhere else, the back plot
  * included. No walls, no doors: where the building goes is up to the player.
  */
-export function bareLot(rows: readonly string[], floor: string, plotWidth: number): string[] {
-  return rows.map((row) => (row[0] === 'P' ? 'P'.repeat(row.length + plotWidth) : floor.repeat(row.length) + 'Y'.repeat(plotWidth)));
+export function bareLot(rows: readonly string[], floor: string, plotWidth: number, extraRows = 0): string[] {
+  const ground = floor.repeat(rows[0].length) + 'Y'.repeat(plotWidth);
+  const out = rows.map((row) => (row[0] === 'P' ? 'P'.repeat(row.length + plotWidth) : ground));
+  // More room at the back too: nothing on an empty lot is fixed but the pavement.
+  return [...Array.from({ length: extraRows }, () => ground), ...out];
 }
 
 const CAFE: VenueDef = {

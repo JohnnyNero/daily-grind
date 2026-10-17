@@ -44,6 +44,8 @@ const STEP_TIMEOUT_TICKS = 2 * TICKS_PER_HOUR;
 const START_TICK = 6 * TICKS_PER_HOUR;
 /** Money to build on an empty lot: about what the standard fit-out, its walls and floors cost, and a bit over. */
 export const EMPTY_LOT_MONEY = 1000000;
+/** An empty lot runs further back than the ready-made buildings. */
+const EMPTY_LOT_EXTRA_ROWS = 10;
 
 /** How a new place starts: fitted out and ready to open, or an empty shell to build from scratch. */
 export type StartLayout = 'fitted' | 'empty';
@@ -85,7 +87,7 @@ export class Sim {
     }
     const venue = venueDef(venueId);
     const empty = layout === 'empty';
-    const map = parseMap(empty ? bareLot(venue.map, venue.frontFloors[0], PLOT_W) : withPlot(venue.map));
+    const map = parseMap(empty ? bareLot(venue.map, venue.frontFloors[0], PLOT_W, EMPTY_LOT_EXTRA_ROWS) : withPlot(venue.map));
     this.state = {
       version: SAVE_VERSION,
       venue: venue.id,

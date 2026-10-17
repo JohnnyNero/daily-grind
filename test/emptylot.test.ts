@@ -31,16 +31,19 @@ function fitOut(sim: Sim): void {
 describe('empty lot', () => {
   it('is bare ground with no walls or doors: the pavement is all that is fixed', () => {
     for (const v of Object.values(VENUES)) {
-      const rows = bareLot(v.map, v.frontFloors[0], 9);
+      const rows = bareLot(v.map, v.frontFloors[0], 20, 10);
       expect(rows.join('')).not.toMatch(/[#dD]/);
-      expect(rows[22]).toBe('P'.repeat(25));
+      expect(rows).toHaveLength(34);
+      expect(rows[32]).toBe('P'.repeat(36));
     }
     const sim = new Sim(5, undefined, 'cafe', 'empty');
     expect(sim.state.tiles.some((t) => t.wall || t.door)).toBe(false);
     // Corners, edges and the shop front are all buildable; the pavement isn't.
     expect(isShell(sim, 0, 0)).toBe(false);
-    expect(isShell(sim, 7, 21)).toBe(false);
-    expect(isShell(sim, 7, 22)).toBe(true);
+    // The map is bigger than the ready-made buildings: wider, and further back.
+    expect([sim.state.w, sim.state.h]).toEqual([36, 34]);
+    expect(isShell(sim, 7, 31)).toBe(false);
+    expect(isShell(sim, 7, 32)).toBe(true);
     expect(buildAt(sim, 0, 0, 'wall')).toBeNull();
     // People arrive anywhere along the pavement.
     expect(sim.entry.length).toBe(sim.state.w);
@@ -143,7 +146,7 @@ describe('zones', () => {
     const sim = new Sim(5, undefined, 'cafe', 'empty');
     expect(buildAt(sim, 0, 5, 'wall')).toBeNull();
     expect(paintZone(sim, 0, 5, 'queue')).toMatch(/open floor/);
-    expect(paintZone(sim, 7, 22, 'queue')).toMatch(/inside/);
+    expect(paintZone(sim, 7, sim.state.h - 2, 'queue')).toMatch(/inside/);
     expect(paintZone(sim, 5, 15, 'queue')).toBeNull();
     expect(buyObject(sim, 'plant', 5, 15)).toMatch(/clear for service/);
     expect(buildAt(sim, 5, 15, 'wall')).toMatch(/clear for service/);
@@ -198,6 +201,26 @@ describe('rotation', () => {
 });
 
 describe('older saves', () => {
+  it('widen a narrower back plot, opening its old far wall onto the new ground', () => {
+    const fresh = new Sim(3);
+    const old = JSON.parse(serialize(fresh)) as SimState;
+    // Cut it back to how saves looked with a 9-wide plot: walled along the far side and top.
+    const w = 25;
+    old.tiles = Array.from({ length: old.h }, (_, y) => old.tiles.slice(y * old.w, y * old.w + w)).flatMap((row) =>
+      row.map((t, x) => (x === w - 1 && t.floor !== 'P' ? { floor: 'B' as const, wall: true, door: false } : t)));
+    old.w = w;
+    const sim = deserialize(JSON.stringify(old));
+    expect(sim.state.w).toBe(36);
+    expect(sim.world.tile(24, 12)).toEqual({ floor: 'Y', wall: false, door: false });
+    expect(sim.world.tile(24, 0).wall).toBe(true);
+    expect(sim.world.tile(30, 0).wall).toBe(true);
+    expect(sim.world.tile(35, 12).wall).toBe(true);
+    expect(sim.world.tile(30, 12)).toEqual({ floor: 'Y', wall: false, door: false });
+    expect(sim.world.tile(30, 23).floor).toBe('P');
+    sim.run(TICKS_PER_DAY);
+    expect(sim.state.yesterday!.served).toBeGreaterThan(20);
+  });
+
   it('swap the one-piece counter for pieces and keep the old service spots', () => {
     const fresh = new Sim(3);
     const old = JSON.parse(serialize(fresh)) as SimState & { zones?: unknown };

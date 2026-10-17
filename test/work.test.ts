@@ -17,7 +17,8 @@ describe('sticky work', () => {
     setStation(sim, till, 'counter');
     for (const p of rest) setStation(sim, p, 'floor');
     const seen = new Map<number, Set<string>>();
-    let lastLabel = '';
+    // Whatever they were already in the middle of doesn't count.
+    let lastLabel = barista.job?.label ?? '';
     for (let t = 0; t < 2 * TICKS_PER_HOUR; t++) {
       sim.step();
       const label = barista.job?.label ?? '';

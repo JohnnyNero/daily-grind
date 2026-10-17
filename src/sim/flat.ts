@@ -8,7 +8,7 @@ import { reachProblem } from './manage';
 import { randInt } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_MINUTE, type Job, type Pawn } from './state';
-import { PLOT_W } from './world';
+import { FLAT_W, PLOT_W } from './world';
 
 /** Rent a live-in pays each night, pence. */
 export const FLAT_RENT = 800;
@@ -96,13 +96,13 @@ function plotIsBare(sim: Sim): boolean {
   const s = sim.state;
   const x0 = s.w - PLOT_W;
   for (let y = 1; y < s.h; y++) {
-    for (let x = x0; x < s.w - 1; x++) {
+    for (let x = x0; x < x0 + FLAT_W; x++) {
       const t = sim.world.tile(x, y);
       if (t.floor === 'P') continue;
       if (t.floor !== 'Y' || t.wall) return false;
     }
   }
-  return !s.objects.some((o) => o.x >= x0);
+  return !s.objects.some((o) => o.x >= x0 && o.x < x0 + FLAT_W);
 }
 
 /**
@@ -114,16 +114,19 @@ export function buildStaffFlat(sim: Sim): string | null {
   if (hasFlat(sim)) return "There's already a flat.";
   if (!plotIsBare(sim)) return "Something's already built on the plot. Use build mode to finish the flat by hand.";
   if (!canSpend(sim, FLAT_COST)) return "The bank won't lend for that.";
+  // The flat takes the near end of the plot, walled off from the rest of the yard.
   const x0 = s.w - PLOT_W;
+  const x1 = x0 + FLAT_W - 1;
   const top = 1;
   const bottom = 9;
   const before = s.tiles.map((t) => ({ ...t }));
   const set = (x: number, y: number, floor: 'R' | 'T' | 'S', wall = false, door = false) => {
     s.tiles[y * s.w + x] = { floor, wall, door };
   };
-  for (let y = top; y < bottom; y++) for (let x = x0; x < s.w - 1; x++) set(x, y, 'R');
-  for (let x = x0; x < s.w; x++) set(x, bottom, 'R', true);
-  set(s.w - 2, top, 'T');
+  for (let y = top; y < bottom; y++) for (let x = x0; x < x1; x++) set(x, y, 'R');
+  for (let y = top; y <= bottom; y++) set(x1, y, 'R', true);
+  for (let x = x0; x <= x1; x++) set(x, bottom, 'R', true);
+  set(x1 - 1, top, 'T');
   // A door from the staff room: the first wall tile on the plot's edge with staff room behind it.
   const doorY = [3, 2, 4, 1, 5].find((y) => {
     const inside = sim.world.tile(x0 - 2, y);
@@ -132,7 +135,7 @@ export function buildStaffFlat(sim: Sim): string | null {
   set(x0 - 1, doorY, 'S', false, true);
   const objects = [
     { def: 'bed', x: x0, y: top }, { def: 'bed', x: x0 + 1, y: top }, { def: 'bed', x: x0 + 2, y: top },
-    { def: 'fridge', x: x0 + 5, y: top }, { def: 'toilet', x: s.w - 2, y: top },
+    { def: 'fridge', x: x0 + 5, y: top }, { def: 'toilet', x: x1 - 1, y: top },
     { def: 'staffTable', x: x0 + 4, y: top + 4 }, { def: 'staffSofa', x: x0 + 1, y: bottom - 1 },
     { def: 'tv', x: x0 + 1, y: bottom - 3 },
   ];

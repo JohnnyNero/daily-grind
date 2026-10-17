@@ -243,6 +243,26 @@ export class Renderer {
         drawItem(ctx, kind, cx + TILE * 0.36, cy + TILE * 0.08 - bob, TILE * 0.3);
       }
     }
+    // Small name tags under the staff, so you can tell who's who at a glance.
+    const tagFont = Math.max(TILE * 0.26, 10 / this.camera.scale);
+    ctx.save();
+    ctx.font = `600 ${tagFont}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const p of pawns) {
+      if (!p.staff) continue;
+      const cx = (p.x + 0.5) * TILE;
+      const ty = (p.y + 0.5) * TILE + TILE * 0.62;
+      const w = ctx.measureText(p.name).width + tagFont * 0.8;
+      const h = tagFont * 1.35;
+      ctx.fillStyle = p.id === this.selectedId ? 'rgba(242, 196, 109, 0.95)' : 'rgba(29, 31, 35, 0.72)';
+      ctx.beginPath();
+      ctx.roundRect(cx - w / 2, ty - h / 2, w, h, h / 2);
+      ctx.fill();
+      ctx.fillStyle = p.id === this.selectedId ? '#1d1f23' : '#ffffff';
+      ctx.fillText(p.name, cx, ty + tagFont * 0.04);
+    }
+    ctx.restore();
     for (const p of pawns) {
       const kind = bubbleFor(p);
       if (kind) drawBubble(ctx, kind, (p.x + 0.85) * TILE, (p.y - 0.15) * TILE, TILE * 0.7);

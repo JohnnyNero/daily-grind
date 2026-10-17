@@ -7,7 +7,9 @@ import type { FloorKind, ObjectInst, SimState, Tile } from './state';
 const FLOOR_CHARS: Record<string, FloorKind> = { K: 'K', S: 'S', B: 'B', F: 'F', C: 'C', T: 'T', P: 'P', Y: 'Y', R: 'R', X: 'X' };
 
 /** Columns of empty yard added to the side of every venue: room for a staff flat. */
-export const PLOT_W = 9;
+export const PLOT_W = 20;
+/** How wide the plot was before it grew, and how wide the ready-made staff flat is. */
+export const FLAT_W = 9;
 
 /** The venue's map with the back plot alongside: yard, edged by wall, pavement along the front. */
 export function withPlot(rows: readonly string[]): string[] {
@@ -46,18 +48,44 @@ function neighbourFloor(rows: readonly string[], x: number, y: number, front = f
   return 'B';
 }
 
-/** Saves from before the back plot existed get it added alongside, coordinates unchanged. */
+/**
+ * Saves from before the back plot existed get it added alongside, and saves from when it
+ * was narrower get it widened. Coordinates never change: new ground is added on the right.
+ */
 export function addPlotToSave(s: SimState, venueMap: readonly string[]): void {
-  const oldW = venueMap[0].length;
-  if (s.w !== oldW) return;
-  const rows = withPlot(venueMap);
-  const plot = parseMap(rows);
+  const venueW = venueMap[0].length;
+  const target = venueW + PLOT_W;
+  if (s.w >= target) return;
+  if (s.w === venueW) {
+    const plot = parseMap(withPlot(venueMap));
+    const tiles: Tile[] = [];
+    for (let y = 0; y < s.h; y++) {
+      for (let x = 0; x < plot.w; x++) tiles.push(x < venueW ? s.tiles[y * venueW + x] : plot.tiles[y * plot.w + x]);
+    }
+    s.tiles = tiles;
+    s.w = plot.w;
+    return;
+  }
+  // A narrower plot: knock out its old far wall where bare yard was behind it, and extend.
+  const oldW = s.w;
+  const old = (x: number, y: number) => s.tiles[y * oldW + x];
   const tiles: Tile[] = [];
   for (let y = 0; y < s.h; y++) {
-    for (let x = 0; x < plot.w; x++) tiles.push(x < oldW ? s.tiles[y * oldW + x] : plot.tiles[y * plot.w + x]);
+    const pavement = old(oldW - 1, y).floor === 'P';
+    for (let x = 0; x < target; x++) {
+      if (x < oldW - 1) tiles.push(old(x, y));
+      else if (x === oldW - 1) {
+        const t = old(x, y);
+        const behind = old(x - 1, y);
+        const opened = !s.openLot && t.wall && !t.door && y > 0 && behind.floor === 'Y' && !behind.wall;
+        tiles.push(opened ? { floor: 'Y', wall: false, door: false } : t);
+      } else if (pavement) tiles.push({ floor: 'P', wall: false, door: false });
+      else if (!s.openLot && (y === 0 || x === target - 1)) tiles.push({ floor: 'Y', wall: true, door: false });
+      else tiles.push({ floor: 'Y', wall: false, door: false });
+    }
   }
   s.tiles = tiles;
-  s.w = plot.w;
+  s.w = target;
 }
 
 export class World {
