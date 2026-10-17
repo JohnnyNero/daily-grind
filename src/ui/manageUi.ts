@@ -1,6 +1,7 @@
 // Management panels: the team (rota, breaks, editing, hiring) and the café (menu, saving).
 // Build mode lives in buildUi.ts. All changes go through sim/manage.ts, which validates them.
 
+import { canCook } from '../sim/kitchen';
 import { MAX_STAFF, TRAITS, WORK_COLOURS, WORK_TYPES, objectDef, type TraitId, type WorkType } from '../sim/defs';
 import {
   editStaff, fire, hire, orderBreak, priceRatio, sendHomeEarly, setDaysOff, setEnabled, setPrice, setRushStation, setShift, setStation,
@@ -384,6 +385,7 @@ export class CafeUi {
       : ratio < 0.95
         ? `Prices are ${Math.round((1 - ratio) * 100)}% below usual: a little busier, but thinner margins. `
         : `Prices are ${ratio > 1.005 ? `${Math.round((ratio - 1) * 100)}% above usual` : 'at the usual level'}. `) + fine;
+    const cooking = canCook(this.sim);
     this.list.replaceChildren(...this.sim.state.menu.map((m) => {
       const change = (fn: () => string | null) => () => {
         const err = fn();
@@ -392,7 +394,9 @@ export class CafeUi {
       };
       const cls = m.price > m.basePrice ? 'price up' : m.price < m.basePrice ? 'price down' : 'price';
       return h('li', { className: m.enabled ? '' : 'off' },
-        h('span', { className: 'name' }, m.name),
+        h('span', { className: 'name' }, m.name,
+          // Hot food comes from the kitchen, and only while there's an oven and prep counter.
+          m.kind === 'hot' ? h('small', { className: 'kitchen-tag' }, cooking ? 'Cooked in the kitchen' : 'Needs an oven and prep counter') : ''),
         h('button', { type: 'button', 'aria-label': `${m.name} 10p cheaper`, onclick: change(() => setPrice(this.sim, m.name, m.price - 10)) }, '−'),
         h('span', { className: cls }, `£${(m.price / 100).toFixed(2)}`),
         h('button', { type: 'button', 'aria-label': `${m.name} 10p dearer`, onclick: change(() => setPrice(this.sim, m.name, m.price + 10)) }, '+'),

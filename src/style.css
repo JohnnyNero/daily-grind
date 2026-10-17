@@ -344,6 +344,7 @@ button.danger, .sheet .row button.danger, .recap-card .row button.danger { color
 .menu-list .price { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .menu-list .price.up { color: #b23a2c; }
 .menu-list .price.down { color: #2f6b3c; }
+.menu-list .kitchen-tag { display: block; color: #c0582b; font-size: 12px; font-weight: 600; text-decoration: none; }
 .menu-list button { min-width: 40px; padding: 0 8px; border: 0 !important; background: #f1eadd !important; font-size: 18px !important; }
 .menu-list li.off .price { color: #a89e90; }
 .switch {

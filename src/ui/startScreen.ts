@@ -159,7 +159,9 @@ class StartScreen {
           portrait(p.look, 56, p.name)),
         h('div', { className: 'person-info' },
           h('div', { className: 'top' }, h('strong', {}, p.name), h('span', {}, `${hhmm(p.shift.start)}–${hhmm(p.shift.end)}`)),
-          h('p', { className: 'hint' }, `${traits} · best at ${best.label.toLowerCase()}`),
+          h('p', { className: 'hint' }, p.staff!.station
+            ? `${traits} · on the ${WORK_TYPES.find((w) => w.id === p.staff!.station)!.label.toLowerCase()}`
+            : `${traits} · best at ${best.label.toLowerCase()}`),
           h('div', { className: 'row' },
             h('button', { type: 'button', onclick: () => this.edit(p) }, 'Edit'),
             h('button', { type: 'button', onclick: () => { rerollStarter(sim, p); this.team(); } }, 'New face'),

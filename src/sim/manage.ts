@@ -196,6 +196,8 @@ export function rerollStarter(sim: Sim, p: Pawn): void {
   p.look = { ...p.look, skin: pick(s, SKIN_TONES), hair: pick(s, HAIR_COLOURS), hairStyle: pick(s, HAIR_STYLES) };
   p.staff.traits = randomTraits(sim);
   for (const w of WORK_TYPES) p.staff.skills[w.id] = Math.round(randRange(s, 1, 8) * 10) / 10;
+  // A starter with a station (the cook) stays good at it.
+  if (p.staff.station) p.staff.skills[p.staff.station] = Math.max(p.staff.skills[p.staff.station], 5);
 }
 
 /** Adds someone to the starting team, on the venue's next default shift. */
@@ -204,7 +206,7 @@ export function addStarter(sim: Sim): Pawn | string {
   if (!isSetup(sim)) return 'The doors are already open; hire from the applicants instead.';
   if (staff.length >= MAX_STAFF) return `The café can't take more than ${MAX_STAFF} staff.`;
   const shifts = sim.venue.shifts;
-  return sim.addStaff({ ...shifts[staff.length % shifts.length] });
+  return sim.addStarterStaff(shifts[staff.length % shifts.length]);
 }
 
 /** Takes someone off the starting team. They were never hired, so nobody misses them. */

@@ -3,6 +3,7 @@
 
 import { DEBT_LIMIT, machineWear } from './business';
 import { openingShortfall } from './fitout';
+import { hotOnMenu } from './kitchen';
 import type { Sim } from './sim';
 import { STRESS_BURNT_OUT } from './stakes';
 import { TICKS_PER_MINUTE, type Pawn } from './state';
@@ -19,7 +20,7 @@ export interface Alert {
 
 const LEVEL_ORDER = { critical: 0, high: 1, medium: 2 } as const;
 
-function canDo(p: Pawn, work: 'counter' | 'barista'): boolean {
+function canDo(p: Pawn, work: 'counter' | 'barista' | 'kitchen'): boolean {
   const staff = p.staff!;
   return !staff.mentalBreak && (staff.station === work || staff.rushStation === work || staff.priorities[work] > 0);
 }
@@ -33,6 +34,7 @@ export function computeAlerts(sim: Sim): Alert[] {
   if (!sim.canTrade) out.push({ id: 'fitout', text: openingShortfall(sim) ?? 'Not ready to open', level: 'critical', panel: 'build' });
   if (open && staffIn.length > 0) {
     if (!staffIn.some((p) => canDo(p, 'counter'))) out.push({ id: 'noTill', text: 'Nobody can work the till', level: 'critical', panel: 'staff' });
+    if (hotOnMenu(sim) && !staffIn.some((p) => canDo(p, 'kitchen'))) out.push({ id: 'noCook', text: 'Nobody can cook', level: 'high', panel: 'staff' });
     if (!staffIn.some((p) => canDo(p, 'barista'))) out.push({ id: 'noBarista', text: `Nobody can work the ${sim.venue.text.noun === 'pub' ? 'bar' : 'machine'}`, level: 'critical', panel: 'staff' });
   }
   if (open && staffIn.length === 0 && sim.canTrade) out.push({ id: 'nobody', text: 'Open with nobody in', level: 'critical', panel: 'staff' });

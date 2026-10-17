@@ -2,6 +2,7 @@
 // queue → order → wait → collect → sit and eat, or take away → leave.
 // Patience drains while they queue and wait; at zero they walk out.
 
+import { canCook } from './kitchen';
 import { reservationKey } from './ai';
 import { GUEST_CLOTHES, HAIR_COLOURS, HAIR_STYLES, NEEDS, SKIN_TONES, objectDef, type NeedValues } from './defs';
 import { pick, randInt, random, randRange } from './rng';
@@ -40,7 +41,9 @@ export function guestsEveryMinute(sim: Sim): void {
     if (!v || !p.onMap) continue;
     // The clock starts once they're actually standing in line, not while they walk in.
     if ((v.state === 'queuing' && !p.moving) || v.state === 'waiting') {
-      v.patience = Math.max(0, v.patience - PATIENCE_DRAIN[v.state]);
+      // Anyone who ordered something cooked expects to wait a bit longer for it.
+      const hot = v.state === 'waiting' && v.items.some((name) => s.menu.find((m) => m.name === name)?.kind === 'hot');
+      v.patience = Math.max(0, v.patience - PATIENCE_DRAIN[v.state] * (hot ? 0.55 : 1));
       if (v.patience <= 0) walkOut(sim, p);
     }
   }
@@ -85,7 +88,9 @@ export function spawnGuest(sim: Sim, eatIn?: boolean): Pawn {
   const s = sim.state;
   const on = s.menu.filter((m) => m.enabled);
   const drinks = on.filter((m) => m.kind === 'drink');
-  let foods = sim.hasCondition('noFood') ? [] : on.filter((m) => m.kind === 'food');
+  // Hot food only while the kitchen can cook it.
+  const cooking = canCook(sim);
+  let foods = sim.hasCondition('noFood') ? [] : on.filter((m) => m.kind === 'food' || (m.kind === 'hot' && cooking));
   // Storyteller visitors (the critic, a birthday) can turn up when the only thing on the menu
   // is food that hasn't been delivered; they order it anyway rather than order nothing.
   if (drinks.length === 0 && foods.length === 0) foods = on.length > 0 ? on : s.menu;

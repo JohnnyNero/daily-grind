@@ -2,6 +2,7 @@
 // Mostly for the empty-lot start, where you build the whole thing yourself.
 
 import { objectDef } from './defs';
+import { canCook } from './kitchen';
 import { SERVICE_DEFS } from './service';
 import type { Sim } from './sim';
 
@@ -26,6 +27,7 @@ export function fitOut(sim: Sim): FitOutItem[] {
     { label: 'A queue area', done: hasTill && sim.positions.queue.length > 1, needed: false },
     { label: 'A pickup area', done: sim.positions.wait.length > 0, needed: false },
     { label: 'A food counter', done: has(SERVICE_DEFS.food), needed: false },
+    { label: 'An oven and prep counter for hot food', done: canCook(sim), needed: false },
     { label: 'A sink for the washing up', done: has('sink'), needed: false },
     { label: 'A toilet', done: has('toilet'), needed: false },
     { label: 'Somewhere to sit', done: seats, needed: false },

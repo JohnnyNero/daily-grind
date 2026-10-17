@@ -31,6 +31,9 @@ function fillDay(d: DayStats): void {
 }
 
 export function fillStaff(staff: StaffInfo, id: number, day: number): void {
+  // Saves from before the kitchen: a middling cook, and happy to help.
+  staff.skills.kitchen ??= Math.round((1 + hash(id, 5) * 5) * 10) / 10;
+  staff.priorities.kitchen ??= 3;
   staff.passions ??= passionsFor(id);
   staff.wage ??= askingWage(staff.skills);
   staff.stress ??= 0;
@@ -47,6 +50,7 @@ export function fillStaff(staff: StaffInfo, id: number, day: number): void {
 }
 
 export function fillApplicant(a: Applicant, salt: number): void {
+  a.skills.kitchen ??= Math.round((1 + hash(salt, 5) * 5) * 10) / 10;
   a.passions ??= passionsFor(salt);
   a.wage ??= askingWage(a.skills);
 }
@@ -66,6 +70,12 @@ export function normalize(sim: Sim): void {
   s.week ??= emptyWeek(sim, Math.floor((day - 1) / 7) + 1, day);
   s.story.incoming ??= null;
   migrateCounter(sim);
+  // Anything new on the venue's standard menu (the kitchen's hot food, say) reaches older saves.
+  for (const m of [...sim.venue.menu, ...sim.venue.unlocks.filter((u) => s.unlocked.includes(u.name))]) {
+    const have = s.menu.find((x) => x.name === m.name);
+    if (!have) s.menu.push({ name: m.name, kind: m.kind, basePrice: m.price, price: m.price, enabled: true });
+    else have.kind = m.kind;
+  }
   fillDay(s.today);
   if (s.yesterday) fillDay(s.yesterday);
   for (const r of s.recaps) fillDay(r.stats);

@@ -218,7 +218,7 @@ export function traitDef(id: TraitId): TraitDef {
 
 // ------------------------------------------------------------------ work
 
-export type WorkType = 'counter' | 'barista' | 'floor' | 'dishes' | 'cleaning';
+export type WorkType = 'counter' | 'barista' | 'kitchen' | 'floor' | 'dishes' | 'cleaning';
 
 export interface WorkTypeDef {
   id: WorkType;
@@ -230,6 +230,7 @@ export interface WorkTypeDef {
 export const WORK_TYPES: readonly WorkTypeDef[] = [
   { id: 'counter', label: 'Counter', description: 'Takes orders at the till and plates cake' },
   { id: 'barista', label: 'Barista', description: 'Makes the coffee' },
+  { id: 'kitchen', label: 'Kitchen', description: 'Cooks hot food: preps it, cooks it, sends it out' },
   { id: 'floor', label: 'Floor', description: 'Clears dirty cups from tables' },
   { id: 'dishes', label: 'Dishes', description: 'Washes up' },
   { id: 'cleaning', label: 'Cleaning', description: 'Mops up spills' },
@@ -239,6 +240,7 @@ export const WORK_TYPES: readonly WorkTypeDef[] = [
 export const WORK_COLOURS: Readonly<Record<WorkType, string>> = {
   counter: '#3f8a52',
   barista: '#8b5a3c',
+  kitchen: '#c0582b',
   floor: '#2e6f9e',
   dishes: '#2f9aa0',
   cleaning: '#7a5aa6',
@@ -251,6 +253,8 @@ export type Skills = Record<WorkType, number>;
 export const TASK_MINUTES = {
   takeOrder: 0.6,
   plateCake: 0.5,
+  prepHot: 1,
+  cookHot: 2.5,
   placeItem: 0.15,
   pickDishes: 0.3,
   dropDishes: 0.2,
@@ -261,7 +265,8 @@ export const TASK_MINUTES = {
 
 // ------------------------------------------------------------------ menu
 
-export type ItemKind = 'drink' | 'food';
+/** Drinks from the machine, food plated at the counter, hot food cooked in the kitchen. */
+export type ItemKind = 'drink' | 'food' | 'hot';
 
 export interface MenuItem {
   name: string;

@@ -41,6 +41,8 @@ export interface Look {
 export type Action =
   | { type: 'takeOrder'; guestId: number }
   | { type: 'makeItem'; orderId: number; index: number }
+  /** Hot food: chopping and assembling before it goes in the oven. */
+  | { type: 'prepItem'; orderId: number; index: number }
   | { type: 'placeItem'; orderId: number; index: number }
   | { type: 'pickDishes'; objectId: number }
   | { type: 'dropDishes' }

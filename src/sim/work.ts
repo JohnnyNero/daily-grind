@@ -14,6 +14,7 @@ import { TICKS_PER_MINUTE, type Action, type Job, type ObjectInst, type Pawn, ty
 import { chargeIngredients, machineWear, wearMachine } from './business';
 import { allHands } from './calls';
 import { addMemory, hasTrait } from './thoughts';
+import { KITCHEN_KIT, canCook, hotBacklog } from './kitchen';
 
 const MAX_WASH_BATCH = 6;
 
@@ -76,8 +77,9 @@ const RUSH: Record<WorkType, { start: number; end: number; backlog: (sim: Sim) =
   counter: { start: 4, end: 2, backlog: (sim) => sim.state.queue.length },
   barista: {
     start: 4, end: 2,
-    backlog: (sim) => sim.state.orders.reduce((n, o) => n + o.items.filter((i) => i.status === 'todo' && i.kind !== 'food').length, 0),
+    backlog: (sim) => sim.state.orders.reduce((n, o) => n + o.items.filter((i) => i.status === 'todo' && i.kind === 'drink').length, 0),
   },
+  kitchen: { start: 3, end: 1, backlog: hotBacklog },
   floor: { start: 3, end: 1, backlog: (sim) => Object.values(sim.state.dirty).filter((n) => n > 0).length },
   dishes: { start: 8, end: 4, backlog: (sim) => sim.state.sinkDirty },
   cleaning: { start: 2, end: 1, backlog: (sim) => sim.state.spills.length },
@@ -167,7 +169,7 @@ export function findWork(sim: Sim, p: Pawn): Job | null {
 function postFor(sim: Sim, work: WorkType): [number, number] | null {
   const s = sim.state;
   if (work === 'counter') return [...sim.positions.tillStaff] as [number, number];
-  const def = work === 'barista' ? sim.venue.drinkStation : work === 'dishes' ? 'sink' : null;
+  const def = work === 'barista' ? sim.venue.drinkStation : work === 'dishes' ? 'sink' : work === 'kitchen' ? KITCHEN_KIT.oven : null;
   const o = def ? s.objects.find((x) => x.def === def) : undefined;
   const spot = o ? sim.world.spots(o).find(([x, y]) => sim.world.passable(x, y)) : undefined;
   return spot ? [spot[0], spot[1]] : null;
@@ -176,6 +178,7 @@ function postFor(sim: Sim, work: WorkType): [number, number] | null {
 const POST_LABELS: Partial<Record<WorkType, string>> = {
   counter: 'Waiting at the till',
   barista: 'Waiting by the machine',
+  kitchen: 'Waiting in the kitchen',
   dishes: 'Waiting by the sink',
 };
 
@@ -254,7 +257,10 @@ function scanTasks(sim: Sim, p: Pawn): Task[] {
       if (item.status !== 'todo') return;
       const key = `item:${order.id}:${index}`;
       if (sim.isReservedByOther(key, p)) return;
-      if (item.kind === 'food') {
+      if (item.kind === 'hot') {
+        const task = cookTask(sim, p, enabled, order.id, index, item.name, key);
+        if (task) tasks.push(task);
+      } else if (item.kind === 'food') {
         if (!enabled.has('counter') || sim.isReservedByOther('cake', p)) return;
         const [cx, cy] = sim.positions.foodStaff;
         tasks.push({
@@ -341,6 +347,47 @@ function scanTasks(sim: Sim, p: Pawn): Task[] {
   return tasks;
 }
 
+/** A free spot at one of these objects, nearest the pawn: the object, which spot, and where. */
+function freeSpot(sim: Sim, p: Pawn, def: string): { o: ObjectInst; index: number; x: number; y: number } | null {
+  let best: { o: ObjectInst; index: number; x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (const o of sim.state.objects) {
+    if (o.def !== def) continue;
+    sim.world.spots(o).forEach(([x, y], index) => {
+      if (!sim.world.passable(x, y) || sim.isReservedByOther(reservationKey(o.id, index), p)) return;
+      const d = Math.hypot(x - p.x, y - p.y);
+      if (d < bestD) {
+        bestD = d;
+        best = { o, index, x, y };
+      }
+    });
+  }
+  return best;
+}
+
+/** Kitchen: prep a hot dish, cook it, and take it out to the pickup. Needs a free prep counter and oven. */
+function cookTask(sim: Sim, p: Pawn, enabled: Set<WorkType>, orderId: number, index: number, name: string, key: string): Task | null {
+  if (!enabled.has('kitchen') || !canCook(sim)) return null;
+  const prep = freeSpot(sim, p, KITCHEN_KIT.prep);
+  const oven = freeSpot(sim, p, KITCHEN_KIT.oven);
+  if (!prep || !oven) return null;
+  return {
+    work: 'kitchen', x: prep.x, y: prep.y,
+    build: () => withPath(sim, p, `Cooking ${withArticle(name)}`, prep.x, prep.y, (job) => {
+      sim.reserve(job, p, key);
+      sim.reserve(job, p, reservationKey(prep.o.id, prep.index));
+      sim.reserve(job, p, reservationKey(oven.o.id, oven.index));
+      return [
+        actStep(p, 'kitchen', { type: 'prepItem', orderId, index }, TASK_MINUTES.prepHot),
+        sim.gotoStep(oven.x, oven.y),
+        actStep(p, 'kitchen', { type: 'makeItem', orderId, index }, TASK_MINUTES.cookHot),
+        sim.gotoStep(sim.positions.pickupStaff[0], sim.positions.pickupStaff[1]),
+        actStep(p, 'kitchen', { type: 'placeItem', orderId, index }, TASK_MINUTES.placeItem),
+      ];
+    }),
+  };
+}
+
 /** Builds a job that walks to (x, y) and then runs the given steps; null if unreachable. */
 function withPath(sim: Sim, p: Pawn, label: string, x: number, y: number, rest: (job: Job) => Step[]): Job | null {
   const go = sim.gotoStep(x, y);
@@ -400,7 +447,8 @@ export function validateAction(sim: Sim, p: Pawn, a: Action, starting: boolean):
       }
       return true;
     }
-    case 'makeItem': {
+    case 'makeItem':
+    case 'prepItem': {
       const item = s.orders.find((o) => o.id === a.orderId)?.items[a.index];
       return item?.status === 'todo';
     }
@@ -454,7 +502,7 @@ export function performAction(sim: Sim, p: Pawn, a: Action): void {
     case 'makeItem': {
       const item = s.orders.find((o) => o.id === a.orderId)!.items[a.index];
       item.status = 'carried';
-      item.quality = workQuality(p, item.kind === 'drink' ? 'barista' : 'counter');
+      item.quality = workQuality(p, item.kind === 'drink' ? 'barista' : item.kind === 'hot' ? 'kitchen' : 'counter');
       chargeIngredients(sim, s.menu.find((m) => m.name === item.name)?.basePrice ?? item.price);
       if (item.kind === 'drink') {
         // The machine they're stood at wears a little with every drink, and a worn one makes worse coffee.
@@ -467,6 +515,9 @@ export function performAction(sim: Sim, p: Pawn, a: Action): void {
       p.carrying = { kind: item.kind, orderId: a.orderId, index: a.index };
       return;
     }
+    case 'prepItem':
+      // Nothing to show yet: the cooking is what makes it.
+      return;
     case 'placeItem': {
       const item = s.orders.find((o) => o.id === a.orderId)!.items[a.index];
       p.carrying = null;

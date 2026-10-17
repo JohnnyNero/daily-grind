@@ -41,7 +41,7 @@ describe('simulation', () => {
   it('brings staff in for their shift and sends them home after', () => {
     const sim = new Sim(7);
     sim.run(4 * TICKS_PER_HOUR); // 06:00 -> 10:00
-    expect(sim.state.pawns.filter((p) => p.kind === 'staff' && p.onMap).length).toBe(3);
+    expect(sim.state.pawns.filter((p) => p.kind === 'staff' && p.onMap).length).toBe(4);
     sim.run(13 * TICKS_PER_HOUR); // -> 23:00
     expect(sim.isQuiet()).toBe(true);
   });
@@ -172,11 +172,11 @@ describe('mood and people', () => {
     startBreak(sim, p, 'quit');
     sim.run(30 * TICKS_PER_MINUTE);
     expect(sim.pawnById(p.id)).toBeUndefined();
-    expect(sim.state.pawns.filter((x) => x.staff)).toHaveLength(3);
+    expect(sim.state.pawns.filter((x) => x.staff)).toHaveLength(4);
     expect(sim.state.applicants.length).toBe(3);
     const hired = hire(sim, 0);
     expect(typeof hired).not.toBe('string');
-    expect(sim.state.pawns.filter((x) => x.staff)).toHaveLength(4);
+    expect(sim.state.pawns.filter((x) => x.staff)).toHaveLength(5);
     expect(sim.state.applicants.length).toBe(2);
   });
 });
@@ -368,7 +368,7 @@ describe('regulars and depth', () => {
     const loaded = deserialize(JSON.stringify(old));
     expect(loaded.state.version).toBe(SAVE_VERSION);
     expect(loaded.state.venue).toBe('cafe');
-    expect(loaded.state.menu.every((m) => m.kind === 'drink' || m.kind === 'food')).toBe(true);
+    expect(loaded.state.menu.every((m) => m.kind === 'drink' || m.kind === 'food' || m.kind === 'hot')).toBe(true);
     expect(loaded.state.regulars).toEqual([]);
     expect(loaded.state.pawns.find((p) => p.staff)!.staff!.priorities.cleaning).toBe(3);
     loaded.run(TICKS_PER_HOUR);

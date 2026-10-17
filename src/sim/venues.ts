@@ -75,7 +75,8 @@ export interface VenueDef {
   hours: { open: number; close: number; lastArrival: number };
   /** Expected arrivals per hour at a minute of the day, before reputation. */
   arrivals: (minute: number) => number;
-  shifts: readonly { start: number; end: number }[];
+  /** The opening team's shifts; a station makes that starter a specialist (the café's cook). */
+  shifts: readonly { start: number; end: number; station?: WorkType }[];
   /** Daily rent, pence, before business rates. */
   rentPerDay: number;
   uniform: { shirt: string; apron: string | null };
@@ -189,12 +190,17 @@ const CAFE: VenueDef = {
     { name: 'mocha', kind: 'drink', price: 370 },
     { name: 'slice of carrot cake', kind: 'food', price: 350 },
     { name: 'brownie', kind: 'food', price: 300 },
+    // Cooked to order in the kitchen.
+    { name: 'bacon roll', kind: 'hot', price: 450 },
+    { name: 'cheese toastie', kind: 'hot', price: 520 },
   ],
   unlocks: [
     { stars: 2, name: 'iced latte', kind: 'drink', price: 380 },
+    { stars: 2, name: 'eggs on toast', kind: 'hot', price: 550 },
     { stars: 3, name: 'chai latte', kind: 'drink', price: 370 },
     { stars: 3, name: 'cinnamon bun', kind: 'food', price: 340 },
     { stars: 4, name: 'pour-over', kind: 'drink', price: 460 },
+    { stars: 4, name: 'full breakfast', kind: 'hot', price: 950 },
     { stars: 5, name: 'house banana bread', kind: 'food', price: 380 },
   ],
   hours: { open: h(7), close: h(17), lastArrival: h(16, 45) },
@@ -212,6 +218,8 @@ const CAFE: VenueDef = {
     { start: h(7), end: h(15) },
     { start: h(7, 30), end: h(12, 30) },
     { start: h(10, 30), end: h(17, 30) },
+    // The cook: breakfast and lunch in the kitchen.
+    { start: h(7, 30), end: h(14, 30), station: 'kitchen' },
   ],
   uniform: { shirt: '#2b2e35', apron: '#c8955f' },
   workLabels: {},

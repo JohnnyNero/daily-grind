@@ -26,7 +26,7 @@ import {
 import { addMemory, driftMood, expireMemories, hasTrait, opinionFromMemories } from './thoughts';
 import { abandonAction, findWork, performAction, standByJob, updateRushes, validateAction } from './work';
 import { World, addPlotToSave, parseMap, withPlot } from './world';
-import { emptyDay } from './business';
+import { askingWage, emptyDay } from './business';
 import { morningBooks } from './books';
 import { friendsMayFollow } from './careers';
 import { checkGoals } from './goals';
@@ -127,8 +127,21 @@ export class Sim {
     normalize(this);
     // The opening team all work day one, and take their days off on different days after.
     venue.shifts.forEach((shift, i) => {
-      this.addStaff({ ...shift }).staff!.daysOff = [1 + (i % 6)];
+      this.addStarterStaff(shift).staff!.daysOff = [1 + (i % 6)];
     });
+  }
+
+  /** Someone for the opening team on one of the venue's shifts: a specialist if the shift has a station. */
+  addStarterStaff(shift: { start: number; end: number; station?: WorkType }): Pawn {
+    const p = this.addStaff({ start: shift.start, end: shift.end });
+    if (shift.station) {
+      const staff = p.staff!;
+      staff.station = shift.station;
+      staff.priorities[shift.station] = 1;
+      staff.skills[shift.station] = Math.max(staff.skills[shift.station], 5);
+      staff.wage = askingWage(staff.skills);
+    }
+    return p;
   }
 
   get venue(): VenueDef {

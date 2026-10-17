@@ -161,6 +161,15 @@ export function drawStationBadge(
       ctx.arc(cx + u * 0.65, cy - u * 0.05, u * 0.35, -Math.PI / 2, Math.PI / 2);
       ctx.stroke();
       break;
+    case 'kitchen':
+      // A frying pan.
+      ctx.arc(cx - u * 0.2, cy + u * 0.15, u * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(cx + u * 0.35, cy - u * 0.3);
+      ctx.lineTo(cx + u * 0.95, cy - u * 0.85);
+      ctx.stroke();
+      break;
     case 'floor':
       // A tray with a cup on it.
       ctx.moveTo(cx - u, cy + u * 0.55);
@@ -305,14 +314,29 @@ export function drawBubble(
   ctx.restore();
 }
 
-/** Small top-down item: a coffee cup, a slice of cake, or a dirty cup. */
+/** Small top-down item: a coffee cup, a slice of cake, a hot plate, or a dirty cup. */
 export function drawItem(ctx: CanvasRenderingContext2D, kind: ItemKind | 'dirty', cx: number, cy: number, size: number): void {
   const r = size / 2;
   ctx.save();
   ctx.lineJoin = 'round';
   ctx.strokeStyle = OUTLINE;
   ctx.lineWidth = Math.max(1, size / 9);
-  if (kind === 'food') {
+  if (kind === 'hot') {
+    // A plate with something toasted and a wisp of steam.
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#d99a3e';
+    ctx.fillRect(cx - r * 0.55, cy - r * 0.35, r * 1.1, r * 0.7);
+    ctx.strokeRect(cx - r * 0.55, cy - r * 0.35, r * 1.1, r * 0.7);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.15, cy - r * 0.45);
+    ctx.quadraticCurveTo(cx - r * 0.4, cy - r * 0.8, cx - r * 0.1, cy - r * 1.15);
+    ctx.stroke();
+  } else if (kind === 'food') {
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);

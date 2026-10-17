@@ -63,6 +63,16 @@ Furniture and walls can't go on zones or service spots. Older saves are converte
 
 **Rotating**: select furniture (or something you're buying) and tap **Rotate**, or press **R**. Where people sit or stand to use it turns with it, so a till turned sideways serves from the side.
 
+## The kitchen
+
+The café cooks hot food to order: **bacon rolls** and **cheese toasties** from the start, **eggs on toast** at two stars and a **full breakfast** at four. A cook preps each dish at a **prep counter**, cooks it in an **oven**, then carries it out to the pickup. That's the **Kitchen** job, with its own skill, priority and station (frying-pan badge).
+
+- The opening team includes a cook (7:30 to 14:30, stationed in the kitchen, kitchen skill 5 or better). When the kitchen is quiet they help out front like any station.
+- Hot food takes a few minutes, so customers who order it are more patient while they wait. It costs more, and pulls people off the floor if nobody's stationed in the kitchen.
+- One oven and one prep counter cook one dish at a time. Buy more to have two cooks going at once.
+- No oven or prep counter (sold, or not built yet on an empty lot): hot food comes off the menu automatically. The Menu tab marks hot dishes "Cooked in the kitchen" or "Needs an oven and prep counter". An alert shows if hot food is on and nobody on shift can cook.
+- Older saves get the new dishes, and everyone gets a kitchen skill and priority 3.
+
 ## How it plays
 
 You run the place; your staff decide what to do. The puzzle is keeping it running as it gets busier, and the people are both the problem and the reward.
@@ -139,6 +149,7 @@ src/
     wants.ts     what each staff member would like to happen
     ambience.ts  cleanliness, looks, spills and slips
     venues.ts    each venue as data: map, furniture, menu, hours, rhythm, wording; the empty shell
+    kitchen.ts   hot food: whether the kitchen can cook, and its backlog
     service.ts   where service happens: till, pickup and food counter pieces, queue and pickup zones
     fitout.ts    what a place needs before it can open
     path.ts      A* pathfinding
