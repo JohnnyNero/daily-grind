@@ -9,10 +9,12 @@ import { AlertsUi, CallsUi, InboxUi, type InboxHooks } from './ui/inboxUi';
 import { loadFromDevice, saveToDevice } from './ui/save';
 import { showStartScreen } from './ui/startScreen';
 
-/** Ticks per real second at 1x: one in-game minute per real second. */
-const BASE_TICKS_PER_SECOND = TICKS_PER_MINUTE;
+/** Ticks per real second at 1x. */
+// At 1x an in-game minute takes 2.5 real seconds: slow enough to follow who's doing what
+// (a drink takes about three seconds, people walk at a stroll). 3x and 8x for getting on.
+const BASE_TICKS_PER_SECOND = TICKS_PER_MINUTE / 2.5;
 /** While nobody is on site the clock races ahead (about an in-game hour every 0.3s). */
-const FAST_FORWARD = 200;
+const FAST_FORWARD = 500;
 /** Never simulate more than this per frame, so a slow phone can't spiral. */
 const MAX_TICKS_PER_FRAME = 20000;
 const AUTOSAVE_MS = 60_000;
@@ -64,6 +66,17 @@ function play(sim: Sim): void {
     },
   );
   hud.setSpeed(speed);
+  // Something big (a letter, a meltdown, a rush on its way) drops fast-forward back to 1x,
+  // so you see it happen.
+  const slowDown = () => {
+    if (speed > 1) {
+      speed = 1;
+      hud.setSpeed(speed);
+    }
+  };
+  hud.onBigEvent = slowDown;
+  let lettersSeen = sim.state.letters.length;
+  let rushSeen = sim.state.story.incoming?.at ?? null;
 
   const hooks = {
     notify: (text: string, tone: 'good' | 'bad' | 'neutral' = 'neutral') => hud.notify(text, tone),
@@ -161,6 +174,11 @@ function play(sim: Sim): void {
     lastView = view;
     hud.update(selected, fastForwarding, now);
     alerts.update(now);
+    if (sim.state.letters.length > lettersSeen) slowDown();
+    lettersSeen = sim.state.letters.length;
+    const incoming = sim.state.story.incoming?.at ?? null;
+    if (incoming !== null && incoming !== rushSeen) slowDown();
+    rushSeen = incoming;
     inbox.update();
     calls.update();
     requestAnimationFrame(frame);

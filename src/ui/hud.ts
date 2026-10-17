@@ -11,7 +11,12 @@ import { el, hhmm, setupTabs } from './dom';
 import { stars } from '../sim/business';
 import { WEEKDAYS, weekday } from '../sim/stakes';
 
-const TOAST_MS = 7000;
+/** Every story stays up at least this long, so it can be read. */
+const TOAST_MIN_MS = 4000;
+/** Longer stories get a little longer (per character). */
+const TOAST_PER_CHAR_MS = 45;
+/** Stories waiting their turn; past this, everyday chatter is dropped. */
+const TOAST_QUEUE = 4;
 
 /** Mood reasons shown before "Show more". */
 const TOP_REASONS = 4;
@@ -72,9 +77,9 @@ export class Hud {
   private events = el('events');
   private recapBox = el('recap');
   private recapsSeen = 0;
-  private lastLogCount = 0;
-  private lastLogTick = -1;
   private toastUntil = 0;
+  private toastQueue: LogEntry[] = [];
+  private lastEntry: LogEntry | null = null;
   private toastPawn: number | null = null;
   private needFills = new Map<string, { fill: HTMLElement; value: HTMLElement }>();
   private speedButtons: HTMLButtonElement[];
@@ -86,7 +91,7 @@ export class Hud {
     private readonly onSelect: (pawnId: number) => void,
   ) {
     this.toast.addEventListener('click', () => {
-      this.toast.hidden = true;
+      // Tapping a toast jumps to who it's about, and moves on to the next story.
       this.toastUntil = 0;
       if (this.toastPawn !== null) this.onSelect(this.toastPawn);
     });
@@ -282,22 +287,50 @@ export class Hud {
     button.setAttribute('aria-label', `${p.name}, ${label}: ${value === 0 ? 'off' : `priority ${value}`}, skill ${skill}${station}`);
   }
 
-  /** Shows the newest log entry as a toast, and keeps the Recent list current. */
+  /**
+   * Queues new log entries as toasts and shows them one at a time, each long enough to
+   * read. When it's busy, everyday chatter makes way for proper stories.
+   */
   private updateLog(now: number): void {
     const log = this.sim.state.log;
-    const newest = log[log.length - 1];
-    if (newest && (newest.tick !== this.lastLogTick || log.length !== this.lastLogCount)) {
-      this.lastLogTick = newest.tick;
-      this.lastLogCount = log.length;
-      this.toast.textContent = newest.text;
-      this.toast.className = `toast ${newest.tone}`;
-      this.toastPawn = newest.pawn !== null && this.sim.pawnById(newest.pawn) ? newest.pawn : null;
-      this.toast.hidden = false;
-      this.toastUntil = now + TOAST_MS;
+    // New entries since last frame. The log is capped, so if our place fell off the
+    // front, take the last few; on the very first frame, start from now.
+    let fresh: LogEntry[] = [];
+    if (this.lastEntry === null) {
+      this.lastEntry = log[log.length - 1] ?? null;
+    } else if (log[log.length - 1] !== this.lastEntry) {
+      const at = log.lastIndexOf(this.lastEntry);
+      fresh = at >= 0 ? log.slice(at + 1) : log.slice(-3);
+    }
+    if (fresh.length > 0) {
+      this.lastEntry = log[log.length - 1];
+      for (const e of fresh) {
+        const chatter = !e.tale && e.interest === 0 && e.tone === 'neutral';
+        if (chatter && this.toastQueue.length >= 2) continue;
+        this.toastQueue.push(e);
+        if (e.interest >= 6) this.onBigEvent?.();
+      }
+      while (this.toastQueue.length > TOAST_QUEUE) {
+        const i = this.toastQueue.findIndex((e) => !e.tale);
+        this.toastQueue.splice(i >= 0 ? i : 0, 1);
+      }
       if (this.staffPanelOpen) this.renderEvents(log);
     }
-    if (!this.toast.hidden && now > this.toastUntil) this.toast.hidden = true;
+    if (now < this.toastUntil) return;
+    const next = this.toastQueue.shift();
+    if (!next) {
+      this.toast.hidden = true;
+      return;
+    }
+    this.toast.textContent = this.toastQueue.length > 0 ? `${next.text}  (+${this.toastQueue.length})` : next.text;
+    this.toast.className = `toast ${next.tone}`;
+    this.toastPawn = next.pawn !== null && this.sim.pawnById(next.pawn) ? next.pawn : null;
+    this.toast.hidden = false;
+    this.toastUntil = now + TOAST_MIN_MS + next.text.length * TOAST_PER_CHAR_MS;
   }
+
+  /** Set by main: something big happened (worth slowing down for). */
+  onBigEvent: (() => void) | null = null;
 
   private renderEvents(log: LogEntry[]): void {
     this.events.replaceChildren(
