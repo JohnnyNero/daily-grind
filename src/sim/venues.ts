@@ -15,6 +15,7 @@ export interface PlacedObject {
   def: string;
   x: number;
   y: number;
+  rot?: number;
 }
 
 type Tile = readonly [number, number];
@@ -59,10 +60,12 @@ export interface VenueDef {
   drinkStation: string;
   /** Minutes to make one drink at skill 5. */
   drinkMinutes: number;
-  /** The service counter (counter, bar): the till, the queue and pickup are worked out from where it stands. */
+  /** Plain counter sections this venue sells (counter, bar). */
   counter: string;
-  /** Where things happen during service, with the counter at its usual spot (COUNTER_HOME). */
-  positions: ServicePositions;
+  /** Pavement tiles where people arrive and leave. */
+  entry: readonly Tile[];
+  /** The standard layout's queue and pickup areas. */
+  zones: { queue: readonly Tile[]; pickup: readonly Tile[] };
   guestSeating: readonly string[];
   /** Floor kinds that count as front of house (for looks). */
   frontFloors: readonly string[];
@@ -82,46 +85,26 @@ export interface VenueDef {
 
 const h = (hours: number, minutes = 0) => hours * 60 + minutes;
 
-// Both starter venues share one floor plan shape, so service positions line up.
+// Both starter venues share one floor plan shape, so the counter and zones line up.
 const ENTRY: readonly Tile[] = [[6, 23], [7, 23], [8, 23], [9, 23]];
-const SERVICE = {
-  entry: ENTRY,
-  tillStaff: [8, 8] as Tile,
-  queue: [[8, 10], [9, 10], [10, 10], [11, 10], [12, 10], [13, 10], [13, 11]] as readonly Tile[],
-  foodStaff: [1, 8] as Tile,
-  pickupStaff: [5, 8] as Tile,
-  pickupGuest: [5, 10] as Tile,
-  wait: [[3, 10], [4, 10], [6, 10], [2, 10], [4, 11], [5, 11], [8, 11], [9, 11]] as readonly Tile[],
+
+/**
+ * The standard counter along row 9: food counter, sections, pickup, sections, till, section.
+ * Staff work it from row 8; customers queue and collect along row 10.
+ */
+function standardCounter(section: string): PlacedObject[] {
+  const pieces = ['foodCounter', section, section, section, 'pickup', section, section, 'till', section];
+  return pieces.map((def, i) => ({ def, x: 1 + i, y: 9 }));
+}
+
+const STANDARD_ZONES = {
+  queue: [[9, 10], [10, 10], [11, 10], [12, 10], [13, 10], [13, 11]] as readonly Tile[],
+  pickup: [[3, 10], [4, 10], [6, 10], [2, 10], [4, 11], [5, 11], [8, 11], [9, 11]] as readonly Tile[],
 };
 
-/** Where the counter stands in the standard layouts; the service spots above are drawn around it. */
-export const COUNTER_HOME: Tile = [1, 9];
-
-const shifted = new Map<string, ServicePositions>();
-
-/** The service spots for a counter standing at (x, y). The front door doesn't move. */
-export function servicePositions(venue: VenueDef, x: number, y: number): ServicePositions {
-  const dx = x - COUNTER_HOME[0];
-  const dy = y - COUNTER_HOME[1];
-  const p = venue.positions;
-  if (dx === 0 && dy === 0) return p;
-  const key = `${venue.id}:${x}:${y}`;
-  let out = shifted.get(key);
-  if (!out) {
-    const at = ([tx, ty]: Tile): Tile => [tx + dx, ty + dy];
-    out = {
-      entry: p.entry, tillStaff: at(p.tillStaff), queue: p.queue.map(at), foodStaff: at(p.foodStaff),
-      pickupStaff: at(p.pickupStaff), pickupGuest: at(p.pickupGuest), wait: p.wait.map(at),
-    };
-    shifted.set(key, out);
-  }
-  return out;
-}
-
-/** Every service spot that has to be open floor, front door aside. */
-export function serviceTiles(p: ServicePositions): Tile[] {
-  return [p.tillStaff, p.foodStaff, p.pickupStaff, p.pickupGuest, ...p.queue, ...p.wait];
-}
+/** Before the counter came in pieces it was one 9-wide object at x, y; older saves still have it. */
+export const LEGACY_COUNTER_W = 9;
+export { standardCounter as counterPieces };
 
 /**
  * The same building with nothing in it: the outside walls and the front door stay,
@@ -177,7 +160,7 @@ const CAFE: VenueDef = {
     { def: 'lockers', x: 14, y: 1 },
     { def: 'staffTable', x: 11, y: 3 },
     { def: 'espresso', x: 2, y: 7 },
-    { def: 'counter', x: 1, y: 9 },
+    ...standardCounter('counter'),
     { def: 'plant', x: 1, y: 10 },
     { def: 'plant', x: 14, y: 10 },
     { def: 'table4', x: 2, y: 12 },
@@ -193,7 +176,8 @@ const CAFE: VenueDef = {
   drinkStation: 'espresso',
   counter: 'counter',
   drinkMinutes: 1.1,
-  positions: SERVICE,
+  entry: ENTRY,
+  zones: STANDARD_ZONES,
   guestSeating: ['table4', 'table2', 'armchair'],
   frontFloors: ['F'],
   menu: [
@@ -303,7 +287,7 @@ const PUB: VenueDef = {
     { def: 'lockers', x: 14, y: 1 },
     { def: 'staffTable', x: 11, y: 3 },
     { def: 'taps', x: 2, y: 7 },
-    { def: 'bar', x: 1, y: 9 },
+    ...standardCounter('bar'),
     { def: 'table4', x: 2, y: 12 },
     { def: 'poolTable', x: 7, y: 13 },
     { def: 'armchair', x: 13, y: 12 },
@@ -317,7 +301,8 @@ const PUB: VenueDef = {
   drinkStation: 'taps',
   counter: 'bar',
   drinkMinutes: 1,
-  positions: SERVICE,
+  entry: ENTRY,
+  zones: STANDARD_ZONES,
   guestSeating: ['table4', 'table2', 'armchair'],
   frontFloors: ['C'],
   menu: [

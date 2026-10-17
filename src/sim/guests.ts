@@ -171,6 +171,10 @@ export function guestTick(sim: Sim, p: Pawn): void {
         if (i >= 0) {
           s.reservations[`wait:${i}`] = p.id;
           goTo(sim, p, `Waiting for ${v.items.join(' and ')}`, sim.positions.wait[i][0], sim.positions.wait[i][1]);
+        } else {
+          const aside = standAside(sim, p);
+          if (aside) goTo(sim, p, `Waiting for ${v.items.join(' and ')}`, aside[0], aside[1]);
+          else p.job = sim.makeJob(`Waiting for ${v.items.join(' and ')}`, [{ kind: 'wait', ticksLeft: TICKS_PER_MINUTE }]);
         }
       }
       return;
@@ -232,18 +236,49 @@ function seatTile(sim: Sim, key: string | null): [number, number] | null {
   const [, objectId, spot] = key.split(':').map(Number);
   const o = sim.world.objectById(objectId);
   if (!o) return null;
-  const [dx, dy] = objectDef(o.def).spots[spot];
-  return [o.x + dx, o.y + dy];
+  return sim.world.spots(o)[spot] ?? null;
 }
 
 function holdsWaitSpot(sim: Sim, p: Pawn): boolean {
   return sim.positions.wait.some((_, n) => sim.state.reservations[`wait:${n}`] === p.id);
 }
 
+/** Lets go of any waiting spot, including one the pickup area no longer has (it was repainted). */
 function releaseWaitSpot(sim: Sim, p: Pawn): void {
-  sim.positions.wait.forEach((_, n) => {
-    if (sim.state.reservations[`wait:${n}`] === p.id) delete sim.state.reservations[`wait:${n}`];
-  });
+  const r = sim.state.reservations;
+  for (const key of Object.keys(r)) if (key.startsWith('wait:') && r[key] === p.id) delete r[key];
+}
+
+/**
+ * No waiting spot free (or no pickup area at all): step out of the queue to the nearest
+ * open tile that isn't a queue or service spot and nobody else is standing on.
+ */
+function standAside(sim: Sim, p: Pawn): [number, number] | null {
+  const s = sim.state;
+  const pos = sim.positions;
+  const busy = new Set([...pos.queue, pos.tillStaff, pos.pickupStaff, pos.foodStaff, pos.pickupGuest].map(([x, y]) => y * s.w + x));
+  for (const o of s.pawns) if (o !== p && o.onMap && o.visit?.state === 'waiting') busy.add(Math.round(o.y) * s.w + Math.round(o.x));
+  const [sx, sy] = pos.pickupGuest;
+  const here = Math.round(p.y) * s.w + Math.round(p.x);
+  if (!busy.has(here) && Math.abs(p.x - sx) + Math.abs(p.y - sy) <= 6) return null;
+  const seen = new Set([sy * s.w + sx]);
+  let frontier: [number, number][] = [[sx, sy]];
+  for (let d = 0; d < 12 && frontier.length > 0; d++) {
+    const next: [number, number][] = [];
+    for (const [x, y] of frontier) {
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const i = ny * s.w + nx;
+        if (seen.has(i) || !sim.world.passable(nx, ny)) continue;
+        seen.add(i);
+        if (!busy.has(i) && s.tiles[i].floor !== 'P') return [nx, ny];
+        next.push([nx, ny]);
+      }
+    }
+    frontier = next;
+  }
+  return null;
 }
 
 function collect(sim: Sim, p: Pawn): void {
@@ -333,11 +368,8 @@ function findSeat(sim: Sim, p: Pawn): { key: string; objectId: number; x: number
     if (!sim.venue.guestSeating.includes(o.def)) continue;
     // Nobody sits down at a table full of someone else's dirty cups.
     if ((s.dirty[o.id] ?? 0) > 0) continue;
-    const spots = objectDef(o.def).spots;
-    spots.forEach(([dx, dy], i) => {
+    sim.world.spots(o).forEach(([x, y], i) => {
       const key = reservationKey(o.id, i);
-      const x = o.x + dx;
-      const y = o.y + dy;
       if (s.reservations[key] !== undefined || !sim.world.passable(x, y)) return;
       const d = Math.hypot(x - p.x, y - p.y);
       if (d < bestD) {

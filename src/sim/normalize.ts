@@ -1,6 +1,7 @@
 // Fills in anything a state is missing: new games get their defaults here, and older
 // saves pick up new systems without a version bump. Safe to run more than once.
 
+import { migrateCounter } from './service';
 import { STARTING_FAME, askingWage, emptyDay, emptyWeek } from './business';
 import { WORK_TYPES, type WorkType } from './defs';
 import type { Sim } from './sim';
@@ -64,6 +65,7 @@ export function normalize(sim: Sim): void {
   s.weeklyReports ??= [];
   s.week ??= emptyWeek(sim, Math.floor((day - 1) / 7) + 1, day);
   s.story.incoming ??= null;
+  migrateCounter(sim);
   fillDay(s.today);
   if (s.yesterday) fillDay(s.yesterday);
   for (const r of s.recaps) fillDay(r.stats);

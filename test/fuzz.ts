@@ -3,8 +3,9 @@
 
 import { HAIR_STYLES, OBJECT_DEFS, TRAITS, WORK_TYPES } from '../src/sim/defs';
 import {
-  buyObject, editStaff, fire, hire, moveObject, orderBreak, sellObject, sendHomeEarly, setEnabled, setPrice, setShift,
+  buyObject, editStaff, fire, hire, moveObject, orderBreak, rotateObject, sellObject, sendHomeEarly, setEnabled, setPrice, setShift,
 } from '../src/sim/manage';
+import { paintZone } from '../src/sim/service';
 import type { Sim } from '../src/sim/sim';
 import { fireEvent } from '../src/sim/storyteller';
 
@@ -37,16 +38,22 @@ export function chaosAction(sim: Sim, r: FuzzRng): string {
       const o = r.pick(s.objects);
       const x = r.int(0, s.w - 1);
       const y = r.int(0, s.h - 1);
-      return `move ${o.def} to ${x},${y}: ${moveObject(sim, o.id, x, y) ?? 'ok'}`;
+      const rot = r.int(0, 3) as 0 | 1 | 2 | 3;
+      return `move ${o.def} to ${x},${y} turned ${rot}: ${moveObject(sim, o.id, x, y, rot) ?? 'ok'}`;
     }
     case 1: {
-      const def = r.pick(Object.values(OBJECT_DEFS).filter((d) => d.price !== undefined)).id;
       const x = r.int(0, s.w - 1);
       const y = r.int(0, s.h - 1);
+      if (r.next() < 0.3) {
+        const tool = r.pick(['queue', 'pickup', 'clear'] as const);
+        return `zone ${tool} at ${x},${y}: ${paintZone(sim, x, y, tool) ?? 'ok'}`;
+      }
+      const def = r.pick(Object.values(OBJECT_DEFS).filter((d) => d.price !== undefined)).id;
       return `buy ${def} at ${x},${y}: ${buyObject(sim, def, x, y) ?? 'ok'}`;
     }
     case 2: {
       const o = r.pick(s.objects);
+      if (r.next() < 0.5) return `rotate ${o.def}: ${rotateObject(sim, o.id) ?? 'ok'}`;
       return `sell ${o.def}: ${sellObject(sim, o.id) ?? 'ok'}`;
     }
     case 3: {

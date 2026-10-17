@@ -1,6 +1,6 @@
 // Map construction and spatial queries.
 
-import { objectDef } from './defs';
+import { footprint, objectDef, rotationOf, spotsAt } from './defs';
 import type { PlacedObject } from './venues';
 import type { FloorKind, ObjectInst, SimState, Tile } from './state';
 
@@ -68,8 +68,12 @@ export class World {
     this.rebuild();
   }
 
-  /** Recomputes which tiles furniture blocks; call after objects move, appear or go. */
+  /** Goes up whenever the layout changes, so anything worked out from it knows to look again. */
+  version = 0;
+
+  /** Recomputes which tiles furniture blocks; call after objects move, appear or go (or zones change). */
   rebuild(): void {
+    this.version++;
     this.blocked.fill(0);
     for (const o of this.s.objects) this.markObject(o);
   }
@@ -92,15 +96,15 @@ export class World {
   };
 
   placeObject(p: PlacedObject): ObjectInst {
-    const def = objectDef(p.def);
-    for (let dy = 0; dy < def.h; dy++) {
-      for (let dx = 0; dx < def.w; dx++) {
-        if (!this.passable(p.x + dx, p.y + dy)) throw new Error(`Can't place ${p.def} at ${p.x},${p.y}: tile taken`);
-      }
+    const rot = rotationOf(p);
+    for (const [x, y] of footprint(p.def, p.x, p.y, rot)) {
+      if (!this.passable(x, y)) throw new Error(`Can't place ${p.def} at ${p.x},${p.y}: tile taken`);
     }
     const inst: ObjectInst = { id: this.s.nextId++, def: p.def, x: p.x, y: p.y };
+    if (rot) inst.rot = rot;
     this.s.objects.push(inst);
     this.markObject(inst);
+    this.version++;
     return inst;
   }
 
@@ -110,14 +114,16 @@ export class World {
 
   /** Spot tiles of an object, in world coordinates. */
   spots(o: ObjectInst): [number, number][] {
-    return objectDef(o.def).spots.map(([dx, dy]) => [o.x + dx, o.y + dy]);
+    return spotsAt(o.def, o.x, o.y, rotationOf(o));
+  }
+
+  /** The tiles it covers. */
+  tilesOf(o: ObjectInst): [number, number][] {
+    return footprint(o.def, o.x, o.y, rotationOf(o));
   }
 
   private markObject(o: ObjectInst): void {
-    const def = objectDef(o.def);
-    if (!def.blocks) return;
-    for (let dy = 0; dy < def.h; dy++) {
-      for (let dx = 0; dx < def.w; dx++) this.blocked[(o.y + dy) * this.s.w + (o.x + dx)] = 1;
-    }
+    if (!objectDef(o.def).blocks) return;
+    for (const [x, y] of this.tilesOf(o)) this.blocked[y * this.s.w + x] = 1;
   }
 }

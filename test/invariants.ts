@@ -1,7 +1,6 @@
 // Things that must always be true about a running sim. Used by the stress tests and the
 // soak script: any message returned is a bug.
 
-import { objectDef } from '../src/sim/defs';
 import type { Sim } from '../src/sim/sim';
 import { TICKS_PER_HOUR } from '../src/sim/state';
 
@@ -67,11 +66,19 @@ export function checkInvariants(sim: Sim): string[] {
     if (!objIds.has(Number(id))) bad(`dirty cups on missing object ${id}`);
     if (!(n > 0)) bad(`dirty count ${n} on ${id}`);
   }
+  const covered = new Map<number, number>();
   for (const o of s.objects) {
-    const d = objectDef(o.def);
-    for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) {
-      if (!sim.world.inBounds(o.x + dx, o.y + dy) || sim.world.tile(o.x + dx, o.y + dy).wall) bad(`${o.def} ${o.id} overlaps a wall`);
+    for (const [x, y] of sim.world.tilesOf(o)) {
+      if (!sim.world.inBounds(x, y) || sim.world.tile(x, y).wall) bad(`${o.def} ${o.id} overlaps a wall`);
+      const other = covered.get(y * s.w + x);
+      if (other !== undefined) bad(`${o.def} ${o.id} overlaps object ${other}`);
+      covered.set(y * s.w + x, o.id);
     }
+  }
+  // Service spots and zones stay clear of furniture.
+  const pos = sim.positions;
+  for (const [x, y] of [pos.tillStaff, pos.pickupStaff, pos.pickupGuest, ...pos.queue, ...pos.wait]) {
+    if (sim.canTrade && covered.has(y * s.w + x)) bad(`service spot ${x},${y} is under furniture`);
   }
   for (const sp of s.spills) if (sim.world.tile(sp.x, sp.y).wall) bad('spill in a wall');
   return problems;

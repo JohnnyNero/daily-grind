@@ -31,6 +31,24 @@ function disc(ctx: Ctx, x: number, y: number, r: number, fill: string, lw = 2): 
 }
 
 const WOOD = '#b07d52';
+
+/** A counter section: a slab with a lip along the staff side and a darker front, no side edges so pieces join. */
+function counterBase(ctx: Ctx, x: number, y: number, W: number, H: number, p: number, body: string, top: string): void {
+  ctx.fillStyle = body;
+  ctx.fillRect(x, y + p, W, H - 2 * p);
+  ctx.fillStyle = top;
+  ctx.fillRect(x, y + p, W, H * 0.24);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+  ctx.fillRect(x, y + H - p - H * 0.14, W, H * 0.14);
+  ctx.strokeStyle = OUTLINE;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y + p);
+  ctx.lineTo(x + W, y + p);
+  ctx.moveTo(x, y + H - p);
+  ctx.lineTo(x + W, y + H - p);
+  ctx.stroke();
+}
 const CHAIR = '#7d5233';
 
 export function drawFloorTile(ctx: Ctx, kind: FloorKind, x: number, y: number, t: number): void {
@@ -161,16 +179,6 @@ export function drawObject(ctx: Ctx, def: string, x: number, y: number, w: numbe
       disc(ctx, x + W * 0.7, y + H * 0.65, t * 0.13, '#1d1d1f', 1.5);
       disc(ctx, x + W * 0.3, y + H * 0.65, t * 0.06, '#c8955f', 0);
       break;
-    case 'counter':
-      box(ctx, x + 1, y + p, W - 2, H - 2 * p, 3, '#6b4429');
-      ctx.fillStyle = '#8e5d3b';
-      ctx.fillRect(x + 2, y + p + 1, W - 4, H * 0.28);
-      // Till and cake display ride on the counter.
-      box(ctx, x + W - t * 1.6, y + H * 0.22, t * 0.9, H * 0.56, 2, '#2b2e35', 1.5);
-      box(ctx, x + t * 0.4, y + H * 0.18, t * 2.2, H * 0.64, 3, 'rgba(220,235,245,0.85)', 1.5);
-      disc(ctx, x + t * 0.95, y + H * 0.5, t * 0.17, '#e8b0a8', 1.2);
-      disc(ctx, x + t * 1.6, y + H * 0.5, t * 0.17, '#9a6b46', 1.2);
-      break;
     case 'staffSofa':
       box(ctx, x + p, y + p, W - 2 * p, H - 2 * p, 6, '#4f7f8a');
       box(ctx, x + p, y + p, W - 2 * p, H * 0.3, 4, '#3f6a74', 1.5);
@@ -237,18 +245,34 @@ export function drawObject(ctx: Ctx, def: string, x: number, y: number, w: numbe
       ctx.strokeStyle = OUTLINE;
       ctx.stroke();
       break;
+    // Counter pieces join up edge to edge: staff work from the top, customers face the bottom.
+    case 'counter':
+      counterBase(ctx, x, y, W, H, p, '#6b4429', '#8e5d3b');
+      break;
     case 'bar':
-      box(ctx, x + 1, y + p, W - 2, H - 2 * p, 3, '#4a2c1a');
-      ctx.fillStyle = '#6b4429';
-      ctx.fillRect(x + 2, y + p + 1, W - 4, H * 0.28);
-      // Pump handles along the bar, a till at the end, crisps by the pickup.
-      for (let i = 0; i < 4; i++) {
-        disc(ctx, x + t * (3.6 + i * 0.7), y + H * 0.55, t * 0.12, ['#c9973a', '#f2f2f2', '#8b2f3c', '#3f7d4f'][i], 1.2);
-      }
-      box(ctx, x + W - t * 1.6, y + H * 0.22, t * 0.9, H * 0.56, 2, '#2b2e35', 1.5);
-      box(ctx, x + t * 0.35, y + H * 0.2, t * 0.6, H * 0.6, 2, '#d6463b', 1.2);
-      box(ctx, x + t * 1.05, y + H * 0.2, t * 0.6, H * 0.6, 2, '#3f6fb5', 1.2);
-      box(ctx, x + t * 1.75, y + H * 0.2, t * 0.6, H * 0.6, 2, '#d8b45a', 1.2);
+      counterBase(ctx, x, y, W, H, p, '#4a2c1a', '#6b4429');
+      disc(ctx, x + W * 0.35, y + H * 0.58, t * 0.1, '#c9973a', 1.2);
+      disc(ctx, x + W * 0.65, y + H * 0.58, t * 0.1, '#f2f2f2', 1.2);
+      break;
+    case 'till':
+      counterBase(ctx, x, y, W, H, p, '#5a3a24', '#7d5233');
+      box(ctx, x + W * 0.2, y + H * 0.2, W * 0.6, H * 0.5, 2, '#2b2e35', 1.5);
+      box(ctx, x + W * 0.28, y + H * 0.27, W * 0.44, H * 0.16, 1, '#8fd19e', 1);
+      ctx.fillStyle = '#d8d8d8';
+      ctx.fillRect(x + W * 0.3, y + H * 0.5, W * 0.4, H * 0.08);
+      break;
+    case 'pickup':
+      counterBase(ctx, x, y, W, H, p, '#5a3a24', '#7d5233');
+      box(ctx, x + W * 0.14, y + H * 0.24, W * 0.72, H * 0.48, 3, '#e9e1d2', 1.5);
+      disc(ctx, x + W * 0.5, y + H * 0.42, t * 0.11, '#d4a63a', 1.2);
+      ctx.fillStyle = '#2b2e35';
+      ctx.fillRect(x + W * 0.47, y + H * 0.26, W * 0.06, H * 0.07);
+      break;
+    case 'foodCounter':
+      counterBase(ctx, x, y, W, H, p, '#5a3a24', '#7d5233');
+      box(ctx, x + W * 0.12, y + H * 0.18, W * 0.76, H * 0.6, 4, 'rgba(220,235,245,0.85)', 1.5);
+      disc(ctx, x + W * 0.36, y + H * 0.5, t * 0.14, '#e8b0a8', 1.2);
+      disc(ctx, x + W * 0.64, y + H * 0.5, t * 0.14, '#9a6b46', 1.2);
       break;
     case 'taps':
       box(ctx, x + p, y + p, W - 2 * p, H - 2 * p, 4, '#2b2e35');

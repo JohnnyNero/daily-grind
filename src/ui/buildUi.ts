@@ -1,12 +1,15 @@
-// Build mode. Three tabs:
-//   Furniture: drag anything to move it, tap to sell, pick from the palette to buy.
+// Build mode. Four tabs:
+//   Furniture: drag anything to move it, rotate it, tap to sell, pick from the palette to buy.
 //   Walls:     drag to build walls, put doors in them, or knock them out.
 //   Floors:    drag to lay floor; a room is whatever its floor says (kitchen, staff room...).
+//   Zones:     drag to mark where the queue runs and where customers wait for pickup.
 // Every change goes through sim/manage.ts or sim/structure.ts, which validate it.
 
-import { OBJECT_DEFS, objectDef } from '../sim/defs';
+import { OBJECT_DEFS, objectDef, rotatedSize, rotationOf, type Rotation } from '../sim/defs';
 import { openingShortfall, fitOut } from '../sim/fitout';
-import { buyObject, moveObject, placementProblem, sellObject, sellValue } from '../sim/manage';
+import { buyObject, moveObject, placementProblem, rotateObject, sellObject, sellValue } from '../sim/manage';
+import { SERVICE_DEFS, ZONE_TOOLS, paintZone, strayQueueTiles, type ZoneTool } from '../sim/service';
+import type { Zones } from '../sim/state';
 import type { Sim } from '../sim/sim';
 import type { ObjectInst } from '../sim/state';
 import {
@@ -18,7 +21,7 @@ import { el, h, setupTabs } from './dom';
 import { pounds } from './hud';
 import type { ManageHooks } from './manageUi';
 
-type Mode = 'furniture' | 'walls' | 'floors';
+type Mode = 'furniture' | 'walls' | 'floors' | 'zones';
 type WallTool = 'wall' | 'door' | 'remove';
 
 const WALL_TOOLS: readonly { id: WallTool; label: string; price: number; hint: string }[] = [
@@ -46,16 +49,21 @@ export class BuildUi {
   private sellButton = el<HTMLButtonElement>('build-sell');
   private cancelButton = el<HTMLButtonElement>('build-cancel');
   private confirmButton = el<HTMLButtonElement>('build-confirm');
+  private rotateButton = el<HTMLButtonElement>('build-rotate');
   private selectTab: (tab: string) => void;
 
   private mode: Mode = 'furniture';
   private wallTool: WallTool = 'wall';
   private floorTool = PAINTABLE_FLOORS[0].kind;
+  private zoneTool: ZoneTool = 'queue';
+  /** Painting zones: the zones before this stroke, and where it started. */
+  private zoneStroke: { before: Zones; start: [number, number]; last: [number, number] | null; problem: string | null } | null = null;
+  private zoneUndo: Zones | null = null;
   private selected: number | null = null;
   /** Furniture being bought: a ghost you drag into place, then confirm. */
-  private buying: { def: string; x: number; y: number } | null = null;
+  private buying: { def: string; x: number; y: number; rot: Rotation } | null = null;
   private drag: Drag | null = null;
-  private ghost: { def: string; x: number; y: number; ok: boolean } | null = null;
+  private ghost: { def: string; x: number; y: number; rot: Rotation; ok: boolean } | null = null;
   /** Painting walls or floors: the layout before this stroke, where it started and what it did. */
   private stroke: {
     before: LayoutSnapshot;
@@ -74,10 +82,18 @@ export class BuildUi {
       this.clear();
     });
     el('build-done').addEventListener('click', () => this.stop());
-    this.undoButton.addEventListener('click', () => this.undoStroke());
+    this.undoButton.addEventListener('click', () => (this.mode === 'zones' ? this.undoZones() : this.undoStroke()));
     this.sellButton.addEventListener('click', () => this.sell());
     this.cancelButton.addEventListener('click', () => this.clear());
     this.confirmButton.addEventListener('click', () => this.confirmBuy());
+    this.rotateButton.addEventListener('click', () => this.rotate());
+    window.addEventListener('keydown', (e) => {
+      if (!this.active || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement | null)?.closest('input, textarea, select')) return;
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        this.rotate();
+      }
+    });
     el('build-footfall').addEventListener('click', () => {
       this.footfall = !this.footfall;
       this.update();
@@ -94,6 +110,7 @@ export class BuildUi {
     this.hooks.refit?.();
     document.body.classList.add('building');
     this.undo = null;
+    this.zoneUndo = null;
     this.selectTab('furniture');
   }
 
@@ -120,6 +137,12 @@ export class BuildUi {
   dragStart(sx: number, sy: number): boolean {
     if (!this.active) return false;
     const [tx, ty] = this.renderer.screenToTile(sx, sy);
+    if (this.mode === 'zones') {
+      const z = this.sim.state.zones;
+      this.zoneStroke = { before: { queue: [...z.queue], pickup: [...z.pickup] }, start: [tx, ty], last: null, problem: null };
+      this.paintZonesTo(tx, ty);
+      return true;
+    }
     if (this.mode !== 'furniture') {
       this.stroke = { before: snapshotLayout(this.sim), start: [tx, ty], last: null, changed: 0, problem: null };
       this.paintTo(tx, ty);
@@ -127,8 +150,8 @@ export class BuildUi {
     }
     const b = this.buying;
     if (b) {
-      const d = objectDef(b.def);
-      if (tx >= b.x && tx < b.x + d.w && ty >= b.y && ty < b.y + d.h) {
+      const [w, h] = rotatedSize(objectDef(b.def), b.rot);
+      if (tx >= b.x && tx < b.x + w && ty >= b.y && ty < b.y + h) {
         this.drag = { object: null, def: b.def, grabX: tx - b.x, grabY: ty - b.y };
         return true;
       }
@@ -138,13 +161,17 @@ export class BuildUi {
     if (!o || objectDef(o.def).fixed) return false;
     this.selected = o.id;
     this.drag = { object: o, def: o.def, grabX: tx - o.x, grabY: ty - o.y };
-    this.ghost = { def: o.def, x: o.x, y: o.y, ok: true };
+    this.ghost = { def: o.def, x: o.x, y: o.y, rot: rotationOf(o), ok: true };
     this.update();
     return true;
   }
 
   dragMove(sx: number, sy: number): void {
     const [tx, ty] = this.renderer.screenToTile(sx, sy);
+    if (this.zoneStroke) {
+      this.paintZonesTo(tx, ty);
+      return;
+    }
     if (this.stroke) {
       this.paintTo(tx, ty);
       return;
@@ -158,11 +185,16 @@ export class BuildUi {
       this.buying.x = x;
       this.buying.y = y;
     }
-    this.ghost = { def: drag.def, x, y, ok: placementProblem(this.sim, drag.def, x, y, drag.object) === null };
+    const rot = this.buying?.rot ?? this.ghost?.rot ?? 0;
+    this.ghost = { def: drag.def, x, y, rot, ok: placementProblem(this.sim, drag.def, x, y, drag.object, rot) === null };
     this.update();
   }
 
   dragEnd(): void {
+    if (this.zoneStroke) {
+      this.finishZoneStroke();
+      return;
+    }
     if (this.stroke) {
       this.finishStroke();
       return;
@@ -172,8 +204,8 @@ export class BuildUi {
     if (!drag) return;
     if (drag.object && this.ghost) {
       const o = drag.object;
-      if (this.ghost.x !== o.x || this.ghost.y !== o.y) {
-        const err = moveObject(this.sim, o.id, this.ghost.x, this.ghost.y);
+      if (this.ghost.x !== o.x || this.ghost.y !== o.y || this.ghost.rot !== rotationOf(o)) {
+        const err = moveObject(this.sim, o.id, this.ghost.x, this.ghost.y, this.ghost.rot);
         if (err) this.hooks.notify(err, 'bad');
         else this.furnitureChanged();
       }
@@ -184,6 +216,11 @@ export class BuildUi {
 
   /** A second finger landed: they meant to pinch, so put back whatever the first finger did. */
   dragCancel(): void {
+    if (this.zoneStroke) {
+      this.sim.state.zones = this.zoneStroke.before;
+      this.sim.world.rebuild();
+      this.zoneStroke = null;
+    }
     if (this.stroke) {
       const err = this.stroke.changed > 0 ? restoreLayout(this.sim, this.stroke.before) : null;
       if (err) {
@@ -203,8 +240,8 @@ export class BuildUi {
     if (this.mode !== 'furniture') return;
     const [tx, ty] = this.renderer.screenToTile(sx, sy);
     if (this.buying) {
-      const d = objectDef(this.buying.def);
-      this.placeGhost(tx - Math.floor((d.w - 1) / 2), ty - Math.floor((d.h - 1) / 2));
+      const [w, h] = rotatedSize(objectDef(this.buying.def), this.buying.rot);
+      this.placeGhost(tx - Math.floor((w - 1) / 2), ty - Math.floor((h - 1) / 2));
       return;
     }
     const hit = this.renderer.objectAtTile(tx, ty);
@@ -293,6 +330,49 @@ export class BuildUi {
     this.update();
   }
 
+  // ---------------------------------------------------------------- zones
+
+  /** Repaints the box from the stroke's start to (tx, ty) over the zones as they were. */
+  private paintZonesTo(tx: number, ty: number): void {
+    const st = this.zoneStroke!;
+    if (st.last && st.last[0] === tx && st.last[1] === ty) return;
+    st.last = [tx, ty];
+    this.sim.state.zones = { queue: [...st.before.queue], pickup: [...st.before.pickup] };
+    st.problem = null;
+    const [sx, sy] = st.start;
+    for (let y = Math.min(sy, ty); y <= Math.max(sy, ty); y++) {
+      for (let x = Math.min(sx, tx); x <= Math.max(sx, tx); x++) {
+        // A single tile says why it can't be marked; a box just skips what it can't.
+        const err = paintZone(this.sim, x, y, this.zoneTool);
+        if (err) st.problem ??= err;
+      }
+    }
+    this.sim.world.rebuild();
+    this.update();
+  }
+
+  private finishZoneStroke(): void {
+    const st = this.zoneStroke!;
+    this.zoneStroke = null;
+    const z = this.sim.state.zones;
+    const changed = z.queue.join() !== st.before.queue.join() || z.pickup.join() !== st.before.pickup.join();
+    if (changed) this.zoneUndo = st.before;
+    else if (st.problem) this.hooks.notify(st.problem, 'bad');
+    const stray = strayQueueTiles(this.sim);
+    if (changed && this.zoneTool === 'queue' && stray > 0) {
+      this.hooks.notify(`${stray} queue tile${stray === 1 ? " isn't" : "s aren't"} joined up to the till, so nobody will queue there.`, 'bad');
+    }
+    this.update();
+  }
+
+  private undoZones(): void {
+    if (!this.zoneUndo) return;
+    this.sim.state.zones = this.zoneUndo;
+    this.zoneUndo = null;
+    this.sim.world.rebuild();
+    this.update();
+  }
+
   // ---------------------------------------------------------------- furniture
 
   /** Furniture changed, so a wall undo could now clash with it. */
@@ -317,7 +397,7 @@ export class BuildUi {
         }
       }
     }
-    this.buying = { def, x: best[0], y: best[1] };
+    this.buying = { def, x: best[0], y: best[1], rot: 0 };
     this.placeGhost(best[0], best[1]);
   }
 
@@ -325,7 +405,22 @@ export class BuildUi {
     const b = this.buying!;
     b.x = x;
     b.y = y;
-    this.ghost = { def: b.def, x, y, ok: placementProblem(this.sim, b.def, x, y) === null };
+    this.ghost = { def: b.def, x, y, rot: b.rot, ok: placementProblem(this.sim, b.def, x, y, null, b.rot) === null };
+    this.update();
+  }
+
+  /** A quarter turn: the thing being bought, or the selected furniture where it stands. */
+  private rotate(): void {
+    if (this.mode !== 'furniture') return;
+    if (this.buying) {
+      this.buying.rot = ((this.buying.rot + 1) % 4) as Rotation;
+      this.placeGhost(this.buying.x, this.buying.y);
+      return;
+    }
+    if (this.selected === null) return;
+    const err = rotateObject(this.sim, this.selected);
+    if (err) this.hooks.notify(err, 'bad');
+    else this.furnitureChanged();
     this.update();
   }
 
@@ -333,7 +428,7 @@ export class BuildUi {
     const b = this.buying;
     if (!b) return;
     const wasReady = this.sim.canTrade;
-    const err = buyObject(this.sim, b.def, b.x, b.y);
+    const err = buyObject(this.sim, b.def, b.x, b.y, b.rot);
     if (err) {
       this.hooks.notify(err, 'bad');
       return;
@@ -358,12 +453,14 @@ export class BuildUi {
 
   private renderTools(): void {
     if (this.mode === 'furniture') {
-      // One service counter per place, and only the venue's own kind.
+      // Only this venue's counter sections, and one of each service point.
+      const objects = this.sim.state.objects;
       const buyable = Object.values(OBJECT_DEFS).filter((d) => d.price !== undefined && !d.fixed &&
-        (!d.serviceCounter || (d.id === this.sim.venue.counter && !this.sim.counter)));
+        (!d.counterSection || d.id === this.sim.venue.counter) &&
+        (!d.service || !objects.some((o) => o.def === d.id)));
       // Until it can open, what it still needs goes first.
       if (!this.sim.canTrade) {
-        const first = [this.sim.venue.counter, this.sim.venue.drinkStation];
+        const first = [SERVICE_DEFS.till, SERVICE_DEFS.pickup, this.sim.venue.drinkStation];
         buyable.sort((a, b) => Number(first.includes(b.id)) - Number(first.includes(a.id)));
       }
       this.tools.replaceChildren(...buyable.map((d) => h('button', {
@@ -375,6 +472,11 @@ export class BuildUi {
         type: 'button', 'aria-pressed': String(this.wallTool === t.id),
         onclick: () => { this.wallTool = t.id; this.update(); },
       }, t.label, h('small', {}, t.price > 0 ? `${pounds(t.price)} each` : 'Free'))));
+    } else if (this.mode === 'zones') {
+      this.tools.replaceChildren(...ZONE_TOOLS.map((t) => h('button', {
+        type: 'button', 'aria-pressed': String(this.zoneTool === t.id), className: `zone-tool zone-${t.id}`,
+        onclick: () => { this.zoneTool = t.id; this.update(); },
+      }, t.label, h('small', {}, 'Free'))));
     } else {
       this.tools.replaceChildren(...PAINTABLE_FLOORS.map((f) => {
         const swatch = h('canvas', { className: 'floor-swatch', width: 40, height: 40, 'aria-hidden': 'true' });
@@ -393,6 +495,12 @@ export class BuildUi {
     if (this.mode === 'floors') {
       return `Drag a box to lay floor. Kitchen, staff room and toilet floors decide what goes where. ${MOVE_HINT}`;
     }
+    if (this.mode === 'zones') {
+      const pos = this.sim.positions;
+      const tool = ZONE_TOOLS.find((t) => t.id === this.zoneTool)!;
+      const status = `Queue: ${pos.queue.length} place${pos.queue.length === 1 ? '' : 's'}. Pickup: ${pos.wait.length} spot${pos.wait.length === 1 ? '' : 's'}.`;
+      return `${tool.hint} ${status} ${MOVE_HINT}`;
+    }
     if (this.buying) {
       const d = objectDef(this.buying.def);
       const problem = placementProblem(this.sim, this.buying.def, this.buying.x, this.buying.y);
@@ -400,13 +508,13 @@ export class BuildUi {
     }
     if (o) {
       const d = objectDef(o.def);
-      if (d.serviceCounter) return `Drag the ${d.label.toLowerCase()} to move it: the till, queue and pickup come with it. Only while there are no customers in.`;
+      if (d.service) return `Drag the ${d.label.toLowerCase()} to move it, or rotate it. Staff stand on the green square, customers on the amber one. Only while there are no customers in.`;
       return d.fixed ? `The ${d.label.toLowerCase()} is fixed in place.` : `Drag the ${d.label.toLowerCase()} to move it, or sell it for ${pounds(sellValue(o.def))}.`;
     }
     const todo = fitOut(this.sim).filter((i) => !i.done);
     if (!this.sim.canTrade) return `${openingShortfall(this.sim)} Pick it below, drag it into place and buy it (machines need counter or kitchen floor: paint some in Floors).${todo.some((i) => !i.needed) ? ` Then: ${todo.filter((i) => !i.needed).map((i) => i.label.toLowerCase()).join(', ')}.` : ''}`;
     if (todo.length > 0) return `Still to get: ${todo.map((i) => i.label.toLowerCase()).join(', ')}. Drag furniture to move it, or pick something below.`;
-    return 'Drag furniture to move it, tap it to sell, or pick something below to buy.';
+    return 'Drag furniture to move it, tap it to rotate or sell, or pick something below to buy.';
   }
 
   private update(): void {
@@ -415,7 +523,8 @@ export class BuildUi {
     view.active = this.active;
     view.objectId = this.selected;
     view.ghost = this.ghost;
-    view.shell = this.active && this.mode !== 'furniture';
+    view.shell = this.active && (this.mode === 'walls' || this.mode === 'floors');
+    view.zones = this.active && (this.mode === 'zones' || this.mode === 'furniture');
     view.footfall = this.active && this.footfall;
     el('build-footfall').setAttribute('aria-pressed', String(this.footfall));
     view.version++;
@@ -429,8 +538,9 @@ export class BuildUi {
       this.confirmButton.disabled = !this.ghost?.ok;
     }
     this.cancelButton.hidden = !this.buying && !o;
+    this.rotateButton.hidden = !furniture || (!this.buying && !o) || objectDef((this.buying?.def ?? o?.def)!).fixed === true;
     this.undoButton.hidden = furniture;
-    this.undoButton.disabled = !this.undo;
+    this.undoButton.disabled = this.mode === 'zones' ? !this.zoneUndo : !this.undo;
     el('build-done').hidden = this.buying !== null;
     this.hint.textContent = this.hintText(o);
     this.renderTools();

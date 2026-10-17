@@ -23,7 +23,7 @@ describe('building work', () => {
     expect(isShell(sim, 0, 5)).toBe(true);
     expect(buildAt(sim, 0, 5, 'remove')).toMatch(/outside/);
     expect(buildAt(sim, 7, 21, 'remove')).toMatch(/outside/);
-    const till = sim.venue.positions.tillStaff;
+    const till = sim.positions.tillStaff;
     expect(buildAt(sim, till[0], till[1], 'wall')).toMatch(/clear for service/);
     expect(buildAt(sim, 2, 12, 'wall')).toMatch(/Move the four-top/);
     expect(buildAt(sim, 2, 11, 'wall')).toMatch(/Leave room/);

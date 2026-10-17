@@ -255,7 +255,7 @@ describe('your café', () => {
     expect(sim.state.money).toBe(money - 6000);
     // Walling off the till with plants is refused.
     const results = [10, 11, 12, 13, 14].map((x) => buyObject(sim, 'plant', x, 9));
-    expect(results).toContain('That would block the counter.');
+    expect(results).toContain('That would cut off the till or the pickup.');
     const espresso = sim.state.objects.find((o) => o.def === 'espresso')!;
     expect(sellObject(sim, espresso.id)).not.toBeNull();
   });

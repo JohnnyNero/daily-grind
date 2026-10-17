@@ -4,7 +4,7 @@
 
 import { objectDef } from './defs';
 import { canSpend } from './business';
-import { footprint, keepClear, reachProblem } from './manage';
+import { keepClear, reachProblem } from './manage';
 import type { Sim } from './sim';
 import type { FloorKind, Tile } from './state';
 
@@ -69,7 +69,7 @@ function someoneOn(sim: Sim, x: number, y: number): boolean {
 function plan(sim: Sim, x: number, y: number, tool: StructureTool): { tile: Tile | null; cost: number } | string {
   if (isShell(sim, x, y)) return "That's the outside of the building.";
   const t = sim.world.tile(x, y);
-  const objects = sim.state.objects.filter((o) => footprint(o.def, o.x, o.y).some(([ox, oy]) => ox === x && oy === y));
+  const objects = sim.state.objects.filter((o) => sim.world.tilesOf(o).some(([ox, oy]) => ox === x && oy === y));
 
   if (tool === 'wall' || tool === 'door') {
     if (tool === 'wall' && t.wall && !t.door) return { tile: null, cost: 0 };
@@ -150,7 +150,7 @@ export function restoreLayout(sim: Sim, snap: LayoutSnapshot): string | null {
     const x = i % s.w;
     const y = Math.floor(i / s.w);
     if (someoneOn(sim, x, y)) return 'Someone is standing in the way.';
-    if (s.objects.some((o) => footprint(o.def, o.x, o.y).some(([ox, oy]) => ox === x && oy === y))) return 'Furniture is in the way.';
+    if (s.objects.some((o) => sim.world.tilesOf(o).some(([ox, oy]) => ox === x && oy === y))) return 'Furniture is in the way.';
   }
   s.tiles = snap.tiles.map((t) => ({ ...t }));
   const blocked = reachProblem(sim);

@@ -13,14 +13,15 @@ import { buildRecap } from './tales';
 import { randomTraits, refreshApplicants } from './manage';
 import { checkSlip } from './ambience';
 import { checkWants, topUpWants } from './wants';
-import { emptyShell, servicePositions, venueDef, type ServicePositions, type VenueDef } from './venues';
+import { emptyShell, venueDef, type ServicePositions, type VenueDef } from './venues';
+import { SERVICE_DEFS, computePositions, zonesFrom } from './service';
 import { clamp01, moodFromNeeds, worstNeed } from './mood';
 import { findPath } from './path';
 import { pick, random, randInt, randRange } from './rng';
 import { canoodle, socialEveryMinute } from './social';
 import {
   TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE,
-  SAVE_VERSION, type Applicant, type ConditionId, type Job, type LogEntry, type ObjectInst, type Pawn, type Relation, type Shift, type SimState, type StaffInfo, type Step,
+  SAVE_VERSION, type Applicant, type ConditionId, type Job, type LogEntry, type Pawn, type Relation, type Shift, type SimState, type StaffInfo, type Step,
 } from './state';
 import { addMemory, driftMood, expireMemories, hasTrait, opinionFromMemories } from './thoughts';
 import { abandonAction, findWork, performAction, standByJob, updateRushes, validateAction } from './work';
@@ -69,6 +70,8 @@ export class Sim {
   footfall: Float32Array = new Float32Array(0);
   walkToday: WalkStats = emptyWalkStats();
   walkYesterday: WalkStats | null = null;
+  private positionsCache: ServicePositions | null = null;
+  private positionsAt = -1;
 
   /** A new venue from a seed, or a saved one restored as-is. */
   constructor(seed: number, saved?: SimState, venueId = 'cafe', layout: StartLayout = 'fitted') {
@@ -117,6 +120,7 @@ export class Sim {
       spills: [],
       hallOfFame: [],
     } as Partial<SimState> as SimState;
+    this.state.zones = empty ? { queue: [], pickup: [] } : zonesFrom(this.state, venue.zones);
     this.world = new World(this.state);
     refreshApplicants(this);
     if (!empty) for (const o of venue.objects) this.world.placeObject(o);
@@ -131,22 +135,20 @@ export class Sim {
     return venueDef(this.state.venue);
   }
 
-  /** The service counter, if there is one yet (an empty lot starts without). */
-  get counter(): ObjectInst | undefined {
-    const def = this.venue.counter;
-    return this.state.objects.find((o) => o.def === def);
-  }
-
-  /** Where service happens: the till, queue and pickup sit around the counter, wherever it stands. */
+  /** Where service happens, worked out from the till, pickup, food counter and zones. */
   get positions(): ServicePositions {
-    const c = this.counter;
-    return c ? servicePositions(this.venue, c.x, c.y) : this.venue.positions;
+    const v = this.world.version;
+    if (this.positionsAt !== v || !this.positionsCache) {
+      this.positionsCache = computePositions(this);
+      this.positionsAt = v;
+    }
+    return this.positionsCache;
   }
 
-  /** A counter and something to make drinks with: the least it takes to open the doors. */
+  /** A till, a pickup counter and something to make drinks with: the least it takes to open. */
   get canTrade(): boolean {
-    const drinks = this.venue.drinkStation;
-    return this.counter !== undefined && this.state.objects.some((o) => o.def === drinks);
+    const need = [SERVICE_DEFS.till, SERVICE_DEFS.pickup, this.venue.drinkStation];
+    return need.every((def) => this.state.objects.some((o) => o.def === def));
   }
 
   // ---------------------------------------------------------------- time
@@ -488,7 +490,7 @@ export class Sim {
   }
 
   placeAtEntry(p: Pawn): void {
-    const entry = this.positions.entry;
+    const entry = this.venue.entry;
     const [ex, ey] = entry[randInt(this.state, 0, entry.length - 1)];
     p.x = ex;
     p.y = ey;
@@ -520,7 +522,7 @@ export class Sim {
   }
 
   leaveJob(label: string): Job {
-    const entry = this.positions.entry;
+    const entry = this.venue.entry;
     const [ex, ey] = entry[randInt(this.state, 0, entry.length - 1)];
     return this.makeJob(label, [this.gotoStep(ex, ey), { kind: 'exit' }]);
   }

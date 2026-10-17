@@ -116,7 +116,7 @@ class StartScreen {
     this.draft = null;
     const layouts: { id: StartLayout; label: string; hint: string }[] = [
       { id: 'fitted', label: 'Ready to open', hint: `Fitted out and stocked, with ${pounds(BUSINESS.startingMoney)} in the bank. Open the doors on day one.` },
-      { id: 'empty', label: 'Empty lot', hint: `Four walls, a front door and ${pounds(EMPTY_LOT_MONEY)}. Lay out the rooms, buy every table and the counter yourself. The team start once there's a counter and a drinks machine.` },
+      { id: 'empty', label: 'Empty lot', hint: `Four walls, a front door and ${pounds(EMPTY_LOT_MONEY)}. Lay out the rooms, the counter and the queue yourself. The team start once there's a till, a pickup counter and a drinks machine.` },
     ];
     const layoutHint = h('p', { className: 'hint' });
     const layoutButtons = h('div', { className: 'choices', role: 'group', 'aria-label': 'How to start' });

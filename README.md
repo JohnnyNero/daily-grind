@@ -41,9 +41,27 @@ There are two so far: **the café** (mornings, flat whites, cake) and **the pub*
 
 ## Empty lot
 
-Pick **Empty lot** instead of *Ready to open* to start from four walls, a front door, bare floor and £8,000 (the standard start has £500 and everything fitted). The game opens paused in build mode. Lay out the rooms with walls, doors and floors, then buy everything, the counter included. Nobody comes in, gets paid or orders anything until there's a counter and a drinks machine; a red alert lists what's still missing, and the build bar suggests what to get next (sink, toilet, seats, staff sofa). Machines and sinks need counter or kitchen floor, toilets need toilet floor, and staff furniture needs staff room floor. Rent still runs while you build. Add `?layout=empty` to the address (with `?venue=`) to skip straight in.
+Pick **Empty lot** instead of *Ready to open* to start from four walls, a front door, bare floor and £8,000 (the standard start has £500 and everything fitted). The game opens paused in build mode. Lay out the rooms with walls, doors and floors, then buy everything. Nobody comes in, gets paid or orders anything until there's a **till, a pickup counter and a drinks machine**; a red alert lists what's still missing, and the build bar suggests what to do next (queue and pickup areas, a food counter, sink, toilet, seats, staff sofa). Machines and sinks need counter or kitchen floor, toilets need toilet floor, and staff furniture needs staff room floor. Rent still runs while you build. Add `?layout=empty` to the address (with `?venue=`) to skip straight in.
 
-The till, queue and pickup point are worked out from the counter, so they move with it (shown as dashed squares in build mode: green for staff, amber for customers). The counter needs open floor behind it for staff and in front for the queue, can only be moved while no customers are in, and you can't sell your only one. This works in the standard layouts too.
+## The counter, the queue and pickup
+
+The counter comes in pieces, each one tile, so it can be any shape or split into separate stations:
+
+- **Till** (£400): staff stand behind it, the customer at the front of the queue stands in front.
+- **Pickup counter** (£150): drinks and food are put out here, and customers collect from the front.
+- **Food counter** (£250, optional): where cake and food are plated. Without one, food is plated at the pickup.
+- **Counter / bar sections** (£80): plain lengths to join it all up.
+
+There's one till, one pickup and one food counter per place. In build mode, dashed squares show where people stand: green for staff, amber for customers. Service pieces need open floor on both sides and can only be moved while no customers are in.
+
+The **Zones** tab marks floor (free) for:
+
+- **Queue**: the queue starts at the spot in front of the till and runs back along joined-up queue floor, nearest first. Numbers show each place in line; faded tiles aren't joined up to the till, so nobody queues there. A longer queue lets more people wait (up to 16), but they still lose patience.
+- **Pickup area**: where customers wait for their order, nearest the pickup first. If it's full or missing, people stand off to the side, clear of the queue.
+
+Furniture and walls can't go on zones or service spots. Older saves are converted automatically: the old one-piece counter becomes pieces in the same places, with the old queue and waiting spots marked as zones.
+
+**Rotating**: select furniture (or something you're buying) and tap **Rotate**, or press **R**. Where people sit or stand to use it turns with it, so a till turned sideways serves from the side.
 
 ## How it plays
 
@@ -120,7 +138,8 @@ src/
     regulars.ts  guests who come back, remember, and hold grudges
     wants.ts     what each staff member would like to happen
     ambience.ts  cleanliness, looks, spills and slips
-    venues.ts    each venue as data: map, furniture, menu, hours, rhythm, wording; the empty shell and counter-relative service spots
+    venues.ts    each venue as data: map, furniture, menu, hours, rhythm, wording; the empty shell
+    service.ts   where service happens: till, pickup and food counter pieces, queue and pickup zones
     fitout.ts    what a place needs before it can open
     path.ts      A* pathfinding
   render/    canvas drawing in the Pawn style

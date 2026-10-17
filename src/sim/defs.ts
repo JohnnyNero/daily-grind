@@ -45,8 +45,13 @@ export interface ObjectDef {
   price?: number;
   /** Fixtures can't be moved or sold. */
   fixed?: boolean;
-  /** A service counter: one per venue, and only the venue's own kind is sold. */
-  serviceCounter?: boolean;
+  /** A plain counter section: each venue sells only its own kind. */
+  counterSection?: boolean;
+  /**
+   * A service point (the till, the pickup, the food counter): where staff stand to work it
+   * and where customers stand to be served, relative to the top-left. One of each per place.
+   */
+  service?: { staff: readonly [number, number]; guest?: readonly [number, number] };
   /** Floors it may stand on (staff kit behind the scenes, guest furniture out front). */
   floors?: readonly string[];
   w: number;
@@ -61,6 +66,8 @@ export interface ObjectDef {
 const STAFF = ['staff'] as const;
 const EVERYONE = ['staff', 'guest'] as const;
 
+const COUNTER_FLOORS = ['B', 'F', 'C', 'K'];
+
 const defs: ObjectDef[] = [
   {
     id: 'fridge', price: 40000, floors: ['K', 'B', 'S', 'R'], label: 'Fridge', w: 1, h: 1, blocks: true, spots: [[0, 1]],
@@ -73,9 +80,13 @@ const defs: ObjectDef[] = [
     id: 'espresso', price: 90000, floors: ['K', 'B'], label: 'Espresso machine', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'coffee', label: 'Make yourself a coffee', doing: 'Sneaking a coffee', usableBy: STAFF, deltas: { energy: 0.2, bladder: -0.08 }, minutes: 4, whenBelow: { need: 'energy', value: 0.75 } }],
   },
-  // The till, the queue and the pickup point are worked out from where the counter stands.
-  { id: 'counter', price: 120000, serviceCounter: true, floors: ['B', 'F', 'C', 'K'], label: 'Counter', w: 9, h: 1, blocks: true, spots: [], offers: [] },
-  { id: 'bar', price: 120000, serviceCounter: true, floors: ['B', 'F', 'C', 'K'], label: 'Bar', w: 9, h: 1, blocks: true, spots: [], offers: [] },
+  // The counter comes in pieces: plain sections, and the service points staff work from
+  // the back (the top, unrotated) while customers stand at the front.
+  { id: 'counter', price: 8000, counterSection: true, floors: COUNTER_FLOORS, label: 'Counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'bar', price: 8000, counterSection: true, floors: COUNTER_FLOORS, label: 'Bar', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'till', price: 40000, service: { staff: [0, -1], guest: [0, 1] }, floors: COUNTER_FLOORS, label: 'Till', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'pickup', price: 15000, service: { staff: [0, -1], guest: [0, 1] }, floors: COUNTER_FLOORS, label: 'Pickup counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
+  { id: 'foodCounter', price: 25000, service: { staff: [0, -1] }, floors: COUNTER_FLOORS, label: 'Food counter', w: 1, h: 1, blocks: true, spots: [], offers: [] },
   {
     id: 'taps', price: 90000, floors: ['K', 'B'], label: 'Beer taps', w: 2, h: 1, blocks: true, spots: [[0, 1], [1, 1]],
     offers: [{ id: 'lemonade', label: 'Pour yourself a lemonade', doing: 'Sneaking a lemonade', usableBy: STAFF, deltas: { energy: 0.12, bladder: -0.08 }, minutes: 3, whenBelow: { need: 'energy', value: 0.75 } }],
@@ -117,6 +128,58 @@ export function objectDef(id: string): ObjectDef {
   const def = OBJECT_DEFS[id];
   if (!def) throw new Error(`Unknown object def: ${id}`);
   return def;
+}
+
+// ------------------------------------------------------------------ rotation
+
+/** Quarter turns clockwise, 0-3. */
+export type Rotation = 0 | 1 | 2 | 3;
+
+export function rotationOf(o: { rot?: number }): Rotation {
+  return ((o.rot ?? 0) & 3) as Rotation;
+}
+
+/** Width and height once turned. */
+export function rotatedSize(def: ObjectDef, rot: Rotation): [number, number] {
+  return rot % 2 === 0 ? [def.w, def.h] : [def.h, def.w];
+}
+
+/** A tile offset from the object's unturned top-left, turned with it (spots outside the footprint too). */
+export function rotateOffset(def: ObjectDef, rot: Rotation, [x, y]: readonly [number, number]): [number, number] {
+  switch (rot) {
+    case 1: return [def.h - 1 - y, x];
+    case 2: return [def.w - 1 - x, def.h - 1 - y];
+    case 3: return [y, def.w - 1 - x];
+    default: return [x, y];
+  }
+}
+
+/** Every tile an object covers. */
+export function footprint(def: string, x: number, y: number, rot: Rotation = 0): [number, number][] {
+  const [w, h] = rotatedSize(objectDef(def), rot);
+  const out: [number, number][] = [];
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) out.push([x + dx, y + dy]);
+  return out;
+}
+
+/** Where its users stand or sit, in world tiles. */
+export function spotsAt(def: string, x: number, y: number, rot: Rotation = 0): [number, number][] {
+  const d = objectDef(def);
+  return d.spots.map((sp) => {
+    const [dx, dy] = rotateOffset(d, rot, sp);
+    return [x + dx, y + dy];
+  });
+}
+
+/** A service point's staff and customer tiles, in world tiles. */
+export function serviceAt(def: string, x: number, y: number, rot: Rotation = 0): { staff: [number, number]; guest: [number, number] | null } | null {
+  const d = objectDef(def);
+  if (!d.service) return null;
+  const at = (sp: readonly [number, number]): [number, number] => {
+    const [dx, dy] = rotateOffset(d, rot, sp);
+    return [x + dx, y + dy];
+  };
+  return { staff: at(d.service.staff), guest: d.service.guest ? at(d.service.guest) : null };
 }
 
 // ------------------------------------------------------------------ traits

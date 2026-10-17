@@ -10,7 +10,7 @@ describe('careers and cascades', () => {
     const sim = new Sim(6);
     sim.run(12 * TICKS_PER_DAY);
     for (let i = 0; i < 200 && !sim.state.letters.some((l) => l.kind === 'raise'); i++) {
-      for (const p of sim.state.pawns) if (p.staff) { p.staff.lastAskDay = -100; p.staff.hiredDay = -100; }
+      for (const p of sim.state.pawns) if (p.staff) { p.staff.lastAskDay = -100; p.staff.hiredDay = -100; p.staff.mood = Math.min(p.staff.mood, 40); }
       careersMorning(sim);
     }
     const letter = sim.state.letters.find((l) => l.kind === 'raise')!;

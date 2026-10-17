@@ -5,14 +5,14 @@
 
 import {
   BACKSTORIES, FIRST_NAMES, HAIR_COLOURS, HAIR_STYLES, MAX_STAFF, SKIN_TONES, TRAITS, WORK_TYPES,
-  objectDef, type HairStyle, type Skills, type TraitId, type WorkType,
+  footprint, objectDef, rotationOf, serviceAt, spotsAt, type HairStyle, type Rotation, type Skills, type TraitId, type WorkType,
 } from './defs';
 import { pick, random, randRange } from './rng';
 import { askingWage, canSpend } from './business';
 import { passionsFor } from './normalize';
 import { Sim } from './sim';
 import { isShell } from './structure';
-import { serviceTiles, servicePositions } from './venues';
+import { SERVICE_DEFS, reservedTiles, serviceSpots } from './service';
 import { SAVE_VERSION, type Applicant, type ObjectInst, type Pawn, type SimState } from './state';
 import { addMemory } from './thoughts';
 
@@ -242,46 +242,19 @@ export { priceRatio } from './business';
 
 // ------------------------------------------------------------------ furniture
 
-/** Service spots that furniture and walls may never cover. */
-export function keepClear(sim: Sim): readonly (readonly [number, number])[] {
-  const v = sim.positions;
-  // No counter yet: the only thing to keep clear is the way in.
-  if (!sim.counter) return v.entry;
-  return [...serviceTiles(v), ...v.entry];
-}
-
-/** Spots that must stay reachable from the door. */
-function mustReach(sim: Sim): readonly (readonly [number, number])[] {
-  const v = sim.positions;
-  return sim.counter ? serviceTiles(v) : [];
+/** Tiles furniture and walls may never cover: service spots, the queue and pickup zones, the way in. */
+export function keepClear(sim: Sim, ignore: ObjectInst | null = null): readonly (readonly [number, number])[] {
+  const own = ignore ? serviceAt(ignore.def, ignore.x, ignore.y, rotationOf(ignore)) : null;
+  const mine = (x: number, y: number) => !!own && ((own.staff[0] === x && own.staff[1] === y) || (own.guest?.[0] === x && own.guest?.[1] === y));
+  return reservedTiles(sim).filter(([x, y]) => !mine(x, y));
 }
 
 /** You can't sell the last one of these. */
 function essential(sim: Sim): string[] {
-  return [sim.venue.counter, sim.venue.drinkStation, 'sink', 'toilet'];
+  return [SERVICE_DEFS.till, SERVICE_DEFS.pickup, sim.venue.drinkStation, 'sink', 'toilet'];
 }
 
-/** Why the service counter can't go to (x, y): its till, queue and pickup spots need open floor. */
-function counterProblem(sim: Sim, x: number, y: number, ignore: ObjectInst | null): string | null {
-  const w = sim.world;
-  for (const [tx, ty] of serviceTiles(servicePositions(sim.venue, x, y))) {
-    if (!w.inBounds(tx, ty)) return 'No room in front for the queue.';
-    const t = w.tile(tx, ty);
-    if (t.wall || t.door || isShell(sim, tx, ty)) return 'It needs open floor behind it for staff and in front for the queue.';
-    for (const o of sim.state.objects) {
-      if (o === ignore) continue;
-      if (footprint(o.def, o.x, o.y).some(([ox, oy]) => ox === tx && oy === ty)) return `The ${objectDef(o.def).label.toLowerCase()} is in the way of the queue or the till.`;
-    }
-  }
-  return null;
-}
-
-export function footprint(def: string, x: number, y: number): [number, number][] {
-  const d = objectDef(def);
-  const out: [number, number][] = [];
-  for (let dy = 0; dy < d.h; dy++) for (let dx = 0; dx < d.w; dx++) out.push([x + dx, y + dy]);
-  return out;
-}
+export { footprint } from './defs';
 
 /** Someone is using it, sitting at it, or on their way to clear it. */
 function inUse(sim: Sim, o: ObjectInst): boolean {
@@ -295,39 +268,54 @@ function claimedSpots(sim: Sim): [number, number][] {
     const [kind, id, spot] = key.split(':');
     if (kind !== 'obj') continue;
     const o = sim.world.objectById(Number(id));
-    const at = o ? objectDef(o.def).spots[Number(spot)] : undefined;
-    if (o && at) out.push([o.x + at[0], o.y + at[1]]);
+    const at = o ? sim.world.spots(o)[Number(spot)] : undefined;
+    if (at) out.push(at);
   }
   return out;
 }
 
-/** Null if `def` can stand at (x, y); otherwise why not. `ignore` is the object being moved. */
-export function placementProblem(sim: Sim, def: string, x: number, y: number, ignore: ObjectInst | null = null): string | null {
+/**
+ * Null if `def` can stand at (x, y) turned `rot` quarter turns; otherwise why not.
+ * `ignore` is the object being moved.
+ */
+export function placementProblem(sim: Sim, def: string, x: number, y: number, ignore: ObjectInst | null = null, rot: Rotation = 0): string | null {
   const d = objectDef(def);
   const w = sim.world;
-  const tiles = footprint(def, x, y);
-  if (d.serviceCounter && sim.state.pawns.some((p) => p.kind === 'guest')) return 'Wait until the customers have gone.';
-  for (const [tx, ty] of tiles) {
+  const label = d.label.toLowerCase();
+  if (d.counterSection && def !== sim.venue.counter) return "That's not for sale here.";
+  if (d.service) {
+    if (sim.state.objects.some((o) => o.def === def && o !== ignore)) return `There's already a ${label}. Drag it to move it.`;
+    if (sim.state.pawns.some((p) => p.kind === 'guest')) return 'Wait until the customers have gone.';
+  }
+  const clear = keepClear(sim, ignore);
+  for (const [tx, ty] of footprint(def, x, y, rot)) {
     if (!w.inBounds(tx, ty)) return "That's off the edge.";
     const t = w.tile(tx, ty);
     if (t.wall) return "There's a wall in the way.";
     if (t.door) return "That would block a door.";
     if (d.floors && !d.floors.includes(t.floor)) return `${d.label}s don't go there.`;
-    // A counter brings its own service spots along with it (checked below).
-    if (!d.serviceCounter && keepClear(sim).some(([kx, ky]) => kx === tx && ky === ty)) return 'That spot has to stay clear for service.';
+    if (clear.some(([kx, ky]) => kx === tx && ky === ty)) return 'That spot has to stay clear for service.';
     for (const o of sim.state.objects) {
       if (o === ignore) continue;
-      if (footprint(o.def, o.x, o.y).some(([ox, oy]) => ox === tx && oy === ty)) return 'Something is already there.';
+      if (w.tilesOf(o).some(([ox, oy]) => ox === tx && oy === ty)) return 'Something is already there.';
     }
     if (d.blocks && sim.state.pawns.some((p) => p.onMap && Math.round(p.x) === tx && Math.round(p.y) === ty)) return 'Someone is standing there.';
     if (d.blocks && claimedSpots(sim).some(([cx, cy]) => cx === tx && cy === ty)) return "Someone's about to sit there.";
   }
-  for (const [dx, dy] of d.spots) {
-    const sx = x + dx;
-    const sy = y + dy;
+  for (const [sx, sy] of spotsAt(def, x, y, rot)) {
     if (!w.inBounds(sx, sy) || w.tile(sx, sy).wall) return "Nobody could get to it there.";
   }
-  if (d.serviceCounter) return counterProblem(sim, x, y, ignore);
+  // A service point needs open floor where staff stand behind it and customers in front.
+  const at = serviceAt(def, x, y, rot);
+  if (at) {
+    for (const [tx, ty] of at.guest ? [at.staff, at.guest] : [at.staff]) {
+      if (!w.inBounds(tx, ty)) return 'There has to be room either side of it.';
+      const t = w.tile(tx, ty);
+      if (t.wall || t.door || isShell(sim, tx, ty)) return 'It needs open floor behind for staff' + (at.guest ? ' and in front for customers.' : '.');
+      const blocker = sim.state.objects.find((o) => o !== ignore && w.tilesOf(o).some(([ox, oy]) => ox === tx && oy === ty));
+      if (blocker) return `The ${objectDef(blocker.def).label.toLowerCase()} is in the way of where people stand to use it.`;
+    }
+  }
   return null;
 }
 
@@ -335,7 +323,7 @@ export function placementProblem(sim: Sim, def: string, x: number, y: number, ig
 export function reachProblem(sim: Sim): string | null {
   const s = sim.state;
   const seen = new Uint8Array(s.w * s.h);
-  const [ex, ey] = sim.positions.entry[0];
+  const [ex, ey] = sim.venue.entry[0];
   const stack: [number, number][] = [[ex, ey]];
   seen[ey * s.w + ex] = 1;
   while (stack.length > 0) {
@@ -349,7 +337,7 @@ export function reachProblem(sim: Sim): string | null {
     }
   }
   const reach = (x: number, y: number) => sim.world.inBounds(x, y) && seen[y * s.w + x] === 1;
-  if (mustReach(sim).some(([x, y]) => !reach(x, y))) return 'That would block the counter.';
+  if (serviceSpots(sim).some(([x, y]) => !reach(x, y))) return 'That would cut off the till or the pickup.';
   // Nobody on the premises may be shut in. Someone between tiles counts if either side is open.
   for (const p of s.pawns) {
     if (!p.onMap) continue;
@@ -363,22 +351,28 @@ export function reachProblem(sim: Sim): string | null {
   return null;
 }
 
-export function moveObject(sim: Sim, id: number, x: number, y: number): string | null {
+/** Moves (and optionally turns) a piece of furniture. `rot` defaults to how it's turned now. */
+export function moveObject(sim: Sim, id: number, x: number, y: number, rot?: Rotation): string | null {
   const o = sim.world.objectById(id);
   if (!o) return "It's gone.";
   const d = objectDef(o.def);
   if (d.fixed) return `The ${d.label.toLowerCase()} is fixed in place.`;
   if (inUse(sim, o)) return 'Someone is using it right now.';
-  const problem = placementProblem(sim, o.def, x, y, o);
+  const turn = rot ?? rotationOf(o);
+  const problem = placementProblem(sim, o.def, x, y, o, turn);
   if (problem) return problem;
-  const [ox, oy] = [o.x, o.y];
+  const before = { x: o.x, y: o.y, rot: o.rot };
   o.x = x;
   o.y = y;
+  if (turn) o.rot = turn;
+  else delete o.rot;
   sim.world.rebuild();
   const blocked = reachProblem(sim);
   if (blocked) {
-    o.x = ox;
-    o.y = oy;
+    o.x = before.x;
+    o.y = before.y;
+    if (before.rot) o.rot = before.rot;
+    else delete o.rot;
     sim.world.rebuild();
     return blocked;
   }
@@ -386,14 +380,20 @@ export function moveObject(sim: Sim, id: number, x: number, y: number): string |
   return null;
 }
 
-export function buyObject(sim: Sim, def: string, x: number, y: number): string | null {
+/** A quarter turn clockwise, where it stands. */
+export function rotateObject(sim: Sim, id: number): string | null {
+  const o = sim.world.objectById(id);
+  if (!o) return "It's gone.";
+  return moveObject(sim, id, o.x, o.y, ((rotationOf(o) + 1) % 4) as Rotation);
+}
+
+export function buyObject(sim: Sim, def: string, x: number, y: number, rot: Rotation = 0): string | null {
   const d = objectDef(def);
-  if (d.price === undefined || d.fixed || (d.serviceCounter && def !== sim.venue.counter)) return "That's not for sale.";
-  if (d.serviceCounter && sim.counter) return `There's already a ${d.label.toLowerCase()}. Drag it to move it.`;
+  if (d.price === undefined || d.fixed) return "That's not for sale.";
   if (!canSpend(sim, d.price)) return "The bank won't lend any more. Get back in the black first.";
-  const problem = placementProblem(sim, def, x, y);
+  const problem = placementProblem(sim, def, x, y, null, rot);
   if (problem) return problem;
-  const o = sim.world.placeObject({ def, x, y });
+  const o = sim.world.placeObject({ def, x, y, rot });
   const blocked = reachProblem(sim);
   if (blocked) {
     sim.state.objects = sim.state.objects.filter((x2) => x2 !== o);

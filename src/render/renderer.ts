@@ -1,12 +1,12 @@
 // Draws the sim. Reads state only, never changes it.
 
-import { NEEDS, WORK_COLOURS, objectDef, type NeedId, type WorkType } from '../sim/defs';
+import { NEEDS, WORK_COLOURS, objectDef, rotatedSize, rotationOf, serviceAt, type NeedId, type Rotation, type WorkType } from '../sim/defs';
+import { zoneAt } from '../sim/service';
 import type { Sim } from '../sim/sim';
 import type { ObjectInst, Pawn } from '../sim/state';
 import { drawFloorTile, drawObject } from './objectArt';
 import { isShell } from '../sim/structure';
 import { PLOT_W } from '../sim/world';
-import { servicePositions, type ServicePositions } from '../sim/venues';
 import { drawBubble, drawItem, drawPawn, drawStationBadge, type BadgeStyle, type BubbleKind } from './pawnArt';
 import { homeWork } from '../sim/work';
 
@@ -22,7 +22,9 @@ export interface BuildView {
   /** Furniture picked out with a highlight. */
   objectId: number | null;
   /** Furniture being dragged or bought, drawn where it would land. */
-  ghost: { def: string; x: number; y: number; ok: boolean } | null;
+  ghost: { def: string; x: number; y: number; rot: Rotation; ok: boolean } | null;
+  /** Show the queue and pickup zones. */
+  zones: boolean;
   /** Shade the parts of the building that can't be changed (walls and floors modes). */
   shell: boolean;
   /** Show where people walk: a heat map of footsteps. */
@@ -46,7 +48,7 @@ export class Renderer {
   private dpr = 1;
   selectedId: number | null = null;
   /** Build mode: draw a grid and outline the selected object. */
-  buildSelection: BuildView = { objectId: null, active: false, ghost: null, shell: false, footfall: false, version: 0 };
+  buildSelection: BuildView = { objectId: null, active: false, ghost: null, zones: false, shell: false, footfall: false, version: 0 };
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly sim: Sim) {
     const ctx = canvas.getContext('2d');
@@ -111,11 +113,8 @@ export class Renderer {
   }
 
   objectAtTile(tx: number, ty: number): ObjectInst | null {
-    for (const o of this.sim.state.objects) {
-      const d = objectDef(o.def);
-      if (tx >= o.x && tx < o.x + d.w && ty >= o.y && ty < o.y + d.h) return o;
-    }
-    return null;
+    const w = this.sim.world;
+    return this.sim.state.objects.find((o) => w.tilesOf(o).some(([x, y]) => x === tx && y === ty)) ?? null;
   }
 
   /** The on-map pawn closest to a screen point, within reach of a fingertip. */
@@ -185,10 +184,7 @@ export class Renderer {
         if (this.sim.world.tile(x, y).door) this.drawDoor(ctx, x, y);
       }
     }
-    for (const o of s.objects) {
-      const def = objectDef(o.def);
-      drawObject(ctx, o.def, o.x * TILE, o.y * TILE, def.w, def.h, TILE);
-    }
+    for (const o of s.objects) drawTurned(ctx, o.def, o.x, o.y, rotationOf(o));
   }
 
   private drawDoor(ctx: CanvasRenderingContext2D, x: number, y: number): void {
@@ -293,47 +289,78 @@ export class Renderer {
     }
     const id = view.objectId;
     const o = id !== null ? this.sim.world.objectById(id) : undefined;
+    if (view.zones) this.drawZones();
     if (o) {
-      const d = objectDef(o.def);
+      const [w, h] = rotatedSize(objectDef(o.def), rotationOf(o));
       ctx.strokeStyle = '#f2c46d';
       ctx.lineWidth = 3;
-      ctx.strokeRect(o.x * TILE + 1, o.y * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
+      ctx.strokeRect(o.x * TILE + 1, o.y * TILE + 1, w * TILE - 2, h * TILE - 2);
     }
     const g = view.ghost;
-    // Where the till, queue and pickup go: they follow the counter, so show them while it moves.
-    if (g && objectDef(g.def).serviceCounter) this.drawServiceSpots(servicePositions(this.sim.venue, g.x, g.y));
-    else if (view.active && !view.shell && this.sim.counter) this.drawServiceSpots(this.sim.positions);
+    // Where staff and customers stand at each till, pickup and food counter (and the one moving).
+    if (view.active && !view.shell) {
+      for (const x of s.objects) if (!g || !o || x !== o) this.drawServiceSpots(x.def, x.x, x.y, rotationOf(x));
+      if (g) this.drawServiceSpots(g.def, g.x, g.y, g.rot);
+    }
     if (g) {
-      const d = objectDef(g.def);
-      if (o && (o.x !== g.x || o.y !== g.y)) {
+      const [w, h] = rotatedSize(objectDef(g.def), g.rot);
+      if (o && (o.x !== g.x || o.y !== g.y || rotationOf(o) !== g.rot)) {
         // The original spot, faded, so it's clear what's moving.
+        const [ow, oh] = rotatedSize(objectDef(o.def), rotationOf(o));
         ctx.fillStyle = 'rgba(29, 31, 35, 0.45)';
-        ctx.fillRect(o.x * TILE, o.y * TILE, d.w * TILE, d.h * TILE);
+        ctx.fillRect(o.x * TILE, o.y * TILE, ow * TILE, oh * TILE);
       }
       ctx.fillStyle = g.ok ? 'rgba(79, 138, 91, 0.35)' : 'rgba(200, 72, 58, 0.4)';
-      ctx.fillRect(g.x * TILE, g.y * TILE, d.w * TILE, d.h * TILE);
+      ctx.fillRect(g.x * TILE, g.y * TILE, w * TILE, h * TILE);
       ctx.save();
       ctx.globalAlpha = 0.85;
-      drawObject(ctx, g.def, g.x * TILE, g.y * TILE, d.w, d.h, TILE);
+      drawTurned(ctx, g.def, g.x, g.y, g.rot);
       ctx.restore();
       ctx.strokeStyle = g.ok ? '#8fd19e' : '#ff8a7a';
       ctx.lineWidth = 3;
-      ctx.strokeRect(g.x * TILE + 1, g.y * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
+      ctx.strokeRect(g.x * TILE + 1, g.y * TILE + 1, w * TILE - 2, h * TILE - 2);
     }
   }
 
-  /** Service spots as dashed squares: staff behind the counter, customers in front. */
-  private drawServiceSpots(p: ServicePositions): void {
+  /** Queue floor in amber with the place in line, pickup floor in blue. */
+  private drawZones(): void {
+    const ctx = this.ctx;
+    const s = this.sim.state;
+    const order = new Map(this.sim.positions.queue.map(([x, y], i) => [y * s.w + x, i]));
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 ${Math.round(TILE * 0.32)}px system-ui, sans-serif`;
+    for (const i of [...s.zones.queue, ...s.zones.pickup]) {
+      const x = i % s.w;
+      const y = Math.floor(i / s.w);
+      const kind = zoneAt(s, x, y);
+      const n = order.get(i);
+      // Queue floor the queue can't reach shows faded.
+      ctx.fillStyle = kind === 'pickup' ? 'rgba(90, 160, 220, 0.4)' : n === undefined ? 'rgba(242, 196, 109, 0.18)' : 'rgba(242, 196, 109, 0.45)';
+      ctx.fillRect(x * TILE + 1, y * TILE + 1, TILE - 2, TILE - 2);
+      if (n !== undefined) {
+        ctx.fillStyle = 'rgba(40, 30, 10, 0.75)';
+        ctx.fillText(String(n + 1), (x + 0.5) * TILE, (y + 0.5) * TILE);
+      }
+    }
+    ctx.restore();
+  }
+
+  /** A service point's spots as dashed squares: green where staff stand, amber where customers do. */
+  private drawServiceSpots(def: string, x: number, y: number, rot: Rotation): void {
+    const at = serviceAt(def, x, y, rot);
+    if (!at) return;
     const ctx = this.ctx;
     ctx.save();
     ctx.lineWidth = 2;
     ctx.setLineDash([5, 4]);
-    const mark = (tiles: readonly (readonly [number, number])[], colour: string) => {
+    const mark = ([tx, ty]: readonly [number, number], colour: string) => {
       ctx.strokeStyle = colour;
-      for (const [x, y] of tiles) ctx.strokeRect(x * TILE + 4, y * TILE + 4, TILE - 8, TILE - 8);
+      ctx.strokeRect(tx * TILE + 4, ty * TILE + 4, TILE - 8, TILE - 8);
     };
-    mark([p.tillStaff, p.foodStaff, p.pickupStaff], 'rgba(143, 209, 158, 0.9)');
-    mark([...p.queue, p.pickupGuest, ...p.wait], 'rgba(242, 196, 109, 0.85)');
+    mark(at.staff, 'rgba(143, 209, 158, 0.95)');
+    if (at.guest) mark(at.guest, 'rgba(242, 196, 109, 0.95)');
     ctx.restore();
   }
 
@@ -374,9 +401,9 @@ export class Renderer {
     for (const o of s.objects) {
       const n = s.dirty[o.id] ?? 0;
       if (n <= 0) continue;
-      const def = objectDef(o.def);
+      const [dw, dh] = rotatedSize(objectDef(o.def), rotationOf(o));
       for (let i = 0; i < Math.min(n, 4); i++) {
-        drawItem(ctx, 'dirty', (o.x + def.w / 2 + (i % 2 ? 0.22 : -0.22)) * TILE, (o.y + def.h / 2 + (i > 1 ? 0.22 : -0.1)) * TILE, cup);
+        drawItem(ctx, 'dirty', (o.x + dw / 2 + (i % 2 ? 0.22 : -0.22)) * TILE, (o.y + dh / 2 + (i > 1 ? 0.22 : -0.1)) * TILE, cup);
       }
     }
     // Seated guests' cups sit on the table in front of them.
@@ -385,9 +412,9 @@ export class Renderer {
       if (!v || v.state !== 'eating' || v.seatObject === null || p.carrying?.kind !== 'takeaway') continue;
       const o = this.sim.world.objectById(v.seatObject);
       if (!o) continue;
-      const def = objectDef(o.def);
-      const tx = o.x + def.w / 2 - 0.5;
-      const ty = o.y + def.h / 2 - 0.5;
+      const [dw, dh] = rotatedSize(objectDef(o.def), rotationOf(o));
+      const tx = o.x + dw / 2 - 0.5;
+      const ty = o.y + dh / 2 - 0.5;
       const k = o.def === 'armchair' ? 0 : 0.55;
       drawItem(ctx, p.carrying.item, (p.x + (tx - p.x) * k + 0.5) * TILE, (p.y + (ty - p.y) * k + 0.5) * TILE, cup);
     }
@@ -439,4 +466,19 @@ function pressingNeed(p: Pawn): NeedId | null {
     }
   }
   return worst;
+}
+
+/** Draws an object turned a number of quarter turns clockwise, its turned footprint starting at tile (x, y). */
+function drawTurned(ctx: CanvasRenderingContext2D, def: string, x: number, y: number, rot: Rotation): void {
+  const d = objectDef(def);
+  if (rot === 0) {
+    drawObject(ctx, def, x * TILE, y * TILE, d.w, d.h, TILE);
+    return;
+  }
+  const [w, h] = rotatedSize(d, rot);
+  ctx.save();
+  ctx.translate((x + w / 2) * TILE, (y + h / 2) * TILE);
+  ctx.rotate((rot * Math.PI) / 2);
+  drawObject(ctx, def, (-d.w / 2) * TILE, (-d.h / 2) * TILE, d.w, d.h, TILE);
+  ctx.restore();
 }

@@ -17,6 +17,16 @@ export interface ObjectInst {
   def: string;
   x: number;
   y: number;
+  /** Quarter turns clockwise; missing means unturned. */
+  rot?: number;
+}
+
+/** Floor areas the manager marks out, as tile indices (y * w + x). */
+export interface Zones {
+  /** Where the queue runs back from the till. */
+  queue: number[];
+  /** Where customers wait for their order to come up at the pickup. */
+  pickup: number[];
 }
 
 export interface Look {
@@ -408,6 +418,7 @@ export interface SimState {
   w: number;
   h: number;
   tiles: Tile[];
+  zones: Zones;
   objects: ObjectInst[];
   pawns: Pawn[];
   /** Reservation key -> pawn id. Keys look like "obj:12:0" (object 12, spot 0). */
