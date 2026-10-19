@@ -9,6 +9,7 @@ import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
 import { occupants } from './impressiveness';
 import { minuteOfLife, tenantReturns, tenantThink } from './tenants';
 import { guestThink } from './events';
+import { guideThink } from './handover';
 import { burglarThink } from './crime';
 
 /** Tiles per tick at a stroll: about two tiles a second at normal speed. */
@@ -190,6 +191,7 @@ function think(sim: Sim, p: Pawn): void {
   const st = sim.state;
   const lay = sim.layout;
   const edge = p.exit === 0 ? 0 : st.w - 1;
+  if (p.kind === 'agent' && guideThink(sim, p)) return;
   if (p.kind === 'guest' && guestThink(sim, p)) return;
   if (p.kind === 'burglar' && burglarThink(sim, p)) return;
   if (p.task === 'leave') {

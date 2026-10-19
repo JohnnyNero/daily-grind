@@ -14,7 +14,7 @@ export const TICKS_PER_MINUTE = 60;
 export const TICKS_PER_HOUR = 60 * TICKS_PER_MINUTE;
 export const TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 
 /**
  * What a cell holds. Walls hold things up and keep people, heat and noise out; a window is
@@ -232,6 +232,29 @@ export interface State {
   planning: { top: number; applied?: { top: number; decideDay: number } };
   /** The council: a visit booked, and an improvement notice to put right by a day. */
   council: { visitDay?: number; notice?: { issues: string[]; byDay: number } };
+  /** The first week: Denise's walk round, her to-do list, and the beats that teach the game. */
+  handover: Handover;
+}
+
+export interface Handover {
+  /** Where Denise is on her walk round; -1 once it's over. */
+  stop: number;
+  /** She's got to this stop and is talking. */
+  at?: boolean;
+  /** Denise's pawn, while she's showing you round. */
+  guide?: number;
+  /** The tenants the building came with, and the ones you've looked at. */
+  cast: number[];
+  met: number[];
+  /** The flats her list is about: the one to let and the stripped one. */
+  toLet?: string;
+  gutted?: string;
+  /** Beats already played, by name. */
+  done: string[];
+  /** Turned off from the menu (or an old save). */
+  skipped?: boolean;
+  /** An advance on a deposit, still to be paid back out of it. */
+  advance?: number;
 }
 
 /**

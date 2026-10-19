@@ -7,6 +7,7 @@ import { opinion } from '../src/sim/social';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, key } from '../src/sim/state';
 import { moveIn } from '../src/sim/tenants';
 import { landlord } from './policy';
+import { skipHandover } from '../src/sim/handover';
 
 const tenantsOf = (sim: Sim) => sim.state.pawns.filter((p) => p.life && !p.life.leaving);
 
@@ -22,6 +23,7 @@ function soak(seed: number, policy: 'decent' | 'ruthless', days: number): Sim {
 /** A night-owl musician in Flat 2, and the light sleeper upstairs in Flat 4. */
 function noisyNeighbours(insulated: boolean, seed = 11): { sim: Sim; sleeper: ReturnType<typeof tenantsOf>[number]; musician: ReturnType<typeof tenantsOf>[number] } {
   const sim = Sim.create(seed);
+  skipHandover(sim);
   const [, two, , four] = sim.layout.flats;
   const person = { ...makePerson(sim.state), traits: ['musician', 'nightOwl'] };
   const [musician] = moveIn(sim, two.id, [person]);
@@ -96,10 +98,17 @@ describe('neighbours', () => {
   });
 
   it('gossip spreads what the landlord did, and tenants ask for things in the chat', () => {
-    const sim = soak(2, 'ruthless', 40);
-    const heard = tenantsOf(sim).flatMap((p) => p.life!.memories.filter((m) => m.from !== undefined));
-    expect(heard.length).toBeGreaterThan(0);
-    expect(heard.every((m) => (m.hops ?? 0) <= 2)).toBe(true);
+    // Heard things fade, so watch for them as the weeks go by.
+    const sim = Sim.create(2);
+    let heard = 0;
+    for (let h = 0; h < 40 * 24; h++) {
+      sim.run(TICKS_PER_HOUR);
+      landlord(sim, 'ruthless');
+      const now = tenantsOf(sim).flatMap((p) => p.life!.memories.filter((m) => m.from !== undefined));
+      expect(now.every((m) => (m.hops ?? 0) <= 2)).toBe(true);
+      heard += now.length;
+    }
+    expect(heard).toBeGreaterThan(0);
     expect(sim.state.chat.some((m) => m.choices)).toBe(true);
   });
 });

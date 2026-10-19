@@ -2,6 +2,7 @@
 // post. One sheet, the same layout every time: a header, sometimes tabs, then the detail.
 // Every number says where it comes from.
 
+import { meet } from '../sim/handover';
 import { brokenIn, mend, repairCost } from '../sim/upkeep';
 import { LISTINGS, landlordRating } from '../sim/leases';
 import { burglaryRisk, fitAlarm, fitLocks, riskWord } from '../sim/crime';
@@ -77,6 +78,7 @@ export class Panels {
   }
 
   show(s: Showing): void {
+    if (s.kind === 'pawn') meet(this.sim, s.id);
     this.showing = s;
     this.body.dataset.key = '';
     this.draftRent = null;

@@ -54,6 +54,8 @@ function normalize(raw: Partial<State>): State {
   st.reviews ??= [];
   st.planning ??= { top: Math.max(0, ...Object.keys(st.cells).map((k) => Number(k.split(',')[1]))) };
   st.council ??= {};
+  // Version 7 added the handover; a building already under way doesn't need one.
+  st.handover ??= { stop: -1, cast: [], met: [], done: [], skipped: true };
   for (const p of st.pawns) {
     if (!p.life) continue;
     p.life.social ??= [];

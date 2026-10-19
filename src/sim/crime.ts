@@ -202,10 +202,19 @@ export function crimeMinute(sim: Sim): void {
   }
 }
 
+/** In through a window, out the same way (they've no keys for the doors). */
+function climbOut(p: Pawn): void {
+  const b = p.burgle!;
+  if (b.entry !== 'window' || !b.at) return;
+  [p.x, p.s] = b.at;
+  p.path = [];
+}
+
 function flee(sim: Sim, p: Pawn, why: 'spotted' | 'passerby' | 'alarm' | 'gaveUp', by?: Pawn): void {
   const st = sim.state;
   const b = p.burgle!;
   const wasInside = b.stage === 'in';
+  if (wasInside) climbOut(p);
   b.stage = 'out';
   p.task = 'leave';
   p.path = [];
@@ -249,6 +258,7 @@ function flee(sim: Sim, p: Pawn, why: 'spotted' | 'passerby' | 'alarm' | 'gaveUp
 /** In and out with the best thing they can carry. */
 function steal(sim: Sim, p: Pawn, flat: Flat): void {
   const st = sim.state;
+  climbOut(p);
   p.burgle!.stage = 'out';
   p.task = 'leave';
   p.doing = 'Legging it';

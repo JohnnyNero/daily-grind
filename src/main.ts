@@ -9,6 +9,7 @@ import { Panels } from './ui/panels';
 import { attachInput } from './ui/input';
 import { FurnitureCard } from './ui/furnitureCard';
 import { furnitureAt } from './sim/build';
+import { HandoverUi } from './ui/handover';
 
 /** At 1x an in-game minute takes 2.5 real seconds, so a day takes about an hour. */
 const BASE_TICKS_PER_SECOND = TICKS_PER_MINUTE / 2.5;
@@ -65,6 +66,7 @@ function play(sim: Sim): void {
     renderer.build.version++;
   };
   hud.onBuild = () => build.start();
+  const handover = new HandoverUi(sim);
   hud.onOverlay = (mode) => {
     renderer.overlay = mode;
   };
@@ -88,6 +90,28 @@ function play(sim: Sim): void {
   window.addEventListener('resize', onResize);
   onResize();
   build.onFit = fitView;
+  // The walk round: the camera goes to each flat as Denise gets there.
+  handover.onFocus = (flatId) => {
+    const lay = sim.layout;
+    const f = flatId ? lay.flat(flatId) : undefined;
+    if (!f) {
+      fitView();
+      return;
+    }
+    const cells = lay.flatCells(f).map((n) => lay.xs(n));
+    const xs = cells.map(([x]) => x);
+    const ss = cells.map(([, s]) => s);
+    renderer.focus(Math.min(...xs), Math.max(...xs), Math.min(...ss), Math.max(...ss), viewBox());
+  };
+  // Her list: each line takes you to where you'd do it.
+  handover.onOpen = (id) => {
+    const h = sim.state.handover;
+    if (id === 'meet') panels.show({ kind: 'people' });
+    else if (id === 'let' && h.toLet) panels.show(sim.state.applicants.some((a) => a.flat === h.toLet) ? { kind: 'applicants', flat: h.toLet } : { kind: 'flat', id: h.toLet });
+    else if (id === 'fit' && h.gutted) panels.show({ kind: 'flat', id: h.gutted });
+    else if (id === 'pay') panels.show({ kind: 'money' });
+  };
+  handover.update();
   el('recentre').addEventListener('click', fitView);
 
   attachInput(canvas, renderer.camera, {
@@ -96,6 +120,7 @@ function play(sim: Sim): void {
     onDragEnd: () => build.dragEnd(),
     onDragCancel: () => build.dragCancel(),
     onTap(x, y) {
+      if (handover.tap()) return;
       if (build.active) {
         build.tap(x, y);
         return;
@@ -204,6 +229,7 @@ function play(sim: Sim): void {
     if (ticks > 0 || view !== lastView) renderer.draw();
     lastView = view;
     hud.update(now);
+    handover.update();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

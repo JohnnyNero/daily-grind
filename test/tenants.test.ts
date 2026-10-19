@@ -5,6 +5,7 @@ import { deserialize, serialize } from '../src/sim/save';
 import { Sim } from '../src/sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE } from '../src/sim/state';
 import { BASELINE, likingTarget, thoughtsOf } from '../src/sim/thoughts';
+import { skipHandover } from '../src/sim/handover';
 
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life);
 
@@ -52,8 +53,11 @@ describe('tenants', () => {
 
   it('cope without a bed or a loo, and like it less', () => {
     const sim = Sim.create(5);
+    skipHandover(sim);
     const flat = sim.layout.flats[0].id;
-    const before = tenants(sim).map((p) => likingTarget(thoughtsOf(sim, p)));
+    // Only the tenant who lost them; the neighbours' days go on as before.
+    const theirs = () => tenants(sim).filter((p) => p.life!.flat === flat);
+    const before = theirs().map((p) => likingTarget(thoughtsOf(sim, p)));
     for (const f of [...sim.state.furniture]) {
       if (['doubleBed', 'toilet'].includes(f.def) && sim.layout.flatAt(f.x, f.s)?.id === flat) removeFurniture(sim.state, f.id);
     }
@@ -62,7 +66,7 @@ describe('tenants', () => {
     const labels = tenants(sim).flatMap((p) => thoughtsOf(sim, p).map((t) => t.label));
     expect(labels).toContain('No bed');
     expect(labels).toContain('No toilet');
-    const after = tenants(sim).map((p) => likingTarget(thoughtsOf(sim, p)));
+    const after = theirs().map((p) => likingTarget(thoughtsOf(sim, p)));
     expect(Math.max(...after)).toBeLessThan(Math.min(...before));
     // They slept on the sofa.
     const memories = tenants(sim).flatMap((p) => p.life!.memories.map((m) => m.id));

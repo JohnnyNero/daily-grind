@@ -20,6 +20,7 @@ import { has } from './traits';
 import { burglaryRisk, startBurglary } from './crime';
 import { bookInspection, breakDown, worn } from './upkeep';
 import { noticeTrait } from './outcomes';
+import { quietFor } from './handover';
 
 /** Most happenings going at once. */
 export const CAP = 2;
@@ -38,7 +39,7 @@ const first = (p: Pawn) => p.name.split(' ')[0];
 /** Could a happening with these tags start now? */
 export function canStart(sim: Sim, tags: string[]): boolean {
   const st = sim.state;
-  if (sim.day < FIRST_DAY) return false;
+  if (quietFor(sim, FIRST_DAY)) return false;
   if (st.story.running.length >= CAP) return false;
   return tags.every((t) => (st.story.cooldowns[t] ?? 0) <= st.tick);
 }
@@ -96,7 +97,7 @@ export function storyHour(sim: Sim): void {
     if (h.kind === 'affair') affairHour(sim, h);
     if (h.kind === 'party') partyHour(sim, h);
   }
-  if (sim.day < FIRST_DAY) return;
+  if (quietFor(sim, FIRST_DAY)) return;
   // Parties: Friday and Saturday evenings, if someone's that way inclined.
   if (hourOf(sim) === 19 && (weekday(sim) === 4 || weekday(sim) === 5)) maybeParty(sim);
   const easy = struggling(sim);

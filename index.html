@@ -25,6 +25,8 @@
   </div>
 
   <button type="button" class="toast" id="toast" hidden></button>
+  <section class="say" id="say" hidden aria-live="polite"></section>
+  <section class="todo" id="todo" hidden aria-label="Denise's list"></section>
 
   <button type="button" class="recentre" id="recentre" aria-label="Fit the building to the screen">
     <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>
@@ -101,6 +103,7 @@
       <button type="button" class="close" id="menu-close" aria-label="Close">✕</button>
     </div>
     <div class="menu-list">
+      <button type="button" id="menu-skip">Skip the handover</button>
       <button type="button" id="menu-export">Save to a file</button>
       <label class="file-button">Load from a file<input type="file" id="menu-import" accept="application/json,.json"></label>
       <button type="button" id="menu-new" class="danger">Start again with a new building</button>

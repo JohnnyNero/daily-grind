@@ -3,6 +3,7 @@
 
 import { book, flatInfo } from './economy';
 import { bookInspection } from './upkeep';
+import { takeAdvance } from './handover';
 import { household } from './leases';
 import type { Sim } from './sim';
 import { remember } from './thoughts';
@@ -38,6 +39,9 @@ function act(sim: Sim, text: string): void {
       return;
     case 'fine':
       book(sim, 'Council fixed penalty', -Number(a));
+      return;
+    case 'advance':
+      takeAdvance(sim, Number(a));
       return;
     case 'inspect':
       bookInspection(sim, 2, 'Following a complaint from a tenant');

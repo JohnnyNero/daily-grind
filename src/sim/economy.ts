@@ -61,6 +61,8 @@ export const ALARM_WEEKLY = 4 * POUND;
 export const COUNCIL_FINE = 150 * POUND;
 export const COUNCIL_FINE_CAP = 450 * POUND;
 export const PLANNING_FEE = 250 * POUND;
+/** What Denise will advance against a deposit if you're short in the first week. */
+export const HANDOVER_ADVANCE = 300 * POUND;
 
 export function furniturePrice(def: string): number {
   return Math.max(30, furnitureDef(def).value * 8) * POUND;

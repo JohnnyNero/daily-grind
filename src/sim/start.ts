@@ -50,6 +50,7 @@ export function newState(seed: number): State {
     reviews: [],
     planning: { top: 0 },
     council: {},
+    handover: { stop: 0, cast: [], met: [], done: [] },
   };
   buildShell(st);
   // You can build up to the roof as it stands; above that needs planning permission.
@@ -142,8 +143,15 @@ function buildShell(st: State): void {
 export function startingTenants(sim: Sim): void {
   const st = sim.state;
   const flats = sim.layout.flats;
-  if (flats[0]) sittingTenants(sim, flats[0].id, [makePerson(st, undefined, true)], 70 * POUND);
-  if (flats[3]) sittingTenants(sim, flats[3].id, [makePerson(st, undefined, false)], 55 * POUND);
+  // Pays on the dot (the last landlord's words), so always pays early.
+  const first = makePerson(st, undefined, true);
+  first.traits = ['paysEarly', ...first.traits.filter((t) => t !== 'paysEarly' && t !== 'haggler')].slice(0, 3);
+  // Bill, who's been here longer than the carpets.
+  const bill = makePerson(st, undefined, false);
+  bill.name = `Bill ${bill.name.split(' ').slice(1).join(' ')}`;
+  bill.note = 'Retired';
+  if (flats[0]) sittingTenants(sim, flats[0].id, [first], 70 * POUND);
+  if (flats[3]) sittingTenants(sim, flats[3].id, [bill], 55 * POUND);
   // Going rates start from how the flats score with their tenants in.
   for (const f of flats) {
     const info = flatInfo(sim, f.id);
@@ -155,7 +163,7 @@ export function startingTenants(sim: Sim): void {
     day: 1,
     from: 'Northfold Building Society',
     title: 'Welcome to your mortgage',
-    body: `Congratulations on your purchase. Your payment of £${MORTGAGE.payment / POUND} is due every Monday. Miss four in a row and the building becomes ours, which we mention only for completeness.`,
+    body: `Congratulations on your purchase. Your payment of £${MORTGAGE.payment / POUND} is due every Monday, starting on day 8. Miss four in a row and the building becomes ours, which we mention only for completeness.`,
     read: false,
   });
 }

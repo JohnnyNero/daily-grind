@@ -16,6 +16,7 @@ import { eventsMinute, storyHour } from './events';
 import { crimeMinute } from './crime';
 import { councilMorning, upkeepHour } from './upkeep';
 import { planningMorning } from './planning';
+import { handoverHour, startHandover } from './handover';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
 
 export class Sim {
@@ -29,6 +30,7 @@ export class Sim {
   static create(seed: number): Sim {
     const sim = new Sim(newState(seed));
     startingTenants(sim);
+    startHandover(sim);
     return sim;
   }
 
@@ -102,6 +104,7 @@ export class Sim {
     romanceHour(this);
     requestsHour(this);
     upkeepHour(this);
+    handoverHour(this);
     storyHour(this);
     if (hour === 4) for (const p of st.pawns) if (p.life) forgetSocial(this, p);
     // Mondays at nine: the mortgage and the bills.
