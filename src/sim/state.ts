@@ -1,45 +1,40 @@
-// Everything that's saved. The building is stored as parts (wall segments, floor slabs,
-// stairs, furniture) rather than as tiles, so saves stay small and edits stay simple.
+// Everything that's saved. The building is a grid of cells, each empty or holding one
+// thing: a wall, a window, a door, or a stair. There's no separate floor: a wall cell with
+// space over it is the floor. Walls can go anywhere you like (as long as they're held up).
 //
-// Positions are in tiles. x is the column, left to right. A storey is 4 rows: 3 rows of
-// room (people are about 2 rows tall, so there's headroom and space for things on the
-// wall) and 1 row of floor slab. Storey 0 stands on the ground; storey s stands on the
-// slab at level s. Inside a storey, row 0 is the one people stand in.
+// Positions are in tiles. x is the column, left to right; s is the row, counted up from
+// the ground (row 0 is the first row above it). People are about two rows tall and stand
+// in the row above whatever holds them up.
 
 export const TILE = 16;
-export const ROOM_ROWS = 3;
-export const STOREY_ROWS = ROOM_ROWS + 1;
-/** Tallest the building can go. */
-export const MAX_STOREYS = 8;
+/** Tallest the building can go, in rows. */
+export const MAX_ROWS = 32;
 
 export const TICKS_PER_MINUTE = 60;
 export const TICKS_PER_HOUR = 60 * TICKS_PER_MINUTE;
 export const TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /**
- * What fills one storey-high slot in a column. Doors: an inside door, a flat's front door
- * (the flat's boundary) and the building's street door.
+ * What a cell holds. Walls hold things up and keep people, heat and noise out; a window is
+ * a wall you can see through. Doors are two cells tall and stored at their bottom cell (the
+ * one above must be left empty): an inside door, a flat's front door (the flat's boundary)
+ * and the building's street door. Stairs go against the back wall, so people walk in front
+ * of them; a run of them drawn corner to corner is a flight.
  */
-export type Segment = 'wall' | 'window' | 'door' | 'flatDoor' | 'entrance';
+export type CellKind = 'wall' | 'window' | 'door' | 'flatDoor' | 'entrance' | 'stair';
 
-export function isDoor(seg: Segment | undefined): seg is 'door' | 'flatDoor' | 'entrance' {
-  return seg === 'door' || seg === 'flatDoor' || seg === 'entrance';
+/** Doors are two cells tall. */
+export const DOOR_ROWS = 2;
+
+export function isDoor(c: CellKind | undefined): c is 'door' | 'flatDoor' | 'entrance' {
+  return c === 'door' || c === 'flatDoor' || c === 'entrance';
 }
 
-/**
- * A flight of stairs up one storey, drawn against the back wall. It covers 3 columns of
- * storey s, from its foot on the floor of s to its top on the floor of s + 1. People walk
- * past in front of it, so it doesn't cut the floor above.
- */
-export interface Stair {
-  id: number;
-  /** Leftmost column. */
-  x: number;
-  s: number;
-  /** 1: rises to the right (foot at x, top at x + 2); -1: rises to the left. */
-  dir: 1 | -1;
+/** Walls and windows: things you can't walk through. */
+export function isSolid(c: CellKind | undefined): c is 'wall' | 'window' {
+  return c === 'wall' || c === 'window';
 }
 
 export interface Furniture {
@@ -47,9 +42,8 @@ export interface Furniture {
   def: string;
   /** Leftmost column. */
   x: number;
+  /** Bottom row. */
   s: number;
-  /** Bottom row within the storey (0 = the floor). */
-  r: number;
   /** Facing the other way. */
   flip?: boolean;
 }
@@ -139,7 +133,7 @@ export interface Pawn {
   id: number;
   name: string;
   kind: PawnKind;
-  /** Column (fractional while walking) and storey (fractional while on stairs). */
+  /** Column and row (both fractional while walking or climbing). */
   x: number;
   s: number;
   /** Nodes still to walk to, as [x, s] pairs; the first is the next step. */
@@ -185,11 +179,8 @@ export interface State {
   w: number;
   /** The plot the building can use: columns x0 to x1 inclusive. */
   plot: { x0: number; x1: number };
-  /** Wall segments by "x,s". */
-  walls: Record<string, Segment>;
-  /** Floor slabs by "x,level"; level L is the floor of storey L (L >= 1) or the roof above the top. */
-  slabs: Record<string, true>;
-  stairs: Stair[];
+  /** The building, by "x,s". Empty cells aren't stored. */
+  cells: Record<string, CellKind>;
   furniture: Furniture[];
   pawns: Pawn[];
   /** The next time someone walks past on the street, and when the agent next calls round. */
@@ -205,7 +196,7 @@ export interface State {
   repossessed?: number;
   /** Short news for the player, newest last. */
   notices: { tick: number; text: string }[];
-  /** Insulated walls and floors: "w:x,s" and "f:x,level". Quieter and warmer. */
+  /** Insulated wall cells, by "x,s". Quieter and warmer. */
   insulated: Record<string, true>;
   /** The central boiler: 0 off to 3 high. */
   boiler: number;
@@ -241,9 +232,7 @@ export interface Works {
 }
 
 export interface BuildPartsData {
-  walls: Record<string, Segment>;
-  slabs: Record<string, true>;
-  stairs: Stair[];
+  cells: Record<string, CellKind>;
   furniture: Furniture[];
   insulated: Record<string, true>;
 }

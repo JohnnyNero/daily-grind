@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildRoom, furnitureProblem, placeFurniture, placeSegment, placeStair, removeSegment, restore, snapshot } from '../src/sim/build';
+import { buildRoom, furnitureProblem, placeCell, placeFurniture, removeCell, restore, snapshot, unsupported } from '../src/sim/build';
 import { findPath } from '../src/sim/layout';
 import { Sim } from '../src/sim/sim';
-import { key } from '../src/sim/state';
 
 describe('the starting building', () => {
   const sim = Sim.create(1);
@@ -11,7 +10,7 @@ describe('the starting building', () => {
 
   it('has five flats, numbered from the ground up', () => {
     expect(lay.flats.map((f) => f.name)).toEqual(['Flat 1', 'Flat 2', 'Flat 3', 'Flat 4', 'Flat 5']);
-    expect(lay.flats.map((f) => f.storeys[0])).toEqual([0, 1, 1, 2, 2]);
+    
     expect(lay.flats.every((f) => f.enclosed)).toBe(true);
     expect(lay.sealed).toEqual([]);
   });
@@ -19,8 +18,10 @@ describe('the starting building', () => {
   it('shares the lobby and stairwell', () => {
     const lobby = lay.rooms[lay.roomOf[lay.node(x0 + 2, 0)]];
     expect(lobby.shared).toBe(true);
-    // The stairwell links all three landings into one shared space.
-    expect(lay.roomOf[lay.node(x0 + 9, 2)]).toBe(lobby.id);
+    // Through a door, the stairwell links all three landings into one shared space.
+    const stairs = lay.rooms[lay.roomOf[lay.node(x0 + 9, 0)]];
+    expect(stairs.shared).toBe(true);
+    expect(lay.roomOf[lay.node(x0 + 10, 8)]).toBe(stairs.id);
   });
 
   it('lets the agent into every flat and back out', () => {
@@ -44,58 +45,83 @@ describe('the starting building', () => {
 });
 
 describe('building', () => {
-  it("won't put a wall through furniture or stairs", () => {
+  it("won't put a wall through furniture or stairs, or outside the plot", () => {
     const sim = Sim.create(1);
     const { x0 } = sim.state.plot;
-    expect(placeSegment(sim.state, x0 + 1, 0, 'wall')).toBe('Furniture in the way');
-    expect(placeSegment(sim.state, x0 + 9, 0, 'wall')).toBe('Stairs in the way');
-    expect(placeSegment(sim.state, x0 - 1, 0, 'wall')).toBe('Outside your plot');
+    expect(placeCell(sim.state, x0 + 1, 0, 'wall')).toBe('Furniture in the way');
+    expect(placeCell(sim.state, x0 + 9, 0, 'wall')).toBe('Stairs in the way');
+    expect(placeCell(sim.state, x0 - 1, 0, 'wall')).toBe('Outside your plot');
   });
 
-  it('puts doors and windows in a slot in a wall, not on their own', () => {
+  it('starts with everything held up', () => {
+    expect(unsupported(Sim.create(1).state.cells)).toBeNull();
+  });
+
+  it('lets a ledge stick out four cells, not five', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const { x0 } = st.plot;
-    // Column 3 of the lobby is open floor.
-    expect(placeSegment(st, x0 + 3, 2, 'door')).toBe('Goes in a wall: put a wall up first');
-    expect(placeSegment(st, x0 + 7, 0, 'window')).toBe('Goes in a wall: put a wall up first');
-    // The studio's front door sits in its wall: it can be swapped for a window.
-    expect(placeSegment(st, x0 + 7, 1, 'window')).toBeNull();
+    // A post on the roof (row 11 is the roof), then a ledge off the top of it.
+    // The post stands over a wall (column 7), so it's held up all the way down.
+    for (let s = 12; s <= 14; s++) expect(placeCell(st, x0 + 7, s, 'wall')).toBeNull();
+    for (let i = 1; i <= 4; i++) expect(placeCell(st, x0 + 7 + i, 14, 'wall'), `cell ${i}`).toBeNull();
+    expect(placeCell(st, x0 + 12, 14, 'wall')).toMatch(/holding it up/);
+    // And the post can't come out now: the ledge hangs off it.
+    expect(removeCell(st, x0 + 7, 13)).toMatch(/holding other bits up/);
+  });
+
+  it('puts doors and windows in gaps and walls, and a door needs a floor', () => {
+    const sim = Sim.create(1);
+    const st = sim.state;
+    const { x0 } = st.plot;
+    // A two-cell gap on the top floor's landing: a door goes in it.
+    expect(placeCell(st, x0 + 10, 8, 'door')).toBeNull();
+    // A window into the side of the lobby wall.
+    expect(placeCell(st, x0, 4, 'window')).toBeNull();
+    // A door in mid air can't.
+    expect(placeCell(st, x0 + 10, 9, 'door')).toBe('A door is in the way: knock it out first');
+    expect(placeCell(st, x0 + 5, 1, 'door')).toBe('A door needs something to stand on');
   });
 
   it('checks where furniture can go', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const { x0 } = st.plot;
-    expect(furnitureProblem(st, 'sofa', x0 + 21, 2, 0)).toBeNull();
-    expect(furnitureProblem(st, 'picture', x0 + 21, 2, 0)).toMatch(/wall/);
-    expect(furnitureProblem(st, 'sofa', x0 + 21, 2, 1)).toMatch(/floor/);
-    expect(furnitureProblem(st, 'fridge', x0 + 21, 2, 0)).toBeNull();
-    expect(furnitureProblem(st, 'sofa', x0 + 26, 2, 0)).toMatch(/wall|plot/i);
-    expect(furnitureProblem(st, 'sofa', x0 + 15, 1, 0)).toMatch(/in the way/);
+    // The top one-bed is empty: row 8 stands on the roof of the floor below.
+    expect(furnitureProblem(st, 'sofa', x0 + 21, 8)).toBeNull();
+    expect(furnitureProblem(st, 'picture', x0 + 21, 9)).toBeNull();
+    expect(furnitureProblem(st, 'sofa', x0 + 21, 9)).toMatch(/floor/);
+    expect(furnitureProblem(st, 'sofa', x0 + 26, 8)).toMatch(/wall|plot/i);
+    expect(furnitureProblem(st, 'sofa', x0 + 15, 4)).toMatch(/in the way/);
   });
 
-  it('builds a room upward and turns it into a new flat', () => {
+  it('builds a room on the roof and turns it into a flat', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const { x0 } = st.plot;
-    // A new storey over the stairwell's flats, reached by stairs from the top landing.
-    expect(buildRoom(st, x0 + 7, 3, x0 + 13, 3)).toBeGreaterThan(0);
-    for (let x = x0 + 8; x <= x0 + 12; x++) expect(st.slabs[key(x, 4)]).toBe(true);
-    expect(placeStair(st, x0 + 9, 2, 1)).toBeNull();
-    expect(placeSegment(st, x0 + 7, 3, 'flatDoor')).toBeNull();
-    // ...but its door opens onto nothing, so the room is reached only by the stairs: shared.
+    // A box on the roof (whose top row is 11), with stairs up to it from the top landing.
+    expect(buildRoom(st, x0 + 7, 11, x0 + 13, 15)).toBeGreaterThan(0);
     sim.changed();
-    const lay = sim.layout;
-    expect(lay.rooms[lay.roomOf[lay.node(x0 + 10, 3)]].shared).toBe(true);
+    let lay = sim.layout;
+    const inside = lay.roomOf[lay.node(x0 + 10, 12)];
+    expect(lay.rooms[inside].outdoor).toBe(false);
+    // A hole in the landing ceiling, and stairs up through it.
+    // (Stairs are drawn from the top down, so each hangs off the one above.)
+    expect(removeCell(st, x0 + 11, 11)).toBeNull();
+    expect(placeCell(st, x0 + 11, 11, 'stair')).toBeNull();
+    expect(placeCell(st, x0 + 10, 10, 'stair')).toBeNull();
+    expect(placeCell(st, x0 + 9, 9, 'stair')).toBeNull();
+    sim.changed();
+    lay = sim.layout;
+    expect(findPath(lay, lay.node(x0 + 8, 8), lay.node(x0 + 10, 12), { all: true })).not.toBeNull();
   });
 
   it('undoes', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const before = snapshot(st);
-    removeSegment(st, st.plot.x0 + 13, 0);
-    placeFurniture(st, 'plant', st.plot.x0 + 12, 0, 0);
+    removeCell(st, st.plot.x0 + 13, 2);
+    placeFurniture(st, 'plant', st.plot.x0 + 12, 0);
     expect(snapshot(st)).not.toBe(before);
     restore(st, before);
     expect(snapshot(st)).toBe(before);

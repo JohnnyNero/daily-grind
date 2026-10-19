@@ -7,20 +7,21 @@
 import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
-import { MAX_STOREYS, ROOM_ROWS, STOREY_ROWS, TILE, TICKS_PER_MINUTE, isDoor, type Pawn, type Segment } from '../sim/state';
-import { SHARED, floorKey, noiseReaching, tempOf, wallKey, warmthOf } from '../sim/environment';
+import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, type CellKind, type Pawn } from '../sim/state';
+import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, edge, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
-import type { BuildParts } from '../sim/build';
+import { stairDir, type BuildParts } from '../sim/build';
 import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
 
 const SKY_ROWS = 4;
 const GROUND_ROWS = 3;
 /** World y of the ground surface. */
-export const GROUND_Y = (SKY_ROWS + MAX_STOREYS * STOREY_ROWS) * TILE;
-const STOREY_PX = STOREY_ROWS * TILE;
+export const GROUND_Y = (SKY_ROWS + MAX_ROWS) * TILE;
+/** Rows to a storey, for the neighbouring houses and the street lamps. */
+const STOREY = 4;
 
-/** World y of the top of storey s's floor. */
-export const floorY = (s: number) => GROUND_Y - s * STOREY_PX;
+/** World y of the bottom of row s (where the feet of someone standing in it are). */
+export const floorY = (s: number) => GROUND_Y - s * TILE;
 
 export interface Camera {
   /** Screen (CSS) pixels per world pixel. */
@@ -29,19 +30,18 @@ export interface Camera {
   oy: number;
 }
 
-/** A cell of the grid: column, storey and row within the storey (3 is the floor slab above). */
+/** A cell of the grid: column and row. */
 export interface Cell {
   x: number;
   s: number;
-  r: number;
 }
 
 export interface BuildView {
   active: boolean;
   /** Cells the current tool would change, and whether it can. */
-  marks: { x: number; s: number; r: number; w: number; h: number; ok: boolean }[];
+  marks: { x: number; s: number; w: number; h: number; ok: boolean }[];
   /** Furniture being placed, where it would go. */
-  ghost: { def: string; x: number; s: number; r: number; flip: boolean; ok: boolean } | null;
+  ghost: { def: string; x: number; s: number; flip: boolean; ok: boolean } | null;
   selected: number | null;
   version: number;
 }
@@ -97,12 +97,12 @@ export class Renderer {
   /** Frames the building (and a bit of street) inside the given screen box. */
   fit(x: number, y: number, w: number, h: number): void {
     const st = this.sim.state;
-    let top = 1;
-    for (const k of Object.keys(st.slabs)) top = Math.max(top, Number(k.split(',')[1]));
-    this.frame((st.plot.x0 - 3) * TILE, (st.plot.x1 + 4) * TILE, floorY(top) - 2 * TILE, GROUND_Y + 2 * TILE, { x, y, w, h });
+    let top = STOREY;
+    for (const k of Object.keys(st.cells)) top = Math.max(top, Number(k.split(',')[1]) + 1);
+    this.frame((st.plot.x0 - 3) * TILE, (st.plot.x1 + 4) * TILE, floorY(top) - 3 * TILE, GROUND_Y + 2 * TILE, { x, y, w, h });
   }
 
-  /** Frames columns x0 to x1 and storeys s0 to s1 (with a tile round them) inside the screen box. */
+  /** Frames columns x0 to x1 and rows s0 to s1 (with a tile round them) inside the screen box. */
   focus(x0: number, x1: number, s0: number, s1: number, box: { x: number; y: number; w: number; h: number }): void {
     this.frame((x0 - 1) * TILE, (x1 + 2) * TILE, floorY(s1 + 1) - TILE, floorY(s0) + TILE, box, 8);
   }
@@ -123,9 +123,9 @@ export class Renderer {
     const { wx, wy } = this.toWorld(sx, sy);
     const rel = GROUND_Y - wy;
     if (rel < 0 || wx < 0 || wx >= this.worldW) return null;
-    const s = Math.floor(rel / STOREY_PX);
-    if (s >= MAX_STOREYS + 1) return null;
-    return { x: Math.floor(wx / TILE), s, r: Math.floor((rel - s * STOREY_PX) / TILE) };
+    const s = Math.floor(rel / TILE);
+    if (s >= MAX_ROWS) return null;
+    return { x: Math.floor(wx / TILE), s };
   }
 
   pawnAt(sx: number, sy: number): Pawn | null {
@@ -257,21 +257,13 @@ export class Renderer {
     const colours = this.roomColours(lay);
     this.drawStreet(ctx);
     this.drawRooms(ctx, lay, colours);
-    for (const k of Object.keys(st.slabs)) {
-      const [x, level] = k.split(',').map(Number);
-      this.drawSlab(ctx, x, level);
-    }
-    for (let x = st.plot.x0; x <= st.plot.x1; x++) {
-      if (lay.roomOf[lay.node(x, 0)] !== -1 && !lay.rooms[lay.roomOf[lay.node(x, 0)]].outdoor) this.drawFloorTop(ctx, x, floorY(0));
-    }
-    for (const t of st.stairs) this.drawStairs(ctx, t.x, t.s, t.dir);
-    for (const [k, seg] of Object.entries(st.walls)) {
+    for (const [k, kind] of Object.entries(st.cells)) {
       const [x, s] = k.split(',').map(Number);
-      this.drawWall(ctx, lay, colours, x, s, seg);
+      this.drawCell(ctx, lay, colours, x, s, kind);
     }
     for (const f of st.furniture) {
       const d = furnitureDef(f.def);
-      drawFurniture(ctx, f.def, f.x * TILE, floorY(f.s) - (f.r + d.h) * TILE, f.flip);
+      drawFurniture(ctx, f.def, f.x * TILE, floorY(f.s) - d.h * TILE, f.flip);
     }
     this.layerVersion = this.sim.version;
     this.lightKey = '';
@@ -285,7 +277,7 @@ export class Renderer {
     for (const [from, to] of [[0, x0 - 2], [x1 + 3, this.sim.state.w]] as const) {
       for (let x = from; x < to; x += 7) {
         const h = 2 + ((x * 7) % 3);
-        const top = floorY(h) - 2 * TILE;
+        const top = floorY(h * STOREY) - 2 * TILE;
         const X = x * TILE;
         rect(ctx, X, top, 6 * TILE, y - top, '#7a5a4c');
         for (let row = top + 3; row < y; row += 4) rect(ctx, X, row, 6 * TILE, 1, '#6d4f42');
@@ -293,9 +285,9 @@ export class Renderer {
         rect(ctx, X - 1, top - 3, 6 * TILE + 2, 2, '#4a3a34');
         for (let s = 0; s < h; s++) {
           for (const wx of [1, 4]) {
-            rect(ctx, (x + wx) * TILE - 1, floorY(s) - 3 * TILE + 5, TILE + 2, TILE + 8, PAL.outline);
-            rect(ctx, (x + wx) * TILE, floorY(s) - 3 * TILE + 6, TILE, TILE + 6, '#3e4a5c');
-            rect(ctx, (x + wx) * TILE, floorY(s) - 2 * TILE + 12, TILE, 2, PAL.white);
+            rect(ctx, (x + wx) * TILE - 1, floorY(s * STOREY) - 3 * TILE + 5, TILE + 2, TILE + 8, PAL.outline);
+            rect(ctx, (x + wx) * TILE, floorY(s * STOREY) - 3 * TILE + 6, TILE, TILE + 6, '#3e4a5c');
+            rect(ctx, (x + wx) * TILE, floorY(s * STOREY) - 2 * TILE + 12, TILE, 2, PAL.white);
           }
         }
       }
@@ -309,9 +301,9 @@ export class Renderer {
     rect(ctx, 0, y + 2 * TILE, W, TILE, '#2a1e1a');
     // Street lamps.
     for (const x of this.streetLamps()) {
-      rect(ctx, x * TILE + 7, floorY(1) - 8, 2, 4 * TILE + 8, '#2f3338');
-      box(ctx, x * TILE + 3, floorY(1) - 11, 10, 4, '#2f3338');
-      rect(ctx, x * TILE + 5, floorY(1) - 7, 6, 2, '#f3d98a');
+      rect(ctx, x * TILE + 7, floorY(STOREY) - 8, 2, 4 * TILE + 8, '#2f3338');
+      box(ctx, x * TILE + 3, floorY(STOREY) - 11, 10, 4, '#2f3338');
+      rect(ctx, x * TILE + 5, floorY(STOREY) - 7, 6, 2, '#f3d98a');
     }
   }
 
@@ -325,45 +317,41 @@ export class Renderer {
     for (const room of lay.rooms) {
       const colour = colours[room.id];
       if (!colour) continue;
-      const bare = room.flat !== null && !this.sim.state.furniture.some((f) => lay.flatAt(f.x, f.s)?.id === room.flat);
-      for (const n of room.nodes) {
+      const bare = this.isBare(lay, room.id);
+      for (const n of room.cells) {
         const [x, s] = lay.xs(n);
-        if (!room.enclosed && !lay.slab(x, s + 1)) continue;
-        this.backWall(ctx, x * TILE, s, TILE, bare ? null : colour);
+        this.backWall(ctx, lay, x * TILE, s, TILE, bare ? null : colour);
       }
+    }
+    // Floorboards on the ground inside the building.
+    for (let x = this.sim.state.plot.x0; x <= this.sim.state.plot.x1; x++) {
+      const room = lay.roomOf[lay.node(x, 0)];
+      if (room !== -1 && !lay.rooms[room].outdoor) this.drawFloorTop(ctx, x, floorY(0));
     }
   }
 
-  /** A strip of back wall in a storey: wallpaper with a skirting board, or bare brick. */
-  private backWall(ctx: CanvasRenderingContext2D, X: number, s: number, w: number, colour: string | null): void {
-    const y = floorY(s) - ROOM_ROWS * TILE;
-    const H = ROOM_ROWS * TILE;
+  /** A flat with no furniture in it at all is stripped to the brick. */
+  private isBare(lay: Layout, room: number): boolean {
+    const flat = lay.rooms[room].flat;
+    return flat !== null && !this.sim.state.furniture.some((f) => lay.flatAt(f.x, f.s)?.id === flat);
+  }
+
+  /** One cell of back wall: wallpaper (with a skirting board along the floor), or bare brick. */
+  private backWall(ctx: CanvasRenderingContext2D, lay: Layout, X: number, s: number, w: number, colour: string | null): void {
+    const y = floorY(s) - TILE;
     if (!colour) {
-      rect(ctx, X, y, w, H, '#a8826a');
-      for (let row = 0; row < ROOM_ROWS * 4; row++) {
+      rect(ctx, X, y, w, TILE, '#a8826a');
+      for (let row = 0; row < 4; row++) {
         rect(ctx, X, y + row * 4 + 3, w, 1, '#957260');
-        for (let bx = X + (row % 2 ? 3 : 11); bx < X + w; bx += TILE) rect(ctx, bx, y + row * 4, 1, 3, '#957260');
+        for (let bx = X + ((s * 4 + row) % 2 ? 3 : 11) - (X % TILE); bx < X + w; bx += TILE) if (bx >= X) rect(ctx, bx, y + row * 4, 1, 3, '#957260');
       }
       return;
     }
-    rect(ctx, X, y, w, H, colour);
-    for (let sx = X + 6 - (X % 10); sx < X + w; sx += 10) if (sx >= X) rect(ctx, sx, y, 1, H, light(colour, 0.08));
-    rect(ctx, X, y, w, 2, dark(colour, 0.12));
-    rect(ctx, X, floorY(s) - 3, w, 3, PAL.skirting);
-  }
-
-  private drawSlab(ctx: CanvasRenderingContext2D, x: number, level: number): void {
-    const y = floorY(level);
-    const X = x * TILE;
-    rect(ctx, X, y, TILE, TILE, PAL.slab);
-    for (let xx = X + (level % 2); xx < X + TILE; xx += 2) rect(ctx, xx, y + TILE - 2, 1, 1, dark(PAL.slab, 0.25));
-    rect(ctx, X, y + TILE - 1, TILE, 1, edge(PAL.slab));
-    if (this.sim.state.insulated[floorKey(x, level)]) {
-      // A layer of insulation in the floor.
-      rect(ctx, X, y + 4, TILE, 5, '#e3c45a');
-      for (let i = 0; i < TILE; i += 4) rect(ctx, X + i + (level % 2) * 2, y + 5, 2, 3, '#c9a63e');
-    }
-    this.drawFloorTop(ctx, x, y);
+    rect(ctx, X, y, w, TILE, colour);
+    for (let sx = X + 6 - (X % 10); sx < X + w; sx += 10) if (sx >= X) rect(ctx, sx, y, 1, TILE, light(colour, 0.08));
+    const x = Math.floor(X / TILE);
+    if (lay.solid(x, s + 1)) rect(ctx, X, y, w, 2, dark(colour, 0.12));
+    if (lay.solid(x, s - 1)) rect(ctx, X, floorY(s) - 3, w, 3, PAL.skirting);
   }
 
   private drawFloorTop(ctx: CanvasRenderingContext2D, x: number, y: number): void {
@@ -373,109 +361,108 @@ export class Renderer {
     rect(ctx, X + ((x * 5) % 13), y, 1, 3, PAL.floorLine);
   }
 
-  /** The colour of the back wall beside a wall segment, on one side. */
+  /** The colour of the back wall in a cell, for showing through a doorway. */
   private sideColour(lay: Layout, colours: (string | null)[], x: number, s: number): string | null {
-    if (x < 0 || x >= lay.w) return null;
+    if (x < 0 || x >= lay.w || s < 0 || s >= lay.rows) return null;
     const room = lay.roomOf[lay.node(x, s)];
     if (room === -1) return null;
-    const bare = lay.rooms[room].flat !== null && !this.sim.state.furniture.some((f) => lay.flatAt(f.x, f.s)?.id === lay.rooms[room].flat);
-    return bare ? 'bare' : colours[room];
+    return this.isBare(lay, room) ? 'bare' : colours[room];
+  }
+
+  /** Does this cell face the outside (so it's brick)? */
+  private facesOutside(lay: Layout, x: number, s: number): boolean {
+    for (const [dx, ds] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx;
+      const ns = s + ds;
+      if (ns < 0) continue;
+      if (!lay.inPlot(nx)) return true;
+      const room = lay.air(nx, ns) ? lay.roomOf[lay.node(nx, ns)] : -1;
+      if (room !== -1 && lay.rooms[room].outdoor) return true;
+    }
+    return false;
   }
 
   /**
-   * A wall segment: a whole tile thick (brick on the outside of the building, plaster inside).
-   * Windows and doors sit in a slot in the wall: a window is a line of glass across the
-   * opening, and a doorway shows the room behind, with the door drawn every frame so it can
-   * swing.
+   * One cell of the building. Walls are brick where they face the outside and plaster
+   * inside, with floorboards on top where there's a room over them. A window is a line of
+   * glass in its cell; a doorway shows the rooms either side (the door itself is drawn
+   * every frame, so it can swing); a stair is a pair of steps.
    */
-  private drawWall(ctx: CanvasRenderingContext2D, lay: Layout, colours: (string | null)[], x: number, s: number, seg: Segment): void {
+  private drawCell(ctx: CanvasRenderingContext2D, lay: Layout, colours: (string | null)[], x: number, s: number, kind: CellKind): void {
     const X = x * TILE;
-    const H = ROOM_ROWS * TILE;
-    const y = floorY(s) - H;
-    const outer = x === this.sim.state.plot.x0 || x === this.sim.state.plot.x1;
-    const body = (top: number, h: number) => {
-      if (h <= 0) return;
-      if (outer) {
-        rect(ctx, X, top, TILE, h, PAL.brick);
-        for (let row = top; row < top + h; row += 4) {
-          rect(ctx, X, row + 3, TILE, 1, PAL.mortar);
-          for (let bx = X + ((row / 4) % 2 ? 3 : 7); bx < X + TILE; bx += 8) rect(ctx, bx, row, 1, 3, PAL.mortar);
+    const Y = floorY(s) - TILE;
+    if (isDoor(kind)) {
+      for (let r = 0; r < DOOR_ROWS; r++) {
+        for (const [side, ox] of [[-1, 0], [1, TILE / 2]] as const) {
+          const c = this.sideColour(lay, colours, x + side, s + r);
+          if (c) this.backWall(ctx, lay, X + ox, s + r, TILE / 2, c === 'bare' ? null : c);
         }
-      } else {
-        rect(ctx, X, top, TILE, h, '#8a7262');
-        rect(ctx, X + 2, top, 3, h, '#a08878');
-        rect(ctx, X + TILE - 3, top, 1, h, '#7a6252');
       }
-      const e = edge(outer ? PAL.brick : '#8a7262');
-      rect(ctx, X, top, 1, h, e);
-      rect(ctx, X + TILE - 1, top, 1, h, e);
-    };
-    const insulated = !!this.sim.state.insulated[wallKey(x, s)];
-    const lagged = (top: number, h: number) => {
-      body(top, h);
-      if (!insulated || h <= 0) return;
-      // Insulation batts packed into the middle of the wall.
-      rect(ctx, X + 4, top, TILE - 8, h, '#e3c45a');
-      for (let yy = top + 1; yy < top + h - 1; yy += 4) rect(ctx, X + 5 + ((yy - top) % 8 ? 0 : 3), yy, 3, 2, '#c9a63e');
-    };
-    if (seg === 'window') {
-      lagged(y, 8);
-      lagged(y + 38, H - 38);
-      // The opening, with the glass as a line across the middle of it.
-      rect(ctx, X, y + 8, TILE, 30, outer ? '#3e4a5c' : dark('#8a7262', 0.3));
-      rect(ctx, X + 1, y + 9, TILE - 2, 28, light(PAL.glass, 0.25));
-      rect(ctx, X + 7, y + 8, 2, 30, PAL.glass);
-      rect(ctx, X + 7, y + 20, 2, 1, light(PAL.glass, 0.6));
-      box(ctx, X - 1, y + 37, TILE + 2, 3, PAL.white);
-      box(ctx, X - 1, y + 7, TILE + 2, 2, PAL.white);
-    } else if (isDoor(seg)) {
-      // The rooms either side show through the doorway.
-      for (const [side, ox] of [[-1, 0], [1, TILE / 2]] as const) {
-        const c = this.sideColour(lay, colours, x + side, s);
-        if (c) this.backWall(ctx, X + ox, s, TILE / 2, c === 'bare' ? null : c);
+      return;
+    }
+    if (kind === 'stair') {
+      this.drawStair(ctx, x, s, stairDir(this.sim.state, x, s));
+      return;
+    }
+    const outer = this.facesOutside(lay, x, s);
+    const base = outer ? PAL.brick : '#8a7262';
+    rect(ctx, X, Y, TILE, TILE, base);
+    if (outer) {
+      for (let row = 0; row < 4; row++) {
+        rect(ctx, X, Y + row * 4 + 3, TILE, 1, PAL.mortar);
+        for (let bx = X + ((s * 4 + row) % 2 ? 3 : 11); bx < X + TILE; bx += 8) rect(ctx, bx, Y + row * 4, 1, 3, PAL.mortar);
       }
-      // Wall over the slot; the door itself is just a line down it (drawn with the doors).
-      lagged(y, H - DOOR_H);
-    } else lagged(y, H);
+    } else {
+      rect(ctx, X, Y + 5, TILE, 1, '#a08878');
+      rect(ctx, X, Y + 12, TILE, 1, '#7a6252');
+    }
+    // Edges only where the wall meets air, so neighbouring cells read as one wall.
+    const e = edge(base);
+    if (!lay.solid(x - 1, s) || isDoor(lay.cell(x - 1, s))) rect(ctx, X, Y, 1, TILE, e);
+    if (!lay.solid(x + 1, s) || isDoor(lay.cell(x + 1, s))) rect(ctx, X + TILE - 1, Y, 1, TILE, e);
+    if (s > 0 && !lay.solid(x, s - 1)) rect(ctx, X, Y + TILE - 1, TILE, 1, e);
+    if (this.sim.state.insulated[key(x, s)]) {
+      rect(ctx, X + 3, Y + 3, TILE - 6, TILE - 6, '#e3c45a');
+      rect(ctx, X + 5, Y + 5, 2, 2, '#c9a63e');
+      rect(ctx, X + 9, Y + 9, 2, 2, '#c9a63e');
+    }
+    if (kind === 'window') {
+      rect(ctx, X + 1, Y + 1, TILE - 2, TILE - 2, light(PAL.glass, 0.25));
+      rect(ctx, X + 7, Y, 2, TILE, PAL.glass);
+      rect(ctx, X + 7, Y + 5, 2, 1, light(PAL.glass, 0.6));
+    }
+    // Floorboards where there's a room on top.
+    if (lay.air(x, s + 1) && lay.roomOf[lay.node(x, s + 1)] !== -1 && !lay.rooms[lay.roomOf[lay.node(x, s + 1)]].outdoor) this.drawFloorTop(ctx, x, Y);
   }
 
-  private drawStairs(ctx: CanvasRenderingContext2D, x: number, s: number, dir: 1 | -1): void {
+  /** A stair cell: two steps rising the way the flight goes. */
+  private drawStair(ctx: CanvasRenderingContext2D, x: number, s: number, dir: 1 | -1): void {
     const X = x * TILE;
-    const base = floorY(s);
-    const rise = STOREY_PX;
-    const run = 3 * TILE;
-    const steps = 8;
-    for (let i = 0; i < steps; i++) {
-      const sx = dir === 1 ? X + (i * run) / steps : X + run - ((i + 1) * run) / steps;
-      const sy = base - ((i + 1) * rise) / steps;
-      box(ctx, sx, sy, run / steps + 1, base - sy, i % 2 ? PAL.wood : dark(PAL.wood, 0.08));
+    const F = floorY(s);
+    for (let i = 0; i < 2; i++) {
+      const sx = dir === 1 ? X + i * 8 : X + TILE - (i + 1) * 8;
+      const top = F - i * 8 - 4;
+      box(ctx, sx, top, 9, F + 6 - top, i % 2 ? PAL.wood : dark(PAL.wood, 0.08));
     }
-    ctx.strokeStyle = PAL.outline;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    const [ax, bx] = dir === 1 ? [X, X + run] : [X + run, X];
-    ctx.moveTo(ax, base - 14);
-    ctx.lineTo(bx, base - rise - 14);
-    ctx.stroke();
   }
 
   // ------------------------------------------------------------------ doors
 
   /**
-   * Doors seen side on: a line when shut, a panel swinging out into the room as someone
-   * passes through, towards the way they're going.
+   * Doors seen side on: a line down the slot when shut, a panel swinging out into the room
+   * as someone passes through, towards the way they're going.
    */
   private drawDoors(ctx: CanvasRenderingContext2D): void {
     const st = this.sim.state;
-    for (const [k, seg] of Object.entries(st.walls)) {
-      if (!isDoor(seg)) continue;
+    for (const [k, kind] of Object.entries(st.cells)) {
+      if (!isDoor(kind)) continue;
       const [x, s] = k.split(',').map(Number);
       const state = this.doors.get(k) ?? { open: 0, dir: 1 as 1 | -1 };
       const near = st.pawns.find((p) => !p.life?.away && Math.abs(p.s - s) < 0.2 && Math.abs(p.x - x) < 1 && !p.front);
       if (near) state.dir = near.facing;
       state.open = Math.max(0, Math.min(1, state.open + (near ? 0.12 : -0.06)));
       this.doors.set(k, state);
-      const leaf = seg === 'flatDoor' ? '#2f6b5a' : seg === 'entrance' ? '#2b3a5a' : PAL.door;
+      const leaf = kind === 'flatDoor' ? '#2f6b5a' : kind === 'entrance' ? '#2b3a5a' : PAL.door;
       const F = floorY(s);
       const hinge = x * TILE + 8;
       const w = Math.round(12 * Math.sin((state.open * Math.PI) / 2));
@@ -528,9 +515,9 @@ export class Renderer {
       const colour = v >= 0.6 ? '#5f9a4c' : v >= 0.4 ? '#d6a63c' : v >= 0.25 ? '#d9813a' : '#c4523f';
       ctx.globalAlpha = 0.45;
       for (const r of f.rooms) {
-        for (const n of lay.rooms[r].nodes) {
+        for (const n of lay.rooms[r].cells) {
           const [x, s] = lay.xs(n);
-          rect(ctx, x * TILE, floorY(s) - ROOM_ROWS * TILE, TILE, ROOM_ROWS * TILE, colour);
+          rect(ctx, x * TILE, floorY(s) - TILE, TILE, TILE, colour);
         }
       }
       ctx.globalAlpha = 1;
@@ -567,10 +554,9 @@ export class Renderer {
     c.fillStyle = mix('#ffffff', '#c4b0b4', d);
     for (const room of lay.rooms) {
       if (room.outdoor) continue;
-      for (const n of room.nodes) {
+      for (const n of room.cells) {
         const [x, s] = lay.xs(n);
-        if (!room.enclosed && !lay.slab(x, s + 1)) continue;
-        c.fillRect(x * TILE - 8, floorY(s) - ROOM_ROWS * TILE, TILE + 16, ROOM_ROWS * TILE + 3);
+        c.fillRect(x * TILE - 4, floorY(s) - TILE - 4, TILE + 8, TILE + 8);
       }
     }
     c.globalCompositeOperation = 'lighter';
@@ -587,7 +573,7 @@ export class Renderer {
       if (!colour) continue;
       const def = furnitureDef(f.def);
       const cx = (f.x + def.w / 2) * TILE;
-      const cy = floorY(f.s) - (f.r + def.h) * TILE + (f.def === 'lamp' ? 4 : 10);
+      const cy = floorY(f.s) - def.h * TILE + (f.def === 'lamp' ? 4 : 10);
       glow(cx, cy, f.def === 'lamp' ? 46 : f.def === 'tv' ? 26 : 18, colour, f.def === 'lamp' ? 0.75 : 0.5);
     }
     // A ceiling light in every lived-in room and on the landings.
@@ -598,16 +584,16 @@ export class Renderer {
       for (const s of new Set(room.nodes.map((n) => lay.xs(n)[1]))) {
         const xs = room.nodes.filter((n) => lay.xs(n)[1] === s).map((n) => lay.xs(n)[0]);
         const cx = ((Math.min(...xs) + Math.max(...xs) + 1) / 2) * TILE;
-        glow(cx, floorY(s) - ROOM_ROWS * TILE + 8, Math.min(70, (Math.max(...xs) - Math.min(...xs) + 2) * 7), '#ffd08a', 0.6);
+        glow(cx, floorY(s) - 2 * TILE, Math.min(70, (Math.max(...xs) - Math.min(...xs) + 2) * 7), '#ffd08a', 0.6);
       }
     }
     // Lit windows glow a little into the street.
-    for (const [k, seg] of Object.entries(st.walls)) {
-      if (seg !== 'window') continue;
+    for (const [k, kind] of Object.entries(st.cells)) {
+      if (kind !== 'window') continue;
       const [x, s] = k.split(',').map(Number);
-      glow(x * TILE + 8, floorY(s) - 26, 14, '#ffd890', 0.5);
+      glow(x * TILE + 8, floorY(s) - 8, 14, '#ffd890', 0.5);
     }
-    for (const x of this.streetLamps()) glow(x * TILE + 8, floorY(1) - 6, 40, '#ffd88a', 0.6);
+    for (const x of this.streetLamps()) glow(x * TILE + 8, floorY(STOREY) - 6, 40, '#ffd88a', 0.6);
     c.globalAlpha = 1;
     c.globalCompositeOperation = 'source-over';
   }
@@ -619,23 +605,23 @@ export class Renderer {
     const st = this.sim.state;
     // A faint grid over the plot.
     ctx.fillStyle = '#ffffff22';
-    const top = floorY(MAX_STOREYS) - ROOM_ROWS * TILE;
+    const top = floorY(MAX_ROWS);
     for (let x = st.plot.x0; x <= st.plot.x1 + 1; x++) ctx.fillRect(x * TILE, top, 0.5, GROUND_Y - top);
-    for (let s = 0; s <= MAX_STOREYS; s++) {
+    for (let s = 0; s <= MAX_ROWS; s++) {
       ctx.fillRect(st.plot.x0 * TILE, floorY(s), (st.plot.x1 - st.plot.x0 + 1) * TILE, 0.5);
     }
     for (const m of this.build.marks) {
       ctx.fillStyle = m.ok ? '#6fd08c66' : '#e0605066';
-      ctx.fillRect(m.x * TILE, floorY(m.s) - (m.r + m.h) * TILE, m.w * TILE, m.h * TILE);
+      ctx.fillRect(m.x * TILE, floorY(m.s) - m.h * TILE, m.w * TILE, m.h * TILE);
     }
     const g = this.build.ghost;
     if (g) {
       const d = furnitureDef(g.def);
       ctx.globalAlpha = 0.75;
-      drawFurniture(ctx, g.def, g.x * TILE, floorY(g.s) - (g.r + d.h) * TILE, g.flip);
+      drawFurniture(ctx, g.def, g.x * TILE, floorY(g.s) - d.h * TILE, g.flip);
       ctx.globalAlpha = 1;
       ctx.fillStyle = g.ok ? '#6fd08c55' : '#e0605066';
-      ctx.fillRect(g.x * TILE, floorY(g.s) - (g.r + d.h) * TILE, d.w * TILE, d.h * TILE);
+      ctx.fillRect(g.x * TILE, floorY(g.s) - d.h * TILE, d.w * TILE, d.h * TILE);
     }
   }
 
@@ -646,7 +632,7 @@ export class Renderer {
     const d = furnitureDef(sel.def);
     ctx.strokeStyle = '#f2c46d';
     ctx.lineWidth = 1;
-    ctx.strokeRect(sel.x * TILE + 0.5, floorY(sel.s) - (sel.r + d.h) * TILE + 0.5, d.w * TILE - 1, d.h * TILE - 1);
+    ctx.strokeRect(sel.x * TILE + 0.5, floorY(sel.s) - d.h * TILE + 0.5, d.w * TILE - 1, d.h * TILE - 1);
   }
 
   // ------------------------------------------------------------------ building work
@@ -673,7 +659,6 @@ export class Renderer {
 
   private drawPiece(ctx: CanvasRenderingContext2D, p: Piece): void {
     const BLUE = '#5fb2ff';
-    const H = ROOM_ROWS * TILE;
     const cross = (x: number, y: number, w: number, h: number) => {
       ctx.strokeStyle = '#ff6a55';
       ctx.lineWidth = 1.5;
@@ -695,76 +680,46 @@ export class Renderer {
       ctx.setLineDash([]);
     };
     const part = p.part;
-    switch (part.kind) {
-      case 'segment': {
-        const X = p.x * TILE;
-        const top = floorY(p.s) - H;
-        if (part.seg === null) {
-          cross(X + 2, top, TILE - 4, H);
-          break;
+    const X = p.x * TILE;
+    const Y = floorY(p.s) - TILE;
+    if (part.kind === 'insulate') {
+      if (p.removes) cross(X, Y, TILE, TILE);
+      else {
+        for (let yy = Y; yy < Y + TILE; yy += 4) {
+          ctx.fillStyle = (yy - Y) % 8 ? `${BLUE}aa` : '#e8c84aaa';
+          ctx.fillRect(X + 3, yy, TILE - 6, 4);
         }
-        ctx.fillStyle = `${BLUE}aa`;
-        if (part.seg === 'window') {
-          ctx.fillRect(X, top, TILE, 8);
-          ctx.fillRect(X, top + 38, TILE, H - 38);
-          ctx.fillStyle = '#d8f0ffcc';
-          ctx.fillRect(X + 7, top + 8, 2, 30);
-        } else if (isDoor(part.seg)) {
-          ctx.fillRect(X, top, TILE, H - DOOR_H);
-          ctx.fillRect(X + 7, floorY(p.s) - DOOR_H, 2, DOOR_H);
-        } else ctx.fillRect(X, top, TILE, H);
-        outline(X, top, TILE, H);
-        break;
       }
-      case 'slab': {
-        const y = floorY(part.level);
-        if (p.removes) cross(p.x * TILE, y, TILE, TILE);
-        else {
-          ctx.fillStyle = `${BLUE}88`;
-          ctx.fillRect(p.x * TILE, y, TILE, TILE);
-          outline(p.x * TILE, y, TILE, TILE);
-        }
-        break;
-      }
-      case 'stair': {
-        const t = part.stair;
-        const X = t.x * TILE;
-        if (p.removes) {
-          cross(X, floorY(t.s + 1), 3 * TILE, floorY(t.s) - floorY(t.s + 1));
-          break;
-        }
-        const steps = 8;
-        const rise = (floorY(t.s) - floorY(t.s + 1)) / steps;
-        const run = (3 * TILE) / steps;
-        ctx.fillStyle = `${BLUE}88`;
-        for (let i = 0; i < steps; i++) {
-          const sx = t.dir === 1 ? X + i * run : X + 3 * TILE - (i + 1) * run;
-          ctx.fillRect(sx, floorY(t.s) - (i + 1) * rise, run, (i + 1) * rise);
-        }
-        break;
-      }
-      case 'insulate': {
-        const [kind, rest] = part.key.split(':');
-        const [x, n] = rest.split(',').map(Number);
-        const [y, h] = kind === 'w' ? [floorY(n) - H, H] : [floorY(n), TILE];
-        const [X, w] = kind === 'w' ? [x * TILE + 5, 6] : [x * TILE, TILE];
-        if (p.removes) {
-          cross(X, y, w, h);
-          break;
-        }
-        for (let yy = y; yy < y + h; yy += 4) {
-          ctx.fillStyle = (yy - y) % 8 ? `${BLUE}aa` : '#e8c84aaa';
-          ctx.fillRect(X, yy, w, Math.min(4, y + h - yy));
-        }
-        break;
-      }
+      return;
     }
+    const rows = isDoor(part.cell ?? part.was) ? DOOR_ROWS : 1;
+    const top = floorY(p.s) - rows * TILE;
+    if (part.cell === null) {
+      cross(X, top, TILE, rows * TILE);
+      return;
+    }
+    ctx.fillStyle = `${BLUE}aa`;
+    if (part.cell === 'window') {
+      ctx.fillRect(X, top, TILE, TILE);
+      ctx.fillStyle = '#d8f0ffcc';
+      ctx.fillRect(X + 7, top, 2, TILE);
+    } else if (isDoor(part.cell)) {
+      ctx.fillRect(X + 7, floorY(p.s) - DOOR_H, 2, DOOR_H);
+    } else if (part.cell === 'stair') {
+      const dir = stairDir(this.sim.state, p.x, p.s) === 1 || (this.build.active && this.sim.state.works.plan?.cells[key(p.x + 1, p.s + 1)] === 'stair') ? 1 : -1;
+      for (let i = 0; i < 2; i++) ctx.fillRect(dir === 1 ? X + i * 8 : X + TILE - (i + 1) * 8, floorY(p.s) - i * 8 - 4, 8, i * 8 + 6);
+    } else ctx.fillRect(X, top, TILE, TILE);
+    outline(X, top, TILE, rows * TILE);
   }
 
   /** A builder in a hard hat, hammering away at the piece they're on. */
   private drawBuilder(ctx: CanvasRenderingContext2D, p: Piece): void {
-    const x = Math.round((p.x + 0.5) * TILE + (p.part.kind === 'segment' ? -TILE : 0));
-    const y = floorY(p.part.kind === 'slab' ? p.part.level - 1 : p.s);
+    // Beside the cell they're working on, at the height of the floor nearest it.
+    const lay = this.sim.layout;
+    let row = p.s;
+    while (row > 0 && !lay.standable[lay.node(p.x - 1, row)] && !lay.standable[lay.node(p.x, row)]) row--;
+    const x = Math.round((p.x - 0.5) * TILE);
+    const y = floorY(row);
     const bob = Math.floor(this.sim.state.tick / 40) % 2;
     drawPerson(ctx, BUILDER, x, y, 0, false);
     // The hat, and a hammer going up and down.
@@ -783,7 +738,7 @@ export class Renderer {
     const toScreen = (wx: number, wy: number) => [c.ox + wx * c.scale, c.oy + wy * c.scale] as const;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    // Flat names, over the middle of each flat's top storey.
+    // Flat names, over the middle of each flat's top floor.
     const size = Math.max(9, Math.min(13, c.scale * 5));
     ctx.font = `600 ${size}px system-ui, sans-serif`;
     for (const f of lay.flats) {
@@ -791,7 +746,7 @@ export class Renderer {
       const topS = Math.max(...nodes.map(([, s]) => s));
       const row = nodes.filter(([, s]) => s === topS).map(([x]) => x);
       const mid = (Math.min(...row) + Math.max(...row) + 1) / 2;
-      const [sx, sy] = toScreen(mid * TILE, floorY(topS) - ROOM_ROWS * TILE + 3);
+      const [sx, sy] = toScreen(mid * TILE, floorY(topS) - 2 * TILE - 2);
       const w = ctx.measureText(f.name).width + 8;
       ctx.fillStyle = '#1d1f23b0';
       ctx.fillRect(sx - w / 2, sy, w, size + 4);

@@ -6,7 +6,7 @@ import { buyFurniture, resaleOf, sellFurniture, shiftFurniture } from '../src/si
 import { deserialize, serialize } from '../src/sim/save';
 import { Sim } from '../src/sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, key, type State } from '../src/sim/state';
-import { copyParts, currentPiece, jobPieces, partsOf, piecesBetween, plannedParts, quote, signOff } from '../src/sim/works';
+import { copyParts, currentPiece, whereIs, jobPieces, partsOf, piecesBetween, plannedParts, quote, signOff } from '../src/sim/works';
 
 /** Draws plans the way build mode does: on a copy of the state, then stored as the plan. */
 function plan(sim: Sim, draw: (draft: State) => void): BuildParts {
@@ -23,7 +23,7 @@ function insulateOverFlat1(sim: Sim, n: number): (d: State) => void {
   const lay = sim.layout;
   const cols = lay.rooms[lay.flats[0].rooms[0]].nodes.map((node) => lay.xs(node)[0]).slice(0, n);
   return (d) => {
-    for (const x of cols) d.insulated[`f:${key(x, 1)}`] = true;
+    for (const x of cols) d.insulated[key(x, 3)] = true;
   };
 }
 
@@ -84,10 +84,12 @@ describe('building work', () => {
     plan(sim, insulateOverFlat1(sim, 1));
     expect(signOff(sim)).toBeNull();
     sim.run(5 * TICKS_PER_MINUTE);
-    expect(currentPiece(sim)).not.toBeNull();
-    expect(sim.noise().get(lay.flats[0].id) ?? 0).toBeGreaterThanOrEqual(5);
-    // The flat upstairs hears it.
-    expect(lay.flats.slice(1).some((f) => noiseReaching(sim, sim.noise(), f.id).amount > 0)).toBe(true);
+    const work = currentPiece(sim);
+    expect(work).not.toBeNull();
+    const where = whereIs(sim, work!);
+    expect(sim.noise().get(where) ?? 0).toBeGreaterThanOrEqual(5);
+    // The flat on the other side of the floor hears it.
+    expect(lay.flats.some((f) => f.id !== where && noiseReaching(sim, sim.noise(), f.id).amount > 0)).toBe(true);
   });
 
   it('keeps plans and jobs through a save', () => {
@@ -104,10 +106,10 @@ describe('furniture', () => {
     const sim = Sim.create(8);
     const st = sim.state;
     const money = st.money;
-    const f = buyFurniture(sim, 'plant', st.plot.x0 + 12, 0, 0, false);
+    const f = buyFurniture(sim, 'plant', st.plot.x0 + 12, 0, false);
     if (typeof f === 'string') throw new Error(f);
     expect(st.money).toBe(money - furniturePrice('plant'));
-    expect(shiftFurniture(sim, f.id, st.plot.x0 + 11, 0, 0)).toBeNull();
+    expect(shiftFurniture(sim, f.id, st.plot.x0 + 11, 0)).toBeNull();
     expect(f.x).toBe(st.plot.x0 + 11);
     sellFurniture(sim, f.id);
     expect(st.furniture.some((o) => o.id === f.id)).toBe(false);
@@ -121,10 +123,10 @@ describe('furniture', () => {
     const x = st.plot.x0 + 12;
     let draft!: State;
     plan(sim, (d) => {
-      d.walls[key(x, 0)] = 'wall';
+      d.cells[key(x, 0)] = 'wall';
       draft = d;
     });
-    expect(buyFurniture(sim, 'plant', x, 0, 0, false, draft)).toBe('A wall or door is in the way');
+    expect(buyFurniture(sim, 'plant', x, 0, false, draft)).toBe('A wall is in the way');
   });
 
   it('gets whoever is using a piece up when it moves', () => {

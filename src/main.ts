@@ -110,14 +110,14 @@ function play(sim: Sim): void {
       }
       const cell = renderer.cellAt(x, y);
       // Furniture brings up its card (tap it again, or anywhere else, to put the card away).
-      const piece = cell && cell.r < 3 ? furnitureAt(sim.state, cell.x, cell.s, cell.r) : undefined;
+      const piece = cell ? furnitureAt(sim.state, cell.x, cell.s) : undefined;
       if (piece && was !== piece.id) {
         panels.close();
         renderer.build.selected = piece.id;
         card.show(piece.id);
         return;
       }
-      const flat = cell && cell.r < 3 ? sim.layout.flatAt(cell.x, cell.s) : undefined;
+      const flat = cell ? sim.layout.flatAt(cell.x, cell.s) : undefined;
       if (flat) {
         renderer.selectedPawn = null;
         panels.show({ kind: 'flat', id: flat.id });

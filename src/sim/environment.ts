@@ -16,10 +16,6 @@ import { TICKS_PER_DAY, isDoor, key, type Pawn } from './state';
 import { has } from './traits';
 import { BUILDER_NOISE, currentPiece, whereIs } from './works';
 
-/** Where heat and noise get through: a wall tile or a floor tile. */
-export const wallKey = (x: number, s: number) => `w:${key(x, s)}`;
-export const floorKey = (x: number, level: number) => `f:${key(x, level)}`;
-
 export const SHARED = 'shared';
 
 /** How much noise an insulated wall or floor lets through, against a bare one. */
@@ -58,16 +54,20 @@ interface Shape {
 
 const shapes = new WeakMap<Sim, { version: number; insulation: number; byFlat: Map<string, Shape>; through: Map<string, Map<string, number>> }>();
 
+/** Who an air cell belongs to: a flat, SHARED, OUTSIDE, or null (a sealed room, or not air). */
+const OUTSIDE = 'outside';
 function ownerOf(lay: Layout, x: number, s: number): string | null {
-  if (x < 0 || x >= lay.w || s < 0 || s >= lay.storeys) return null;
-  const n = lay.node(x, s);
-  const room = lay.roomOf[n];
-  if (room !== -1) {
-    const r = lay.rooms[room];
-    return r.flat ?? (r.shared ? SHARED : null);
-  }
-  return lay.flatAt(x, s)?.id ?? null;
+  if (x < 0 || x >= lay.w || s >= lay.rows) return OUTSIDE;
+  if (s < 0) return null;
+  const room = lay.roomOf[lay.node(x, s)];
+  if (room === -1) return null;
+  const r = lay.rooms[room];
+  if (r.outdoor) return OUTSIDE;
+  return r.flat ?? (r.shared ? SHARED : null);
 }
+
+/** The most wall cells we look through for what's on the other side. */
+const THICKEST = 4;
 
 function shapesOf(sim: Sim) {
   const st = sim.state;
@@ -76,44 +76,55 @@ function shapesOf(sim: Sim) {
   if (cached && cached.version === sim.version && cached.insulation === ins) return cached;
   const lay = sim.layout;
   const through = new Map<string, Map<string, number>>();
-  const add = (a: string | null, b: string | null, amount: number) => {
-    if (!a || !b || a === b) return;
-    for (const [p, q] of [[a, b], [b, a]]) {
-      const m = through.get(p) ?? new Map<string, number>();
-      m.set(q, (m.get(q) ?? 0) + amount);
-      through.set(p, m);
-    }
+  const add = (a: string, b: string, amount: number) => {
+    const m = through.get(a) ?? new Map<string, number>();
+    m.set(b, (m.get(b) ?? 0) + amount);
+    through.set(a, m);
   };
   const byFlat = new Map<string, Shape>();
   for (const f of lay.flats) byFlat.set(f.id, { area: f.area, outside: 0, insulated: 0, through });
-  const ownOutside = (id: string | null, insulated: boolean) => {
-    const s = id ? byFlat.get(id) : undefined;
-    if (!s) return;
-    s.outside++;
-    if (insulated) s.insulated++;
-  };
-  for (let s = 0; s < lay.storeys; s++) {
+  // From every cell of every flat (and the shared parts), look through the walls in each
+  // direction to see what's on the other side: another flat, the outside, or the ground.
+  // Thicker walls let less through; doors and windows let more.
+  for (let s = 0; s < lay.rows; s++) {
     for (let x = 0; x < lay.w; x++) {
-      // Walls (and doors and windows) between the tile to the left and the one to the right.
-      const seg = lay.segment(x, s);
-      if (seg) {
-        const left = ownerOf(lay, x - 1, s);
-        const right = ownerOf(lay, x + 1, s);
-        const ins = !!st.insulated[wallKey(x, s)];
-        const leak = (isDoor(seg) ? 1.5 : seg === 'window' ? 1.2 : 1) * (ins ? INSULATED : 1);
-        if (left && right) add(left, right, leak * 0.1);
-        else if (left && !right) ownOutside(left, ins);
-        else if (right && !left) ownOutside(right, ins);
-      }
-      // Floors: between this storey and the one above.
-      const here = ownerOf(lay, x, s);
-      if (here && !lay.isDoorNode(lay.node(x, s))) {
-        const above = s + 1 < lay.storeys && lay.slab(x, s + 1) ? ownerOf(lay, x, s + 1) : null;
-        const ins = !!st.insulated[floorKey(x, s + 1)];
-        if (above) add(here, above, (ins ? INSULATED : 1) * 0.08);
-        if (!lay.slab(x, s + 1)) ownOutside(here, false);
-        else if (!above) ownOutside(here, ins); // the roof
-        if (s === 0) ownOutside(here, !!st.insulated[floorKey(x, 0)]);
+      const me = ownerOf(lay, x, s);
+      if (!me || me === OUTSIDE) continue;
+      const shape = byFlat.get(me);
+      for (const [dx, ds] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        let t = 0;
+        let leak = 1;
+        let lagged = false;
+        let other: string | null = null;
+        for (let i = 1; i <= THICKEST + 1; i++) {
+          const nx = x + dx * i;
+          const ns = s + ds * i;
+          if (ns < 0) {
+            other = 'ground';
+            break;
+          }
+          const o = lay.air(nx, ns) || nx < 0 || nx >= lay.w || ns >= lay.rows ? ownerOf(lay, nx, ns) : undefined;
+          if (o !== undefined) {
+            other = o;
+            break;
+          }
+          t++;
+          const c = lay.cell(nx, ns);
+          if (st.insulated[key(nx, ns)]) lagged = true;
+          if (isDoor(c) || lay.doorTop(nx, ns)) leak = Math.max(leak, 1.5);
+          else if (c === 'window') leak = Math.max(leak, 1.2);
+        }
+        if (t === 0 && other !== 'ground') continue;
+        const thick = Math.max(1, t);
+        const weight = ds === 0 ? 1 / 3 : 1;
+        if (other === OUTSIDE || other === 'ground') {
+          if (shape) {
+            shape.outside += weight / thick;
+            if (lagged) shape.insulated += weight / thick;
+          }
+        } else if (other && other !== me) {
+          add(me, other, ((ds === 0 ? 0.035 : 0.08) * leak * (lagged ? INSULATED : 1)) / (thick * thick));
+        }
       }
     }
   }
@@ -136,7 +147,7 @@ export function neighboursOf(sim: Sim, id: string): string[] {
 
 export function radiators(sim: Sim, flat: Flat): number {
   const lay = sim.layout;
-  const nodes = new Set(flat.rooms.flatMap((r) => lay.rooms[r].nodes));
+  const nodes = new Set(lay.flatCells(flat));
   return sim.state.furniture.filter((f) => f.def === 'radiator' && nodes.has(lay.node(f.x, f.s))).length;
 }
 
@@ -245,7 +256,7 @@ const BIN_PEOPLE = 6;
 /** Too many people for the bins in the shared parts, and it's late in the week. */
 export function binsOverflowing(sim: Sim): boolean {
   const lay = sim.layout;
-  const shared = new Set(lay.rooms.filter((r) => r.shared).flatMap((r) => r.nodes));
+  const shared = new Set(lay.rooms.filter((r) => r.shared).flatMap((r) => r.cells));
   const bins = sim.state.furniture.filter((f) => f.def === 'bins' && shared.has(lay.node(f.x, f.s))).length;
   const people = sim.state.pawns.filter((p) => p.life && !p.life.leaving).length;
   const weekday = (sim.day - 1) % 7;
@@ -257,7 +268,7 @@ function dirtHour(sim: Sim): void {
   const lay = sim.layout;
   const tenants = st.pawns.filter((p) => p.life && !p.life.leaving);
   // People walk dirt in from the street; a doormat in the lobby halves it.
-  const shared = new Set(lay.rooms.filter((r) => r.shared).flatMap((r) => r.nodes));
+  const shared = new Set(lay.rooms.filter((r) => r.shared).flatMap((r) => r.cells));
   const mat = st.furniture.some((f) => f.def === 'doormat' && shared.has(lay.node(f.x, f.s)));
   addDirt(sim, SHARED, 0.0025 * tenants.length * (mat ? 0.5 : 1));
   for (const f of lay.flats) {

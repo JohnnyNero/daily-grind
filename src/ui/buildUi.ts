@@ -7,29 +7,21 @@
 
 import {
   buildRoom,
+  cellProblem,
   furnitureAt,
   furnitureProblem,
-  placeSegment,
-  placeSlab,
-  placeStair,
-  removeSegment,
-  removeSlab,
-  removeStair,
-  segmentProblem,
-  slabProblem,
-  slabRemoveProblem,
-  stairIn,
-  stairProblem,
   insulate,
   insulateProblem,
+  placeCell,
+  removeCell,
+  removeProblem,
   type BuildParts,
 } from '../sim/build';
 import { FURNITURE, furnitureDef, type FurnitureGroup } from '../sim/defs';
-import { DEMOLISH_PRICE, FLOOR_PRICE, INSULATE_PRICE, SEGMENT_PRICE, STAIRS_PRICE, TIER_RENT, furniturePrice, pounds } from '../sim/economy';
-import { floorKey, wallKey } from '../sim/environment';
+import { CELL_PRICE, DEMOLISH_PRICE, INSULATE_PRICE, TIER_RENT, furniturePrice, pounds } from '../sim/economy';
 import { flatScore, occupants, scoreFor } from '../sim/impressiveness';
 import { Sim } from '../sim/sim';
-import { ROOM_ROWS, TILE, key, type Segment, type State } from '../sim/state';
+import { DOOR_ROWS, TILE, isDoor, isSolid, key, type CellKind, type State } from '../sim/state';
 import { buyFurniture, sellFurniture, shiftFurniture, turnFurniture } from '../sim/furnish';
 import { BUILDERS, copyParts, howLong, jobPieces, partsOf, piecesBetween, plannedParts, quote, signOff, stopJob } from '../sim/works';
 import { drawFurniture } from '../render/art';
@@ -37,26 +29,25 @@ import { floorY, type Cell, type Renderer } from '../render/renderer';
 import { el, h } from './dom';
 import type { FurnitureCard } from './furnitureCard';
 
-type Tool = 'room' | Segment | 'floor' | 'stairs' | 'insulate' | 'demolish';
+type Tool = 'room' | CellKind | 'insulate' | 'demolish';
 
 const TOOLS: Record<Tool, { name: string; hint: string }> = {
-  room: { name: 'Room', hint: 'Drag across to mark out a room: walls at both ends, a floor and a ceiling.' },
-  wall: { name: 'Wall', hint: 'Tap or drag to put up walls.' },
-  window: { name: 'Window', hint: 'Tap a wall to put a window in it.' },
-  insulate: { name: 'Insulate', hint: 'Tap a wall or a floor: much less noise gets through, and the heat stays in.' },
-  door: { name: 'Door', hint: 'Tap a wall to put an inside door in it, between rooms of the same flat.' },
-  flatDoor: { name: 'Flat door', hint: "Tap a wall to put a flat's front door in it. Everything behind it is that flat." },
-  entrance: { name: 'Street door', hint: 'Tap a ground-floor wall to put the way in from the street in it.' },
-  floor: { name: 'Floor', hint: 'Tap or drag along a storey to lay a floor (or a ceiling) there.' },
-  stairs: { name: 'Stairs', hint: 'Tap where the stairs should start. "Turn" makes them climb the other way.' },
-  demolish: { name: 'Knock down', hint: 'Tap or drag to take out walls, doors, floors, stairs and furniture.' },
+  wall: { name: 'Wall', hint: 'Draw walls a cell at a time, anywhere. A wall with space over it is a floor.' },
+  room: { name: 'Room', hint: 'Drag a box: walls all round it, with the room inside.' },
+  window: { name: 'Window', hint: 'Tap a gap in a wall (or a wall cell) to put a window in.' },
+  insulate: { name: 'Insulate', hint: 'Tap or drag along walls: much less noise gets through, and the heat stays in.' },
+  door: { name: 'Door', hint: 'Tap the bottom of a two-cell gap in a wall: an inside door, between rooms of one flat.' },
+  flatDoor: { name: 'Flat door', hint: "Tap the bottom of a two-cell gap: a flat's front door. Everything behind it is that flat." },
+  entrance: { name: 'Street door', hint: 'Tap the bottom of a two-cell gap on the ground: the way in from the street.' },
+  stair: { name: 'Stairs', hint: 'Draw stairs corner to corner, one cell up for each one across.' },
+  demolish: { name: 'Knock down', hint: 'Tap or drag to take out walls, windows, doors and stairs. Tap furniture to sell it.' },
 };
 
 /** The groups along the top of the bar: building work first, then furniture. */
 const GROUPS: { id: string; name: string; tools?: Tool[]; furniture?: FurnitureGroup[] }[] = [
-  { id: 'walls', name: 'Walls', tools: ['room', 'wall', 'window', 'insulate'] },
+  { id: 'walls', name: 'Walls', tools: ['wall', 'room', 'window', 'insulate'] },
   { id: 'doors', name: 'Doors', tools: ['door', 'flatDoor', 'entrance'] },
-  { id: 'floors', name: 'Floors', tools: ['floor', 'stairs'] },
+  { id: 'stairs', name: 'Stairs', tools: ['stair'] },
   { id: 'demolish', name: 'Knock down', tools: ['demolish'] },
   { id: 'sleep', name: 'Bedroom', furniture: ['sleep'] },
   { id: 'sit', name: 'Living', furniture: ['sit'] },
@@ -65,6 +56,9 @@ const GROUPS: { id: string; name: string; tools?: Tool[]; furniture?: FurnitureG
   { id: 'storage', name: 'Storage', furniture: ['storage'] },
   { id: 'decor', name: 'Decor & heat', furniture: ['decor'] },
 ];
+
+/** Tools you paint with: drag across cells and each one gets done. */
+const PAINT: readonly Tool[] = ['wall', 'window', 'stair', 'insulate', 'demolish'];
 
 const MAX_UNDO = 50;
 /** How near (in screen pixels) a drag has to start to the selected piece to move it, not the view. */
@@ -75,9 +69,8 @@ type Box = { x: number; y: number; w: number; h: number };
 export class BuildUi {
   active = false;
   private group = GROUPS[0];
-  private tool: Tool = 'room';
+  private tool: Tool = 'wall';
   private piece: string | null = null;
-  private stairDir: 1 | -1 = 1;
   private flip = false;
   /** Undo steps: the plans as they were, or the furniture (and the money) as it was. */
   private undo: { plan?: string; furniture?: string; money?: number; ledger?: number }[] = [];
@@ -193,7 +186,7 @@ export class BuildUi {
   /** The plans, without the furniture (which isn't planned), for undo. */
   private planSnap(): string {
     const d = this.draft;
-    return JSON.stringify({ walls: d.walls, slabs: d.slabs, stairs: d.stairs, insulated: d.insulated });
+    return JSON.stringify({ cells: d.cells, insulated: d.insulated });
   }
 
   private furnitureSnap(): (typeof this.undo)[number] {
@@ -284,8 +277,7 @@ export class BuildUi {
     const id = this.renderer.build.selected;
     if (id !== null) this.furnish(() => turnFurniture(this.sim, id));
     else if (this.isFurniture()) this.flip = !this.flip;
-    else this.stairDir = this.stairDir === 1 ? -1 : 1;
-    this.setHint(!this.isFurniture() && this.tool === 'stairs' ? `Stairs climb to the ${this.stairDir === 1 ? 'right' : 'left'}.` : null);
+    this.setHint(null);
   }
 
   private isFurniture(): boolean {
@@ -362,7 +354,7 @@ export class BuildUi {
   private updateButtons(): void {
     const selected = this.renderer.build.selected !== null;
     (el('build-undo') as HTMLButtonElement).disabled = this.undo.length === 0;
-    el('build-flip').hidden = this.isFurniture() ? !selected && this.piece === null : this.tool !== 'stairs';
+    el('build-flip').hidden = !this.isFurniture() || (!selected && this.piece === null);
   }
 
   /** The cost of the plans, how long they'll take, and what they'll do for the flats. */
@@ -444,7 +436,7 @@ export class BuildUi {
     const lay = this.draftSim.layout;
     const f = lay.flat(flatId);
     if (!f) return;
-    const cells = f.rooms.flatMap((r) => lay.rooms[r].nodes).map((n) => lay.xs(n));
+    const cells = lay.flatCells(f).map((n) => lay.xs(n));
     const xs = cells.map(([x]) => x);
     const ss = cells.map(([, s]) => s);
     this.renderer.focus(Math.min(...xs), Math.max(...xs), Math.min(...ss), Math.max(...ss), this.viewBox());
@@ -467,7 +459,7 @@ export class BuildUi {
   tap(sx: number, sy: number): void {
     const cell = this.renderer.cellAt(sx, sy);
     if (!cell) return;
-    this.apply(cell, cell, true);
+    this.apply(cell, true);
     this.preview(null);
   }
 
@@ -499,7 +491,7 @@ export class BuildUi {
     const c = this.renderer.camera;
     const left = c.ox + f.x * TILE * c.scale;
     const right = left + d.w * TILE * c.scale;
-    const bottom = c.oy + (floorY(f.s) - f.r * TILE) * c.scale;
+    const bottom = c.oy + floorY(f.s) * c.scale;
     const top = bottom - d.h * TILE * c.scale;
     return sx > left - GRAB_PX && sx < right + GRAB_PX && sy > top - GRAB_PX && sy < bottom + GRAB_PX;
   }
@@ -507,16 +499,17 @@ export class BuildUi {
   dragMove(sx: number, sy: number): void {
     const d = this.drag;
     const cell = this.renderer.cellAt(sx, sy);
-    if (!d || !cell || (cell.x === d.last.x && cell.s === d.last.s && cell.r === d.last.r)) return;
+    if (!d || !cell || (cell.x === d.last.x && cell.s === d.last.s)) return;
+    // The cell the drag started on gets painted too, once it's clear this is a drag.
+    if (!d.moved && d.furniture === undefined && PAINT.includes(this.tool)) this.apply(d.start, false);
     d.moved = true;
     if (d.furniture !== undefined) {
       const f = this.sim.state.furniture.find((o) => o.id === d.furniture)!;
       const dx = cell.x - d.last.x;
       const ds = cell.s - d.last.s;
-      const r = furnitureDef(f.def).wall ? Math.max(1, f.r + (ds === 0 ? cell.r - d.last.r : 0)) : 0;
       // If it doesn't fit there, it stays put until the finger reaches somewhere it does.
       this.syncDraft();
-      if (!shiftFurniture(this.sim, f.id, f.x + dx, f.s + ds, r, this.draft)) {
+      if (!shiftFurniture(this.sim, f.id, f.x + dx, f.s + ds, this.draft)) {
         d.last = cell;
         this.draftSim.changed();
         this.bump();
@@ -524,11 +517,9 @@ export class BuildUi {
       return;
     }
     if (this.tool === 'room') this.markRoom(d.start, cell);
-    else {
-      // Fill in every cell along the way, so a quick swipe doesn't leave gaps.
-      const step = Math.sign(cell.x - d.last.x);
-      for (let x = d.last.x + step; step !== 0 && x !== cell.x; x += step) this.apply({ ...cell, x }, d.start, false);
-      this.apply(cell, d.start, false);
+    else if (PAINT.includes(this.tool)) {
+      // Every cell along the way, so a quick swipe doesn't leave gaps.
+      for (const c of between(d.last, cell)) this.apply(c, false);
     }
     d.last = cell;
   }
@@ -547,11 +538,11 @@ export class BuildUi {
       return;
     }
     if (this.tool === 'room') {
-      if (Math.abs(d.last.x - d.start.x) < 2) this.setHint('Make it at least three tiles wide.', true);
+      if (Math.abs(d.last.x - d.start.x) < 2 || Math.abs(d.last.s - d.start.s) < 3) this.setHint('Make it at least 3 wide and 4 tall: people need two cells of headroom.', true);
       else this.change(() => buildRoom(this.draft, d.start.x, d.start.s, d.last.x, d.last.s));
     } else if (!d.moved) {
       this.undo.pop();
-      this.apply(d.start, d.start, true);
+      this.apply(d.start, true);
     } else if (this.undo[this.undo.length - 1]?.plan === this.planSnap()) {
       this.undo.pop();
     }
@@ -572,7 +563,7 @@ export class BuildUi {
   }
 
   /** Does the current tool at a cell. `single` is a tap (keeps its own undo step). */
-  private apply(cell: Cell, start: Cell, single: boolean): void {
+  private apply(cell: Cell, single: boolean): void {
     const st = this.draft;
     if (this.isFurniture()) {
       this.tapFurniture(cell);
@@ -587,61 +578,33 @@ export class BuildUi {
       if (single) this.change(go);
       else {
         go();
-        this.sim.state.nextId = Math.max(this.sim.state.nextId, this.draft.nextId);
         this.planChanged();
       }
     };
-    // Drags stay on the storey they started on.
-    const s = single ? cell.s : start.s;
-    const r = single ? cell.r : start.r;
+    const { x, s } = cell;
     switch (this.tool) {
       case 'room':
         if (single) problem = 'Drag across to mark out a room.';
         break;
-      case 'floor': {
-        const level = r === ROOM_ROWS ? s + 1 : s;
-        if (level < 1) problem = 'The ground floor stands on the ground';
-        else run(() => placeSlab(st, cell.x, level));
-        break;
-      }
-      case 'stairs':
-        if (single) run(() => placeStair(st, cell.x, s, this.stairDir));
-        break;
       case 'demolish': {
         // Knocking down furniture sells it, there and then (only with a tap, not a drag).
-        const f = r < ROOM_ROWS ? furnitureAt(this.sim.state, cell.x, s, r) : undefined;
+        const f = furnitureAt(this.sim.state, x, s);
         if (f) {
           if (single) this.furnish(() => sellFurniture(this.sim, f.id));
-        } else run(() => this.demolish(cell.x, s, r));
+        } else run(() => removeCell(st, x, s));
         break;
       }
-      case 'insulate': {
-        const part = this.insulatePart(cell.x, s, r);
-        if (!part) problem = 'Tap a wall, or a floor between storeys';
-        else run(() => insulate(st, part));
+      case 'insulate':
+        run(() => insulate(st, key(x, s)));
         break;
+      default: {
+        // A door goes in by its bottom cell: tapping the top half of a gap means the cell below.
+        const kind = this.tool as CellKind;
+        const at = isDoor(kind) && s > 0 && cellProblem(st, x, s, kind) && !cellProblem(st, x, s - 1, kind) ? s - 1 : s;
+        run(() => placeCell(st, x, at, kind));
       }
-      default:
-        if (r === ROOM_ROWS) problem = 'Tap the storey, not the floor';
-        else run(() => placeSegment(st, cell.x, s, this.tool as Segment));
     }
     this.setHint(problem, problem !== null);
-  }
-
-  /** The wall or floor tile the insulate tool means at a cell. */
-  private insulatePart(x: number, s: number, r: number): string | null {
-    if (r === ROOM_ROWS) return floorKey(x, s + 1);
-    return this.draft.walls[key(x, s)] ? wallKey(x, s) : null;
-  }
-
-  private demolish(x: number, s: number, r: number): string | null {
-    const st = this.draft;
-    if (r === ROOM_ROWS) return removeSlab(st, x, s + 1);
-    if (removeSegment(st, x, s)) return null;
-    const t = stairIn(st, x, s);
-    if (t) return removeStair(st, t.id) ? null : 'Nothing there';
-    if (st.slabs[key(x, s)] && s > 0) return removeSlab(st, x, s);
-    return 'Nothing to knock down there';
   }
 
   get isMoving(): boolean {
@@ -666,7 +629,7 @@ export class BuildUi {
       const spot = this.spotFor(movingDef, cell);
       const out = { problem: null as string | null };
       this.furnish(() => {
-        out.problem = shiftFurniture(this.sim, id, spot.x, spot.s, spot.r, this.draft);
+        out.problem = shiftFurniture(this.sim, id, spot.x, spot.s, this.draft);
       });
       if (out.problem) {
         this.setHint(out.problem, true);
@@ -676,16 +639,16 @@ export class BuildUi {
       this.showCard(id);
       return;
     }
-    const under = furnitureAt(st, cell.x, cell.s, cell.r);
+    const under = furnitureAt(st, cell.x, cell.s);
     const spot = this.piece ? this.spotFor(this.piece, cell) : null;
-    if (!this.piece || !spot || (under && furnitureProblem(st, this.piece, spot.x, spot.s, spot.r) !== null)) {
+    if (!this.piece || !spot || (under && furnitureProblem(st, this.piece, spot.x, spot.s) !== null)) {
       if (under && this.card.showing !== under.id) this.showCard(under.id);
       else this.select(null);
       return;
     }
     const out = { result: 'Nothing placed' as ReturnType<typeof buyFurniture> };
     this.furnish(() => {
-      out.result = buyFurniture(this.sim, this.piece!, spot.x, spot.s, spot.r, this.flip, this.draft);
+      out.result = buyFurniture(this.sim, this.piece!, spot.x, spot.s, this.flip, this.draft);
     });
     if (typeof out.result === 'string') this.setHint(out.result, true);
     else {
@@ -711,21 +674,28 @@ export class BuildUi {
   }
 
   /**
-   * Where a piece goes for a tapped cell: centred on it, on the floor or on the wall at the
-   * height tapped.
+   * Where a piece goes for a tapped cell: centred on it. Wall pieces go at the height
+   * tapped; floor pieces drop to the floor under the tap (or sit on the floor tapped).
    */
   private spotFor(def: string, cell: Cell): Cell {
     const d = furnitureDef(def);
-    const r = d.wall ? Math.min(ROOM_ROWS - d.h, Math.max(1, cell.r)) : 0;
-    return { x: cell.x - Math.floor((d.w - 1) / 2), s: cell.s, r };
+    const x = cell.x - Math.floor((d.w - 1) / 2);
+    if (d.wall) return { x, s: cell.s };
+    const st = this.sim.state;
+    if (isSolid(st.cells[key(cell.x, cell.s)])) return { x, s: cell.s + 1 };
+    let s = cell.s;
+    for (let i = 0; i < 3 && s > 0 && !isSolid(st.cells[key(cell.x, s - 1)]); i++) s--;
+    return { x, s };
   }
 
   private markRoom(a: Cell, b: Cell): void {
     const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
     const [s0, s1] = [Math.min(a.s, b.s), Math.max(a.s, b.s)];
-    const ok = x1 - x0 >= 2;
-    this.renderer.build.marks = [];
-    for (let s = s0; s <= s1; s++) this.renderer.build.marks.push({ x: x0, s, r: 0, w: x1 - x0 + 1, h: ROOM_ROWS, ok });
+    const ok = x1 - x0 >= 2 && s1 - s0 >= 3;
+    const m = this.renderer.build.marks;
+    m.length = 0;
+    m.push({ x: x0, s: s0, w: x1 - x0 + 1, h: 1, ok }, { x: x0, s: s1, w: x1 - x0 + 1, h: 1, ok });
+    if (s1 - s0 > 1) m.push({ x: x0, s: s0 + 1, w: 1, h: s1 - s0 - 1, ok }, { x: x1, s: s0 + 1, w: 1, h: s1 - s0 - 1, ok });
     this.bump();
   }
 
@@ -744,29 +714,31 @@ export class BuildUi {
       const def = moving?.def ?? this.piece;
       if (def) {
         const spot = this.spotFor(def, cell);
-        const ok = furnitureProblem(this.sim.state, def, spot.x, spot.s, spot.r, moving?.id) === null && furnitureProblem(st, def, spot.x, spot.s, spot.r, moving?.id) === null;
+        const ok = furnitureProblem(this.sim.state, def, spot.x, spot.s, moving?.id) === null && furnitureProblem(st, def, spot.x, spot.s, moving?.id) === null;
         b.ghost = { def, ...spot, flip: moving ? !!moving.flip : this.flip, ok };
       }
-    } else if (this.tool === 'stairs') {
-      b.marks.push({ x: cell.x, s: cell.s, r: 0, w: 3, h: ROOM_ROWS, ok: stairProblem(st, cell.x, cell.s, this.stairDir) === null });
-    } else if (this.tool === 'floor') {
-      const level = cell.r === ROOM_ROWS ? cell.s + 1 : cell.s;
-      b.marks.push({ x: cell.x, s: level - 1, r: ROOM_ROWS, w: 1, h: 1, ok: level >= 1 && slabProblem(st, cell.x, level) === null });
     } else if (this.tool === 'insulate') {
-      const part = this.insulatePart(cell.x, cell.s, cell.r);
-      const ok = part !== null && insulateProblem(st, part) === null;
-      if (cell.r === ROOM_ROWS) b.marks.push({ x: cell.x, s: cell.s, r: ROOM_ROWS, w: 1, h: 1, ok });
-      else b.marks.push({ x: cell.x, s: cell.s, r: 0, w: 1, h: ROOM_ROWS, ok });
+      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: insulateProblem(st, key(cell.x, cell.s)) === null });
     } else if (this.tool === 'demolish') {
-      const ok = cell.r === ROOM_ROWS ? slabRemoveProblem(st, cell.x, cell.s + 1) === null : true;
-      b.marks.push({ x: cell.x, s: cell.s, r: cell.r === ROOM_ROWS ? ROOM_ROWS : 0, w: 1, h: cell.r === ROOM_ROWS ? 1 : ROOM_ROWS, ok });
-    } else if (this.tool !== 'room' && cell.r < ROOM_ROWS) {
-      b.marks.push({ x: cell.x, s: cell.s, r: 0, w: 1, h: ROOM_ROWS, ok: segmentProblem(st, cell.x, cell.s, this.tool as Segment) === null });
+      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: removeProblem(st, cell.x, cell.s) === null || furnitureAt(this.sim.state, cell.x, cell.s) !== undefined });
+    } else if (this.tool !== 'room') {
+      const kind = this.tool as CellKind;
+      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: isDoor(kind) ? DOOR_ROWS : 1, ok: cellProblem(st, cell.x, cell.s, kind) === null });
     }
     this.bump();
   }
 }
 
+/** Every cell on a straight line from a to b, not counting a (so a drag paints each cell once). */
+function between(a: Cell, b: Cell): Cell[] {
+  const out: Cell[] = [];
+  const n = Math.max(Math.abs(b.x - a.x), Math.abs(b.s - a.s));
+  for (let i = 1; i <= n; i++) {
+    const c = { x: Math.round(a.x + ((b.x - a.x) * i) / n), s: Math.round(a.s + ((b.s - a.s) * i) / n) };
+    if (!out.some((o) => o.x === c.x && o.s === c.s)) out.push(c);
+  }
+  return out;
+}
 
 // ------------------------------------------------------------------ icons
 
@@ -806,19 +778,21 @@ function toolIcon(t: Tool): HTMLCanvasElement {
       r(7, 5, 18, 15, '#d9b98f');
       break;
     case 'wall':
+      // A few cells of wall, the way you draw them.
+      for (const [x, y] of [[4, 14], [12, 14], [20, 14], [20, 6]]) r(x, y, 8, 8, '#9c5b45');
+      break;
     case 'window':
+      r(12, 6, 8, 12, '#d6c9b2');
+      r(13, 7, 6, 10, '#8fbcd3');
+      r(15, 6, 2, 12, '#bfe3f0');
+      break;
     case 'door':
     case 'flatDoor':
     case 'entrance':
       r(11, 2, 10, 21, '#d6c9b2');
-      if (t === 'window') r(13, 6, 6, 9, '#8fbcd3');
-      if (t !== 'wall' && t !== 'window') r(12, 8, 8, 15, t === 'flatDoor' ? '#2f6b5a' : t === 'entrance' ? '#23395b' : '#b07a4a');
+      r(15, 6, 2, 17, t === 'flatDoor' ? '#2f6b5a' : t === 'entrance' ? '#23395b' : '#b07a4a');
       break;
-    case 'floor':
-      r(2, 12, 28, 6, '#77706a');
-      r(2, 12, 28, 2, '#9a6a45');
-      break;
-    case 'stairs':
+    case 'stair':
       for (let i = 0; i < 6; i++) r(4 + i * 4, 20 - i * 3, 4, 3 + i * 3, '#835a3c');
       break;
     case 'insulate':
@@ -838,10 +812,8 @@ function toolIcon(t: Tool): HTMLCanvasElement {
 // ------------------------------------------------------------------ prices
 
 function toolPrice(t: Tool): string {
-  if (t === 'room') return 'by the part';
-  if (t === 'floor') return `${pounds(FLOOR_PRICE)} a tile`;
-  if (t === 'stairs') return pounds(STAIRS_PRICE);
-  if (t === 'demolish') return pounds(DEMOLISH_PRICE);
-  if (t === 'insulate') return pounds(INSULATE_PRICE);
-  return pounds(SEGMENT_PRICE[t]);
+  if (t === 'room') return `${pounds(CELL_PRICE.wall)} a cell`;
+  if (t === 'demolish') return `${pounds(DEMOLISH_PRICE)} a cell`;
+  if (t === 'insulate') return `${pounds(INSULATE_PRICE)} a cell`;
+  return `${pounds(CELL_PRICE[t])}${t === 'wall' || t === 'stair' || t === 'window' ? ' a cell' : ''}`;
 }

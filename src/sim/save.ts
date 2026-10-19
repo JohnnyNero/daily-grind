@@ -22,10 +22,10 @@ export function deserialize(json: string): Sim {
 function normalize(raw: Partial<State>): State {
   const st = raw as State;
   if ((st.version ?? 0) > SAVE_VERSION) throw new Error('That save is from a newer version of the game.');
+  // Version 5 made the building out of cells; older buildings can't be carried over.
+  if ((st.version ?? 0) < 5) throw new Error('That save is from before walls were drawn cell by cell, so it can\'t be loaded.');
   st.version = SAVE_VERSION;
-  st.walls ??= {};
-  st.slabs ??= {};
-  st.stairs ??= [];
+  st.cells ??= {};
   st.furniture = (st.furniture ?? []).filter((f) => isFurniture(f.def));
   st.pawns ??= [];
   st.timers ??= { passerby: st.tick, agent: st.tick };
@@ -59,7 +59,6 @@ function normalize(raw: Partial<State>): State {
     p.life.calmUntil ??= 0;
     p.life.since ??= 1;
   }
-  const planned = [st.works.plan, st.works.job].flatMap((p) => (p ? [...p.furniture, ...p.stairs] : []));
-  st.nextId = Math.max(st.nextId ?? 1, ...st.furniture.map((f) => f.id + 1), ...st.stairs.map((t) => t.id + 1), ...st.pawns.map((p) => p.id + 1), ...planned.map((o) => o.id + 1));
+  st.nextId = Math.max(st.nextId ?? 1, ...st.furniture.map((f) => f.id + 1), ...st.pawns.map((p) => p.id + 1));
   return st;
 }

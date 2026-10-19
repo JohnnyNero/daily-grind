@@ -1,15 +1,16 @@
 // The building you start with: a tired three-storey block on a 28-tile plot. A street door
-// into a lobby with the bins, a stairwell up the middle, a cramped studio and a one-bed on
-// each upper floor, a one-bed on the ground floor, and the top one-bed stripped to the brick.
+// into a lobby with the bins, a door through to the stairwell up the middle, a cramped
+// studio and a one-bed on each upper floor, a one-bed on the ground floor, and the top
+// one-bed stripped to the brick.
 
-import { placeFurniture, placeSegment, placeStair } from './build';
+import { placeFurniture } from './build';
 import { MORTGAGE, POUND, START_MONEY, TIER_RENT, flatInfo } from './economy';
 import { flatScore } from './impressiveness';
 import { makePerson, sittingTenants } from './leases';
 import { LAST } from './pawns';
 import { pick } from './rng';
 import type { Sim } from './sim';
-import { SAVE_VERSION, TICKS_PER_HOUR, key, type State } from './state';
+import { SAVE_VERSION, TICKS_PER_HOUR, isDoor, key, type CellKind, type State } from './state';
 
 const STREET = 10;
 const PLOT_W = 28;
@@ -24,9 +25,7 @@ export function newState(seed: number): State {
     nextId: 1,
     w: STREET * 2 + PLOT_W,
     plot: { x0: STREET, x1: STREET + PLOT_W - 1 },
-    walls: {},
-    slabs: {},
-    stairs: [],
+    cells: {},
     furniture: [],
     pawns: [],
     timers: { passerby: 8 * TICKS_PER_HOUR, agent: 9 * TICKS_PER_HOUR },
@@ -50,38 +49,44 @@ export function newState(seed: number): State {
   return st;
 }
 
+/** Each storey is 4 rows: 3 of room and 1 of floor. */
+const STOREY = 4;
+
 function buildShell(st: State): void {
   const { x0, x1 } = st.plot;
   const at = (dx: number) => x0 + dx;
-  for (let level = 1; level <= STOREYS; level++) {
-    for (let x = x0; x <= x1; x++) st.slabs[key(x, level)] = true;
+  const set = (dx: number, row: number, kind: CellKind) => {
+    st.cells[key(at(dx), row)] = kind;
+    if (isDoor(kind)) delete st.cells[key(at(dx), row + 1)];
+  };
+  // The floors and the roof.
+  for (let s = 1; s <= STOREYS; s++) {
+    for (let x = x0; x <= x1; x++) st.cells[key(x, s * STOREY - 1)] = 'wall';
   }
-  const seg = (dx: number, s: number, kind: Parameters<typeof placeSegment>[3]) => {
-    // Doors and windows go in a wall, so the wall goes up first.
-    const problem = placeSegment(st, at(dx), s, 'wall') ?? placeSegment(st, at(dx), s, kind);
-    if (problem) throw new Error(`Start building: ${problem} at ${dx},${s}`);
+  // A wall up a column of one storey, with a window or a door in it.
+  const column = (dx: number, s: number, kind: 'wall' | 'window' | 'door' | 'flatDoor' | 'entrance') => {
+    const row = s * STOREY;
+    for (let r = 0; r < STOREY - 1; r++) set(dx, row + r, 'wall');
+    if (kind === 'window') set(dx, row + 1, 'window');
+    else if (kind !== 'wall') set(dx, row, kind);
   };
   // Columns: outer wall 0, studio 1-6, wall 7, stairwell 8-12, wall 13, one-bed 14-26, outer wall 27.
   for (let s = 0; s < STOREYS; s++) {
-    seg(0, s, s === 0 ? 'entrance' : 'window');
-    seg(PLOT_W - 1, s, 'window');
-    if (s > 0) seg(7, s, 'flatDoor');
-    seg(13, s, 'flatDoor');
-    // The one-bed: living room and kitchen, bedroom, bathroom. The top one is gutted.
-    if (s < 2) {
-      seg(20, s, 'door');
-      seg(24, s, 'door');
-    }
+    column(0, s, s === 0 ? 'entrance' : 'window');
+    column(PLOT_W - 1, s, 'window');
+    // The studio's front door; on the ground floor, a door between the lobby and the stairs.
+    column(7, s, s > 0 ? 'flatDoor' : 'door');
+    column(13, s, 'flatDoor');
+    // The one-bed: living room and kitchen, bedroom, bathroom. (The top one is gutted, but
+    // the walls hold the roof up.)
+    column(20, s, 'door');
+    column(24, s, 'door');
   }
-  const stairs = (dx: number, s: number, dir: 1 | -1) => {
-    const problem = placeStair(st, at(dx), s, dir);
-    if (problem) throw new Error(`Start building: ${problem}`);
-  };
-  stairs(8, 0, 1);
-  stairs(8, 1, -1);
+  // Up the stairwell: right from the lobby to the first floor, then back left to the second.
+  for (const [dx, row] of [[9, 0], [10, 1], [11, 2], [12, 3], [11, 5], [10, 6], [9, 7]]) set(dx, row, 'stair');
 
   const put = (def: string, dx: number, s: number, r = 0, flip = false) => {
-    const f = placeFurniture(st, def, at(dx), s, r, flip);
+    const f = placeFurniture(st, def, at(dx), s * STOREY + r, flip);
     if (typeof f === 'string') throw new Error(`Start building: ${def} ${f}`);
   };
   // Lobby.

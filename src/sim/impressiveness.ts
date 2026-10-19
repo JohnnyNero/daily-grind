@@ -74,7 +74,7 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
   const lay = sim.layout;
   const flat = lay.flat(flatId);
   const nodes = flat ? flat.rooms.flatMap((r) => lay.rooms[r].nodes) : [];
-  const inFlat = new Set(nodes);
+  const inFlat = new Set(flat ? lay.flatCells(flat) : []);
   const furniture = sim.state.furniture.filter((f) => inFlat.has(lay.node(f.x, f.s)));
   const defs = furniture.map((f) => furnitureDef(f.def));
   const people = Math.max(1, peopleOverride ?? occupants(sim, flatId));
@@ -85,14 +85,14 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
     wash: defs.some((d) => d.id === 'shower' || d.id === 'bath'),
     kitchen: defs.some((d) => d.id === 'cooker' || d.id === 'fridge'),
   };
-  // Windows in the flat's walls (either side of any of its tiles).
+  // Windows next to any of the flat's cells.
   let windows = 0;
   const seen = new Set<string>();
-  for (const n of nodes) {
+  for (const n of inFlat) {
     const [x, s] = lay.xs(n);
-    for (const wx of [x - 1, x + 1]) {
-      const k = `${wx},${s}`;
-      if (!seen.has(k) && lay.segment(wx, s) === 'window') windows++;
+    for (const [wx, ws] of [[x - 1, s], [x + 1, s], [x, s - 1], [x, s + 1]]) {
+      const k = `${wx},${ws}`;
+      if (!seen.has(k) && lay.cell(wx, ws) === 'window') windows++;
       seen.add(k);
     }
   }

@@ -6,7 +6,7 @@ import { furnitureDef } from './defs';
 import { flatScore, TIERS } from './impressiveness';
 import type { Sim } from './sim';
 import { CLEANER_WEEKLY, gasBill } from './environment';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, type FlatInfo, type Letter, type Segment } from './state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, type FlatInfo, type Letter, type CellKind } from './state';
 
 export const POUND = 100;
 
@@ -39,17 +39,17 @@ export const LEASE_WEEKS = 6;
 export const RENT_NOTICE_DAYS = 7;
 export const MOVE_OUT_NOTICE_DAYS = 7;
 
-export const SEGMENT_PRICE: Record<Segment, number> = {
-  wall: 60 * POUND,
-  window: 180 * POUND,
+/** What each cell costs to put in. */
+export const CELL_PRICE: Record<CellKind, number> = {
+  wall: 25 * POUND,
+  window: 120 * POUND,
   door: 120 * POUND,
   flatDoor: 250 * POUND,
   entrance: 400 * POUND,
+  stair: 150 * POUND,
 };
-export const FLOOR_PRICE = 50 * POUND;
-export const STAIRS_PRICE = 900 * POUND;
-export const DEMOLISH_PRICE = 20 * POUND;
-export const INSULATE_PRICE = 120 * POUND;
+export const DEMOLISH_PRICE = 10 * POUND;
+export const INSULATE_PRICE = 40 * POUND;
 /** What you get back for furniture you take out. */
 export const RESALE = 0.3;
 

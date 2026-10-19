@@ -142,7 +142,7 @@ export class Panels {
       this.close();
       return;
     }
-    const nodes = new Set(flat.rooms.flatMap((r) => lay.rooms[r].nodes));
+    const nodes = new Set(lay.flatCells(flat));
     const furniture = sim.state.furniture.filter((f) => nodes.has(lay.node(f.x, f.s)));
     const score = flatScore(sim, id);
     const info = flatInfo(sim, id);
@@ -150,8 +150,7 @@ export class Panels {
     const people = household(sim, id);
     const going = goingRate(sim, id);
     const applicants = sim.state.applicants.filter((a) => a.flat === id);
-    const floors = flat.storeys.map((s) => (s === 0 ? 'Ground floor' : `Floor ${s}`)).join(' and ');
-    this.head(flat.name, `${floors} · ${flat.rooms.length === 1 ? 'one room' : `${flat.rooms.length} rooms`} · ${flat.area} tiles`);
+    this.head(flat.name, `${flat.rooms.length === 1 ? 'one room' : `${flat.rooms.length} rooms`} · ${flat.area} tiles`);
     const draft = this.draftRent?.flat === id ? this.draftRent.rent : null;
     this.fill([id, score, info, people.map((p) => p.id), applicants.length, furniture.length, draft, sim.day], () => {
       const out: (Node | string)[] = [];

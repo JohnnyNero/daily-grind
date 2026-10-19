@@ -1,223 +1,268 @@
 // Changing the building. Every change goes through here so it's checked the same way
 // (each check returns a reason in words, or null if it's fine) and can be undone.
+//
+// The building is cells. Walls go anywhere, as long as they're held up: every wall,
+// window, door and stair has to connect to the ground, and a ledge can stick out at most
+// MAX_OVERHANG cells from whatever's holding it. Windows fill a one-cell gap and doors a
+// two-cell one (or replace the wall that's there). Stairs are drawn a cell at a time.
 
 import { furnitureDef } from './defs';
-import { MAX_STOREYS, ROOM_ROWS, key, type BuildPartsData, type Furniture, type Segment, type Stair, type State } from './state';
+import { DOOR_ROWS, MAX_ROWS, isDoor, isSolid, key, type BuildPartsData, type CellKind, type Furniture, type State } from './state';
 
 export type BuildParts = BuildPartsData;
 
+/** How far a ledge can stick out from whatever's holding it up. */
+export const MAX_OVERHANG = 4;
+
 /** The parts that can change in build mode, as a copy (for undo). */
 export function snapshot(s: State): string {
-  const parts: BuildParts = { walls: s.walls, slabs: s.slabs, stairs: s.stairs, furniture: s.furniture, insulated: s.insulated };
+  const parts: BuildParts = { cells: s.cells, furniture: s.furniture, insulated: s.insulated };
   return JSON.stringify(parts);
 }
 
 export function restore(s: State, json: string): void {
   const parts = JSON.parse(json) as BuildParts;
-  s.walls = parts.walls;
-  s.slabs = parts.slabs;
-  s.stairs = parts.stairs;
+  s.cells = parts.cells;
   s.furniture = parts.furniture;
   s.insulated = parts.insulated ?? {};
 }
 
-// ------------------------------------------------------------------ insulation
-
-/** Wall tiles are "w:x,s", floor tiles "f:x,level" (level 0 is the ground floor's floor). */
-export function insulateProblem(st: State, part: string): string | null {
-  if (st.insulated[part]) return 'Already insulated';
-  const [kind, rest] = part.split(':');
-  const [x, n] = rest.split(',').map(Number);
-  if (!inPlot(st, x)) return 'Outside your plot';
-  if (kind === 'w') {
-    const seg = st.walls[key(x, n)];
-    if (seg !== 'wall' && seg !== 'window') return 'Insulate a wall, not a door or a gap';
-  } else if (n > 0 && st.slabs[key(x, n)] !== true) return 'No floor there';
-  return null;
-}
-
-export function insulate(st: State, part: string): string | null {
-  const problem = insulateProblem(st, part);
-  if (problem) return problem;
-  st.insulated[part] = true;
-  return null;
-}
-
 const inPlot = (st: State, x: number) => x >= st.plot.x0 && x <= st.plot.x1;
-const hasFloor = (st: State, x: number, s: number) => s === 0 || st.slabs[key(x, s)] === true;
 
-/** Furniture with any part in this column of this storey. */
-export function furnitureIn(st: State, x: number, s: number): Furniture[] {
-  return st.furniture.filter((f) => f.s === s && x >= f.x && x < f.x + furnitureDef(f.def).w);
+export function cellOf(st: State, x: number, s: number): CellKind | undefined {
+  return st.cells[key(x, s)];
 }
 
-/** The flight of stairs drawn across this column of this storey, if any. */
-export function stairIn(st: State, x: number, s: number): Stair | undefined {
-  return st.stairs.find((t) => t.s === s && x >= t.x && x <= t.x + 2);
+/** The upper cell of a door (left empty in the cells, but taken). */
+export function isDoorTop(st: State, x: number, s: number): boolean {
+  return isDoor(cellOf(st, x, s - 1));
 }
 
-const stairTop = (t: Stair) => (t.dir === 1 ? t.x + 2 : t.x);
-
-// ------------------------------------------------------------------ walls, doors, windows
-
-export function segmentProblem(st: State, x: number, s: number, seg: Segment): string | null {
-  if (!inPlot(st, x) || s < 0 || s >= MAX_STOREYS) return 'Outside your plot';
-  if (st.walls[key(x, s)] === seg) return null;
-  if (!hasFloor(st, x, s)) return 'Needs a floor under it';
-  // Doors and windows fill a slot in a wall; they don't stand on their own.
-  if (seg !== 'wall' && st.walls[key(x, s)] === undefined) return 'Goes in a wall: put a wall up first';
-  if (seg === 'entrance' && s !== 0) return 'The street door goes on the ground floor';
-  if (furnitureIn(st, x, s).length > 0) return 'Furniture in the way';
-  if (stairIn(st, x, s)) return 'Stairs in the way';
-  if (seg === 'wall' || seg === 'window') {
-    if (st.stairs.some((t) => t.s + 1 === s && stairTop(t) === x)) return 'Blocks the top of the stairs';
-  }
-  return null;
+/** Something's in this cell: a wall, window, stair, or either half of a door. */
+export function taken(st: State, x: number, s: number): boolean {
+  return cellOf(st, x, s) !== undefined || isDoorTop(st, x, s);
 }
 
-export function placeSegment(st: State, x: number, s: number, seg: Segment): string | null {
-  const problem = segmentProblem(st, x, s, seg);
-  if (problem) return problem;
-  st.walls[key(x, s)] = seg;
-  return null;
+/** Which way a stair climbs: 1 up to the right, -1 up to the left (from the stairs next to it). */
+export function stairDir(st: State, x: number, s: number): 1 | -1 {
+  const at = (dx: number, ds: number) => cellOf(st, x + dx, s + ds) === 'stair';
+  if (at(1, 1) || at(-1, -1)) return 1;
+  if (at(-1, 1) || at(1, -1)) return -1;
+  return 1;
 }
 
-export function removeSegment(st: State, x: number, s: number): boolean {
-  if (!inPlot(st, x) || st.walls[key(x, s)] === undefined) return false;
-  delete st.walls[key(x, s)];
-  delete st.insulated[`w:${key(x, s)}`];
-  return true;
-}
-
-// ------------------------------------------------------------------ floors
-
-/** Level L is the floor of storey L, or the roof over storey L - 1. */
-export function slabProblem(st: State, x: number, level: number): string | null {
-  if (!inPlot(st, x) || level < 1 || level > MAX_STOREYS) return 'Outside your plot';
-  return null;
-}
-
-export function placeSlab(st: State, x: number, level: number): string | null {
-  const problem = slabProblem(st, x, level);
-  if (problem) return problem;
-  st.slabs[key(x, level)] = true;
-  return null;
-}
-
-export function slabRemoveProblem(st: State, x: number, level: number): string | null {
-  if (!inPlot(st, x) || st.slabs[key(x, level)] !== true) return 'No floor there';
-  if (furnitureIn(st, x, level).length > 0) return 'Furniture is standing on it';
-  if (st.walls[key(x, level)] !== undefined) return 'A wall is standing on it';
-  if (stairIn(st, x, level)) return 'Stairs are standing on it';
-  if (st.stairs.some((t) => t.s + 1 === level && stairTop(t) === x)) return 'The stairs come up here';
-  return null;
-}
-
-export function removeSlab(st: State, x: number, level: number): string | null {
-  const problem = slabRemoveProblem(st, x, level);
-  if (problem) return problem;
-  delete st.slabs[key(x, level)];
-  delete st.insulated[`f:${key(x, level)}`];
-  return null;
-}
-
-// ------------------------------------------------------------------ stairs
-
-export function stairProblem(st: State, x: number, s: number, dir: 1 | -1): string | null {
-  if (!inPlot(st, x) || !inPlot(st, x + 2) || s < 0) return 'Outside your plot';
-  if (s + 1 >= MAX_STOREYS) return 'Nowhere to go up to';
-  const top = dir === 1 ? x + 2 : x;
-  for (let c = x; c <= x + 2; c++) {
-    if (!hasFloor(st, c, s)) return 'Needs a floor under it';
-    if (st.walls[key(c, s)] !== undefined) return 'A wall or door is in the way';
-    if (stairIn(st, c, s)) return 'Other stairs are in the way';
-    if (furnitureIn(st, c, s).length > 0) return 'Furniture in the way';
-  }
-  if (!hasFloor(st, top, s + 1)) return 'Needs a floor at the top';
-  const atTop = st.walls[key(top, s + 1)];
-  if (atTop === 'wall' || atTop === 'window') return 'A wall is in the way at the top';
-  return null;
-}
-
-export function placeStair(st: State, x: number, s: number, dir: 1 | -1): string | null {
-  const problem = stairProblem(st, x, s, dir);
-  if (problem) return problem;
-  st.stairs.push({ id: st.nextId++, x, s, dir });
-  return null;
-}
-
-export function removeStair(st: State, id: number): boolean {
-  const i = st.stairs.findIndex((t) => t.id === id);
-  if (i < 0) return false;
-  st.stairs.splice(i, 1);
-  return true;
-}
-
-// ------------------------------------------------------------------ rooms
+// ------------------------------------------------------------------ holding things up
 
 /**
- * A walled, floored and roofed box from column xa to xb and storey sa to sb: walls down
- * both ends, a floor under it and a ceiling over it. Existing doors and windows stay, and
- * any part that's blocked is skipped. Returns how many parts were added.
+ * The first cell that isn't held up, or null if everything is. Each cell's distance from
+ * support is worked out from the ground: straight up or down costs nothing, each step
+ * sideways costs one, and stairs hold each other up corner to corner.
+ */
+export function unsupported(cells: Record<string, CellKind>): string | null {
+  const dist = new Map<string, number>();
+  const occupied = new Map<string, CellKind | 'top'>();
+  for (const [k, c] of Object.entries(cells)) {
+    occupied.set(k, c);
+    if (isDoor(c)) {
+      const [x, s] = k.split(',').map(Number);
+      occupied.set(key(x, s + 1), 'top');
+    }
+  }
+  const deque: string[] = [];
+  for (const k of occupied.keys()) {
+    if (Number(k.split(',')[1]) === 0) {
+      dist.set(k, 0);
+      deque.push(k);
+    }
+  }
+  // 0-1 breadth-first: free steps go to the front of the queue, sideways ones to the back.
+  for (let i = 0; i < deque.length; i++) {
+    const k = deque[i];
+    const d = dist.get(k)!;
+    const [x, s] = k.split(',').map(Number);
+    const steps: [number, number, number][] = [[0, 1, 0], [0, -1, 0], [1, 0, 1], [-1, 0, 1]];
+    if (occupied.get(k) === 'stair') steps.push([1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0]);
+    for (const [dx, ds, cost] of steps) {
+      const n = key(x + dx, s + ds);
+      const kind = occupied.get(n);
+      if (kind === undefined) continue;
+      if (dx !== 0 && ds !== 0 && kind !== 'stair') continue;
+      const nd = d + cost;
+      if (nd > MAX_OVERHANG || (dist.get(n) ?? Infinity) <= nd) continue;
+      dist.set(n, nd);
+      // Re-queuing at the end is fine at this size: distances only ever go down.
+      deque.push(n);
+    }
+  }
+  for (const k of occupied.keys()) if (!dist.has(k)) return k;
+  return null;
+}
+
+const NOT_HELD = `Nothing holding it up: a ledge can stick out ${MAX_OVERHANG} cells at most`;
+
+/** Runs a change on a copy of the cells and says whether everything's still held up. */
+function stillHeld(st: State, change: (cells: Record<string, CellKind>) => void): boolean {
+  const cells = { ...st.cells };
+  change(cells);
+  return unsupported(cells) === null;
+}
+
+// ------------------------------------------------------------------ cells
+
+/** Furniture with any part in this cell. */
+export function furnitureAt(st: State, x: number, s: number): Furniture | undefined {
+  return st.furniture.find((f) => {
+    const d = furnitureDef(f.def);
+    return x >= f.x && x < f.x + d.w && s >= f.s && s < f.s + d.h;
+  });
+}
+
+/** Furniture standing on this cell. */
+function standingOn(st: State, x: number, s: number): Furniture | undefined {
+  return st.furniture.find((f) => !furnitureDef(f.def).wall && f.s === s + 1 && x >= f.x && x < f.x + furnitureDef(f.def).w);
+}
+
+export function cellProblem(st: State, x: number, s: number, kind: CellKind): string | null {
+  const rows = isDoor(kind) ? DOOR_ROWS : 1;
+  if (!inPlot(st, x) || s < 0 || s + rows > MAX_ROWS) return 'Outside your plot';
+  const here = cellOf(st, x, s);
+  if (here === kind) return null;
+  if (kind === 'entrance' && s !== 0) return 'The street door goes on the ground';
+  for (let r = 0; r < rows; r++) {
+    const c = cellOf(st, x, s + r);
+    if (isDoorTop(st, x, s + r) || isDoor(c)) return 'A door is in the way: knock it out first';
+    // Walls, windows and doors can replace a wall or a window; stairs need an empty cell.
+    if (c === 'stair') return 'Stairs in the way';
+    if (c !== undefined && kind === 'stair') return 'Something is in the way';
+    if (furnitureAt(st, x, s + r)) return 'Furniture in the way';
+  }
+  if (isDoor(kind) && s > 0 && !isSolid(cellOf(st, x, s - 1)) && cellOf(st, x, s - 1) !== 'stair') return 'A door needs something to stand on';
+  if (!stillHeld(st, (cells) => setCell(cells, x, s, kind))) return NOT_HELD;
+  return null;
+}
+
+/** Puts a cell in, without checking (doors clear the cell above them). */
+function setCell(cells: Record<string, CellKind>, x: number, s: number, kind: CellKind): void {
+  cells[key(x, s)] = kind;
+  if (isDoor(kind)) delete cells[key(x, s + 1)];
+}
+
+export function placeCell(st: State, x: number, s: number, kind: CellKind): string | null {
+  const problem = cellProblem(st, x, s, kind);
+  if (problem) return problem;
+  if (cellOf(st, x, s) === kind) return null;
+  setCell(st.cells, x, s, kind);
+  if (!isSolid(kind)) delete st.insulated[key(x, s)];
+  if (isDoor(kind)) delete st.insulated[key(x, s + 1)];
+  return null;
+}
+
+/** Why a cell can't be knocked out (a door's upper half means the door). */
+export function removeProblem(st: State, x: number, s: number): string | null {
+  if (!inPlot(st, x)) return 'Outside your plot';
+  const at = isDoorTop(st, x, s) ? s - 1 : s;
+  if (cellOf(st, x, at) === undefined) return 'Nothing to knock down there';
+  if (standingOn(st, x, s)) return 'Furniture is standing on it';
+  if (!stillHeld(st, (cells) => delete cells[key(x, at)])) return "It's holding other bits up";
+  return null;
+}
+
+export function removeCell(st: State, x: number, s: number): string | null {
+  const problem = removeProblem(st, x, s);
+  if (problem) return problem;
+  const at = isDoorTop(st, x, s) ? s - 1 : s;
+  delete st.cells[key(x, at)];
+  delete st.insulated[key(x, at)];
+  return null;
+}
+
+/**
+ * A box of walls from column xa to xb and row sa to sb: the walls round the edge, with
+ * the room inside. Walls already there stay, and any cell that can't go in is skipped.
+ * Returns how many cells went in.
  */
 export function buildRoom(st: State, xa: number, sa: number, xb: number, sb: number): number {
   const [x0, x1] = [Math.min(xa, xb), Math.max(xa, xb)];
   const [s0, s1] = [Math.min(sa, sb), Math.max(sa, sb)];
+  const edge: [number, number][] = [];
+  for (let x = x0; x <= x1; x++) edge.push([x, s0], [x, s1]);
+  for (let s = s0 + 1; s < s1; s++) edge.push([x0, s], [x1, s]);
+  // Bottom up, and round again while anything else goes in: a cell can need the corner
+  // beyond it to be up first.
+  edge.sort((a, b) => a[1] - b[1]);
   let added = 0;
-  for (let level = Math.max(1, s0); level <= s1 + 1; level++) {
-    for (let x = x0; x <= x1; x++) {
-      if (st.slabs[key(x, level)] || slabProblem(st, x, level)) continue;
-      st.slabs[key(x, level)] = true;
+  for (let progress = true; progress; ) {
+    progress = false;
+    for (const [x, s] of edge) {
+      if (taken(st, x, s) || placeCell(st, x, s, 'wall')) continue;
       added++;
-    }
-  }
-  for (let s = s0; s <= s1; s++) {
-    for (const x of [x0, x1]) {
-      if (st.walls[key(x, s)] !== undefined || segmentProblem(st, x, s, 'wall')) continue;
-      st.walls[key(x, s)] = 'wall';
-      added++;
+      progress = true;
     }
   }
   return added;
 }
 
+// ------------------------------------------------------------------ insulation
+
+/** Insulation goes in wall and window cells, by "x,s". */
+export function insulateProblem(st: State, k: string): string | null {
+  if (st.insulated[k]) return 'Already insulated';
+  const [x] = k.split(',').map(Number);
+  if (!inPlot(st, x)) return 'Outside your plot';
+  if (!isSolid(st.cells[k])) return 'Insulate a wall';
+  return null;
+}
+
+export function insulate(st: State, k: string): string | null {
+  const problem = insulateProblem(st, k);
+  if (problem) return problem;
+  st.insulated[k] = true;
+  return null;
+}
+
 // ------------------------------------------------------------------ furniture
 
-export function furnitureProblem(st: State, def: string, x: number, s: number, r: number, ignoreId?: number): string | null {
+/**
+ * Floor furniture stands on walls (a wall cell under every column of it); wall furniture
+ * hangs anywhere there's room. Nothing goes in a wall, a door or on the stairs.
+ */
+export function furnitureProblem(st: State, def: string, x: number, s: number, ignoreId?: number): string | null {
   const d = furnitureDef(def);
-  if (s < 0 || s >= MAX_STOREYS) return 'Outside your plot';
-  if (d.wall ? r < 1 : r !== 0) return d.wall ? 'Goes on the wall, above the floor' : 'Stands on the floor';
-  if (r + d.h > ROOM_ROWS) return 'Too tall to fit';
+  if (s < 0 || s + d.h > MAX_ROWS) return 'Outside your plot';
   for (let c = x; c < x + d.w; c++) {
     if (!inPlot(st, c)) return 'Outside your plot';
-    if (!hasFloor(st, c, s)) return 'Needs a floor';
-    if (st.walls[key(c, s)] !== undefined) return 'A wall or door is in the way';
-    if (stairIn(st, c, s)) return 'Stairs in the way';
+    for (let r = s; r < s + d.h; r++) {
+      const cell = cellOf(st, c, r);
+      if (isSolid(cell)) return 'A wall is in the way';
+      if (isDoor(cell) || isDoorTop(st, c, r)) return 'A door is in the way';
+      if (cell === 'stair') return 'Stairs in the way';
+    }
+    if (!d.wall && s > 0 && !isSolid(cellOf(st, c, s - 1))) return 'Needs a floor under it';
   }
   for (const f of st.furniture) {
-    if (f.id === ignoreId || f.s !== s) continue;
+    if (f.id === ignoreId) continue;
     const o = furnitureDef(f.def);
     const overlapX = x < f.x + o.w && f.x < x + d.w;
-    const overlapR = r < f.r + o.h && f.r < r + d.h;
-    if (overlapX && overlapR) return `${o.name} in the way`;
+    const overlapS = s < f.s + o.h && f.s < s + d.h;
+    if (overlapX && overlapS) return `${o.name} in the way`;
   }
   return null;
 }
 
-export function placeFurniture(st: State, def: string, x: number, s: number, r: number, flip = false): Furniture | string {
-  const problem = furnitureProblem(st, def, x, s, r);
+export function placeFurniture(st: State, def: string, x: number, s: number, flip = false): Furniture | string {
+  const problem = furnitureProblem(st, def, x, s);
   if (problem) return problem;
-  const f: Furniture = { id: st.nextId++, def, x, s, r, ...(flip ? { flip: true } : {}) };
+  const f: Furniture = { id: st.nextId++, def, x, s, ...(flip ? { flip: true } : {}) };
   st.furniture.push(f);
   return f;
 }
 
-export function moveFurniture(st: State, id: number, x: number, s: number, r: number): string | null {
+export function moveFurniture(st: State, id: number, x: number, s: number): string | null {
   const f = st.furniture.find((o) => o.id === id);
   if (!f) return 'Gone';
-  const problem = furnitureProblem(st, f.def, x, s, r, id);
+  const problem = furnitureProblem(st, f.def, x, s, id);
   if (problem) return problem;
-  Object.assign(f, { x, s, r });
+  Object.assign(f, { x, s });
   return null;
 }
 
@@ -234,12 +279,4 @@ export function flipFurniture(st: State, id: number): boolean {
   if (f.flip) delete f.flip;
   else f.flip = true;
   return true;
-}
-
-/** The furniture covering a cell, if any. */
-export function furnitureAt(st: State, x: number, s: number, r: number): Furniture | undefined {
-  return st.furniture.find((f) => {
-    const d = furnitureDef(f.def);
-    return f.s === s && x >= f.x && x < f.x + d.w && r >= f.r && r < f.r + d.h;
-  });
 }

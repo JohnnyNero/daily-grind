@@ -78,7 +78,7 @@ describe('tenants', () => {
     removeFurniture(st, sink.id);
     const cooker = st.furniture.find((f) => f.def === 'cooker' && f.s === 0)!;
     removeFurniture(st, cooker.id);
-    expect(typeof placeFurniture(st, 'tv', x0 + 15, 0, 0)).not.toBe('string');
+    expect(typeof placeFurniture(st, 'tv', x0 + 15, 0)).not.toBe('string');
     sim.changed();
     let watched = false;
     for (let t = 0; t < 3 * TICKS_PER_DAY && !watched; t += TICKS_PER_HOUR / 4) {

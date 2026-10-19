@@ -327,7 +327,8 @@ interface Choice {
 /** Furniture in the flat that meets a need (and works where it is), nearest first. */
 function choices(sim: Sim, p: Pawn, flat: Flat, match: (o: Offer, f: Furniture) => boolean): Choice[] {
   const lay = sim.layout;
-  const inFlat = new Set(flatNodes(sim, flat));
+  // Every cell of the flat (wall furniture hangs above where anyone stands).
+  const inFlat = new Set(lay.flatCells(flat));
   const out: Choice[] = [];
   for (const f of sim.state.furniture) {
     if (!inFlat.has(lay.node(f.x, f.s))) continue;

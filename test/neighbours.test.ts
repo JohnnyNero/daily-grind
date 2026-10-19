@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { insulate } from '../src/sim/build';
-import { floorKey, tempOf } from '../src/sim/environment';
+import { tempOf } from '../src/sim/environment';
 import { makePerson } from '../src/sim/leases';
 import { Sim } from '../src/sim/sim';
 import { opinion } from '../src/sim/social';
-import { TICKS_PER_DAY, TICKS_PER_HOUR } from '../src/sim/state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, key } from '../src/sim/state';
 import { moveIn } from '../src/sim/tenants';
 import { landlord } from './policy';
 
@@ -20,8 +20,8 @@ function soak(seed: number, policy: 'decent' | 'ruthless', days: number): Sim {
 }
 
 /** A night-owl musician in Flat 2, and the light sleeper upstairs in Flat 4. */
-function noisyNeighbours(insulated: boolean): { sim: Sim; sleeper: ReturnType<typeof tenantsOf>[number]; musician: ReturnType<typeof tenantsOf>[number] } {
-  const sim = Sim.create(11);
+function noisyNeighbours(insulated: boolean, seed = 11): { sim: Sim; sleeper: ReturnType<typeof tenantsOf>[number]; musician: ReturnType<typeof tenantsOf>[number] } {
+  const sim = Sim.create(seed);
   const [, two, , four] = sim.layout.flats;
   const person = { ...makePerson(sim.state), traits: ['musician', 'nightOwl'] };
   const [musician] = moveIn(sim, two.id, [person]);
@@ -32,7 +32,7 @@ function noisyNeighbours(insulated: boolean): { sim: Sim; sleeper: ReturnType<ty
     // The floor between them: Flat 4's floor, over Flat 2.
     for (const n of four.rooms.flatMap((r) => sim.layout.rooms[r].nodes)) {
       const [x, s] = sim.layout.xs(n);
-      insulate(sim.state, floorKey(x, s));
+      insulate(sim.state, key(x, s - 1));
     }
     sim.changed();
   }
@@ -58,15 +58,18 @@ describe('neighbours', () => {
   });
 
   it('insulating the floor between them makes the one above like it more', () => {
+    // Over a few buildings, as how often their hours overlap varies from one to the next.
     const average = (insulated: boolean) => {
-      const { sim, sleeper } = noisyNeighbours(insulated);
       let total = 0;
       let n = 0;
-      for (let h = 0; h < 14 * 24; h++) {
-        sim.run(TICKS_PER_HOUR);
-        if (h > 48) {
-          total += sleeper.life!.liking;
-          n++;
+      for (const seed of [11, 12, 13]) {
+        const { sim, sleeper } = noisyNeighbours(insulated, seed);
+        for (let h = 0; h < 14 * 24; h++) {
+          sim.run(TICKS_PER_HOUR);
+          if (h > 48) {
+            total += sleeper.life!.liking;
+            n++;
+          }
         }
       }
       return total / n;

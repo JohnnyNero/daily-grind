@@ -9,10 +9,10 @@
 // there's no list of orders to keep in step.
 
 import type { BuildParts } from './build';
-import { DEMOLISH_PRICE, FLOOR_PRICE, INSULATE_PRICE, SEGMENT_PRICE, STAIRS_PRICE, book, pounds } from './economy';
+import { CELL_PRICE, DEMOLISH_PRICE, INSULATE_PRICE, book, pounds } from './economy';
 import { SHARED } from './environment';
 import type { Sim } from './sim';
-import type { Segment, Stair, State } from './state';
+import { isDoor, key, type CellKind, type State } from './state';
 import { remember } from './thoughts';
 
 export const BUILDERS = 'Bodge & Sons';
@@ -25,9 +25,9 @@ export const WORK_MINUTES_A_DAY = END_MINUTE - START_MINUTE;
 /** How loud the builders are where they're working. */
 export const BUILDER_NOISE = 5;
 
-/** Minutes of work for each kind of piece. */
-const SEGMENT_MINUTES: Record<Segment, number> = { wall: 60, window: 90, door: 60, flatDoor: 90, entrance: 120 };
-const MINUTES = { knockDown: 30, floor: 20, stairs: 360, insulate: 45 };
+/** Minutes of work for each kind of cell. */
+const CELL_MINUTES: Record<CellKind, number> = { wall: 20, window: 45, door: 60, flatDoor: 90, entrance: 120, stair: 45 };
+const MINUTES = { knockDown: 15, insulate: 20 };
 
 /** One thing to do: what, where (for drawing it and the noise), what it costs and how long. */
 export interface Piece {
@@ -35,177 +35,105 @@ export interface Piece {
   /** Pence. */
   cost: number;
   minutes: number;
-  /** Where the work is: a column and storey. */
+  /** The cell. */
   x: number;
   s: number;
   /** Takes something away (drawn crossed out) rather than adding it. */
   removes: boolean;
-  /** For drawing it: a wall segment, a floor slab, stairs or insulation. */
-  part:
-    | { kind: 'segment'; seg: Segment | null }
-    | { kind: 'slab'; level: number }
-    | { kind: 'stair'; stair: Stair }
-    | { kind: 'insulate'; key: string };
+  /** For drawing it: a cell (what goes in, or null for knocking out what's there) or insulation. */
+  part: { kind: 'cell'; cell: CellKind | null; was?: CellKind } | { kind: 'insulate' };
   apply(st: State): void;
 }
 
 export function partsOf(st: State): BuildParts {
-  return { walls: st.walls, slabs: st.slabs, stairs: st.stairs, furniture: st.furniture, insulated: st.insulated };
+  return { cells: st.cells, furniture: st.furniture, insulated: st.insulated };
 }
 
 export function copyParts(p: BuildParts): BuildParts {
   return JSON.parse(JSON.stringify(p)) as BuildParts;
 }
 
+const NAME: Record<CellKind, string> = { wall: 'wall', window: 'window', door: 'door', flatDoor: 'front door', entrance: 'street door', stair: 'stair' };
+
 /**
  * What it takes to turn `now` into `target`, in the order it's done: things come out
- * before new things go in, floors before walls, walls before stairs. Furniture isn't
- * building work: it goes in straight away (see furnish.ts).
+ * first (top down), then new cells go in from the bottom up, then the insulation.
+ * Furniture isn't building work: it goes in straight away (see furnish.ts).
  */
 export function piecesBetween(now: BuildParts, target: BuildParts): Piece[] {
   const out: Piece[] = [];
-  const cols = (k: string) => k.split(',').map(Number) as [number, number];
-  const stairsAfter = new Set(target.stairs.map((t) => t.id));
-  const stairsBefore = new Set(now.stairs.map((t) => t.id));
-
-  for (const t of now.stairs) {
-    if (stairsAfter.has(t.id)) continue;
+  const at = (k: string) => k.split(',').map(Number) as [number, number];
+  const byRow = (dir: 1 | -1) => (a: string, b: string) => dir * (at(a)[1] - at(b)[1]) || at(a)[0] - at(b)[0];
+  const gone = Object.keys(now.cells).filter((k) => target.cells[k] === undefined).sort(byRow(-1));
+  for (const k of gone) {
+    const [x, s] = at(k);
+    const was = now.cells[k];
     out.push({
-      label: 'Took out the stairs',
-      cost: DEMOLISH_PRICE,
-      minutes: MINUTES.knockDown * 2,
-      x: t.x + 1,
-      s: t.s,
-      removes: true,
-      part: { kind: 'stair', stair: t },
-      apply: (st) => {
-        st.stairs = st.stairs.filter((o) => o.id !== t.id);
-      },
-    });
-  }
-  for (const k of Object.keys(now.walls)) {
-    if (k in target.walls) continue;
-    const [x, s] = cols(k);
-    out.push({
-      label: `Knocked out a ${segmentName(now.walls[k])}`,
+      label: `Knocked out a ${NAME[was]}`,
       cost: DEMOLISH_PRICE,
       minutes: MINUTES.knockDown,
       x,
       s,
       removes: true,
-      part: { kind: 'segment', seg: null },
+      part: { kind: 'cell', cell: null, was },
       apply: (st) => {
-        delete st.walls[k];
-        delete st.insulated[`w:${k}`];
+        delete st.cells[k];
+        delete st.insulated[k];
       },
     });
   }
-  for (const k of Object.keys(now.slabs)) {
-    if (target.slabs[k]) continue;
-    const [x, level] = cols(k);
+  const added = Object.keys(target.cells).filter((k) => now.cells[k] !== target.cells[k]).sort(byRow(1));
+  for (const k of added) {
+    const [x, s] = at(k);
+    const cell = target.cells[k];
     out.push({
-      label: 'Took up a floor',
-      cost: DEMOLISH_PRICE,
-      minutes: MINUTES.floor,
-      x,
-      s: level - 1,
-      removes: true,
-      part: { kind: 'slab', level },
-      apply: (st) => {
-        delete st.slabs[k];
-        delete st.insulated[`f:${k}`];
-      },
-    });
-  }
-  for (const k of Object.keys(target.slabs)) {
-    if (now.slabs[k]) continue;
-    const [x, level] = cols(k);
-    out.push({
-      label: 'Laid a floor',
-      cost: FLOOR_PRICE,
-      minutes: MINUTES.floor,
-      x,
-      s: level - 1,
-      removes: false,
-      part: { kind: 'slab', level },
-      apply: (st) => {
-        st.slabs[k] = true;
-      },
-    });
-  }
-  for (const [k, seg] of Object.entries(target.walls)) {
-    if (now.walls[k] === seg) continue;
-    const [x, s] = cols(k);
-    out.push({
-      label: `Put in a ${segmentName(seg)}`,
-      cost: SEGMENT_PRICE[seg],
-      minutes: SEGMENT_MINUTES[seg],
+      label: `Put in a ${NAME[cell]}`,
+      cost: CELL_PRICE[cell],
+      minutes: CELL_MINUTES[cell],
       x,
       s,
       removes: false,
-      part: { kind: 'segment', seg },
+      part: { kind: 'cell', cell, was: now.cells[k] },
       apply: (st) => {
-        st.walls[k] = seg;
-      },
-    });
-  }
-  for (const t of target.stairs) {
-    if (stairsBefore.has(t.id)) continue;
-    out.push({
-      label: 'Built the stairs',
-      cost: STAIRS_PRICE,
-      minutes: MINUTES.stairs,
-      x: t.x + 1,
-      s: t.s,
-      removes: false,
-      part: { kind: 'stair', stair: t },
-      apply: (st) => {
-        st.stairs.push({ ...t });
+        st.cells[k] = cell;
+        if (isDoor(cell)) delete st.cells[key(x, s + 1)];
       },
     });
   }
   for (const k of Object.keys(target.insulated ?? {})) {
     if (now.insulated?.[k]) continue;
-    const [kind, rest] = k.split(':');
-    const [x, n] = cols(rest);
+    const [x, s] = at(k);
     out.push({
-      label: kind === 'w' ? 'Insulated a wall' : 'Insulated a floor',
+      label: 'Insulated a wall',
       cost: INSULATE_PRICE,
       minutes: MINUTES.insulate,
       x,
-      s: kind === 'w' ? n : n - 1,
+      s,
       removes: false,
-      part: { kind: 'insulate', key: k },
+      part: { kind: 'insulate' },
       apply: (st) => {
         st.insulated[k] = true;
       },
     });
   }
-  // Insulation the plan drops without taking out its wall (it went with a wall that's coming back).
+  // Insulation the plan drops from a wall that stays (it's free, and instant).
   for (const k of Object.keys(now.insulated ?? {})) {
-    if (target.insulated?.[k]) continue;
-    const [kind, rest] = k.split(':');
-    const stays = kind === 'w' ? rest in target.walls : target.slabs[rest];
-    if (!stays) continue;
-    const [x, n] = cols(rest);
+    if (target.insulated?.[k] || target.cells[k] === undefined) continue;
+    const [x, s] = at(k);
     out.push({
       label: 'Stripped out insulation',
       cost: 0,
       minutes: 0,
       x,
-      s: kind === 'w' ? n : n - 1,
+      s,
       removes: true,
-      part: { kind: 'insulate', key: k },
+      part: { kind: 'insulate' },
       apply: (st) => {
         delete st.insulated[k];
       },
     });
   }
   return out;
-}
-
-function segmentName(seg: Segment): string {
-  return { wall: 'wall', window: 'window', door: 'door', flatDoor: 'front door', entrance: 'street door' }[seg];
 }
 
 export interface Quote {
@@ -308,9 +236,10 @@ export function currentPiece(sim: Sim): Piece | null {
 
 /** Which flat (or the shared parts) a piece of work is in. */
 export function whereIs(sim: Sim, p: Piece): string {
-  // A floor belongs to the storey on it, or else the one under it; a wall to either side.
+  // A cell belongs to the room it's in, or else whatever's next to it: above first (a floor
+  // belongs to the room on it), then either side, then below.
   const lay = sim.layout;
-  const spots: [number, number][] = p.part.kind === 'slab' ? [[p.x, p.s + 1], [p.x, p.s]] : [[p.x, p.s], [p.x - 1, p.s], [p.x + 1, p.s]];
+  const spots: [number, number][] = [[p.x, p.s], [p.x, p.s + 1], [p.x - 1, p.s], [p.x + 1, p.s], [p.x, p.s - 1]];
   for (const [x, s] of spots) {
     const flat = lay.flatAt(x, s);
     if (flat) return flat.id;

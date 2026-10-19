@@ -10,18 +10,18 @@ import type { Furniture, State } from './state';
 import { disturb } from './tenants';
 
 /** Why a piece can't go here, now or once the plans are built. */
-function problem(sim: Sim, plan: State | undefined, def: string, x: number, s: number, r: number, ignoreId?: number): string | null {
-  return furnitureProblem(sim.state, def, x, s, r, ignoreId) ?? (plan ? furnitureProblem(plan, def, x, s, r, ignoreId) : null);
+function problem(sim: Sim, plan: State | undefined, def: string, x: number, s: number, ignoreId?: number): string | null {
+  return furnitureProblem(sim.state, def, x, s, ignoreId) ?? (plan ? furnitureProblem(plan, def, x, s, ignoreId) : null);
 }
 
 /** Buys a piece and puts it in. Returns it, or why not. */
-export function buyFurniture(sim: Sim, def: string, x: number, s: number, r: number, flip: boolean, plan?: State): Furniture | string {
+export function buyFurniture(sim: Sim, def: string, x: number, s: number, flip: boolean, plan?: State): Furniture | string {
   const st = sim.state;
   const price = furniturePrice(def);
   if (st.money < price) return `Can't afford it: it's ${pounds(price)} and you have ${pounds(st.money)}`;
-  const why = problem(sim, plan, def, x, s, r);
+  const why = problem(sim, plan, def, x, s);
   if (why) return why;
-  const f = placeFurniture(st, def, x, s, r, flip);
+  const f = placeFurniture(st, def, x, s, flip);
   if (typeof f === 'string') return f;
   book(sim, `Bought a ${furnitureDef(def).name.toLowerCase()}`, -price);
   sim.changed();
@@ -29,11 +29,11 @@ export function buyFurniture(sim: Sim, def: string, x: number, s: number, r: num
 }
 
 /** Moves a piece. Returns why not, if it can't go there. */
-export function shiftFurniture(sim: Sim, id: number, x: number, s: number, r: number, plan?: State): string | null {
+export function shiftFurniture(sim: Sim, id: number, x: number, s: number, plan?: State): string | null {
   const f = sim.state.furniture.find((o) => o.id === id);
   if (!f) return 'Gone';
-  if (f.x === x && f.s === s && f.r === r) return null;
-  const why = problem(sim, plan, f.def, x, s, r, id) ?? moveFurniture(sim.state, id, x, s, r);
+  if (f.x === x && f.s === s) return null;
+  const why = problem(sim, plan, f.def, x, s, id) ?? moveFurniture(sim.state, id, x, s);
   if (why) return why;
   disturb(sim, id);
   sim.changed();
