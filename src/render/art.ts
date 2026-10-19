@@ -1,4 +1,4 @@
-// The art, in the "Lamplight" style: warm colours, dark brown outlines and dithered
+// The art, in the "Lamplight" style: warm colours, soft edges and flat bands of
 // shading, drawn in world pixels (16 to a tile) and scaled up without smoothing.
 
 import { furnitureDef } from '../sim/defs';
@@ -70,7 +70,7 @@ export function rect(ctx: Ctx, x: number, y: number, w: number, h: number, colou
 
 /**
  * A block with an edge in a darker shade of its own colour (a black outline everywhere was
- * too busy), a highlight along the top and dithered shade at the bottom.
+ * too busy), a highlight along the top and a band of shade at the bottom.
  */
 export function box(ctx: Ctx, x: number, y: number, w: number, h: number, c: string): void {
   if (w <= 2 || h <= 2) {
@@ -85,10 +85,7 @@ export function box(ctx: Ctx, x: number, y: number, w: number, h: number, c: str
   rect(ctx, ix, iy, iw, ih, c);
   if (iw < 2 || ih < 2) return;
   rect(ctx, ix, iy, iw, 1, light(c, 0.22));
-  const d = dark(c, 0.2);
-  for (let yy = iy + ih - 2; yy < iy + ih; yy++) {
-    for (let xx = ix + ((yy - iy) % 2); xx < ix + iw; xx += 2) rect(ctx, xx, yy, 1, 1, d);
-  }
+  rect(ctx, ix, iy + ih - Math.min(2, ih - 1), iw, Math.min(2, ih - 1), dark(c, 0.12));
   rect(ctx, ix + iw - 1, iy + 1, 1, ih - 1, dark(c, 0.12));
 }
 
