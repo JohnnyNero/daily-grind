@@ -1,31 +1,50 @@
-// People on the map. For now there are two kinds: passers-by who walk along the street,
-// and the letting agent, who has keys to everything and calls round to look at flats
-// (which proves every flat can be reached and left). Tenants come later.
+// People on the map: passers-by on the street, the letting agent (who has keys to
+// everything and shows people round the empty flats), and tenants, whose lives are in
+// tenants.ts. This file walks everyone about.
 
 import { findPath, type Keys } from './layout';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
+import { occupants } from './impressiveness';
+import { minuteOfLife, tenantReturns, tenantThink } from './tenants';
 
 /** Tiles per tick at a stroll: about two tiles a second at normal speed. */
 const WALK = 0.08;
 const CLIMB = 0.05;
 const EPS = 1e-6;
 
-const FIRST = ['Sam', 'Priya', 'Dave', 'Aisha', 'Tom', 'Mags', 'Kwame', 'Ellie', 'Gareth', 'Zara', 'Bill', 'Niamh', 'Raj', 'Jo', 'Callum', 'Bev', 'Tariq', 'Fiona', 'Lee', 'Mo'];
-const LAST = ['Patel', 'Jones', 'Smith', 'Okafor', 'Murphy', 'Clarke', 'Nowak', 'Hughes', 'Ahmed', 'Walsh', 'Evans', 'Khan', 'Reid', 'Bell'];
+export const FIRST = ['Sam', 'Priya', 'Dave', 'Aisha', 'Tom', 'Mags', 'Kwame', 'Ellie', 'Gareth', 'Zara', 'Bill', 'Niamh', 'Raj', 'Jo', 'Callum', 'Bev', 'Tariq', 'Fiona', 'Lee', 'Mo'];
+export const LAST = ['Patel', 'Jones', 'Smith', 'Okafor', 'Murphy', 'Clarke', 'Nowak', 'Hughes', 'Ahmed', 'Walsh', 'Evans', 'Khan', 'Reid', 'Bell'];
 
 /** Each pawn's last-seen building version, so paths are checked when the building changes. */
 const seenVersion = new WeakMap<Pawn, number>();
 
 export function keysOf(p: Pawn): Keys {
-  return p.kind === 'agent' ? { all: true } : {};
+  if (p.kind === 'agent') return { all: true };
+  if (p.life) return { flats: [p.life.flat] };
+  return {};
 }
 
 export function stepPawns(sim: Sim): void {
   const st = sim.state;
   spawn(sim);
-  for (const p of [...st.pawns]) step(sim, p);
+  const minute = st.tick % TICKS_PER_MINUTE === 0;
+  for (const p of [...st.pawns]) {
+    if (p.life) {
+      if (minute) minuteOfLife(sim, p);
+      if (p.life.away) {
+        if (st.tick >= p.life.away.until) tenantReturns(sim, p);
+        continue;
+      }
+    }
+    step(sim, p);
+  }
+}
+
+/** The empty flats, which the agent shows round. */
+function emptyFlats(sim: Sim) {
+  return sim.layout.flats.filter((f) => occupants(sim, f.id) === 0);
 }
 
 function spawn(sim: Sim): void {
@@ -38,7 +57,7 @@ function spawn(sim: Sim): void {
     addPawn(sim, 'passerby');
   }
   if (st.tick >= st.timers.agent && !st.pawns.some((p) => p.kind === 'agent')) {
-    if (hour >= 9 && hour < 18 && sim.layout.flats.length > 0) addPawn(sim, 'agent');
+    if (hour >= 9 && hour < 18 && emptyFlats(sim).length > 0) addPawn(sim, 'agent');
     else st.timers.agent = st.tick + TICKS_PER_HOUR;
   }
 }
@@ -75,7 +94,7 @@ function removePawn(sim: Sim, p: Pawn): void {
 }
 
 /** Standing on a node, not part way along a step. (The pavement step crosses whole columns, so passing one doesn't count.) */
-const atNode = (p: Pawn) =>
+export const atNode = (p: Pawn) =>
   Math.abs(p.x - Math.round(p.x)) < EPS && Math.abs(p.s - Math.round(p.s)) < EPS && !(p.front && Math.abs(p.x - (p.frontTo ?? p.x)) > EPS);
 
 function step(sim: Sim, p: Pawn): void {
@@ -96,7 +115,8 @@ function step(sim: Sim, p: Pawn): void {
     return;
   }
   if (st.tick < p.waitUntil) return;
-  think(sim, p);
+  if (p.life) tenantThink(sim, p);
+  else think(sim, p);
 }
 
 /** If the building changed under them (a wall where they stand, a floor taken away), find somewhere to stand. */
@@ -114,7 +134,8 @@ function settle(sim: Sim, p: Pawn): void {
   }
 }
 
-function setGoal(sim: Sim, p: Pawn, goal: [number, number]): boolean {
+/** Sets off for a node, finding the way. False (and standing still) if there's no way there. */
+export function setGoal(sim: Sim, p: Pawn, goal: [number, number]): boolean {
   const lay = sim.layout;
   p.goal = goal;
   const path = findPath(lay, lay.node(Math.round(p.x), Math.round(p.s)), lay.node(goal[0], goal[1]), keysOf(p));
@@ -173,7 +194,7 @@ function think(sim: Sim, p: Pawn): void {
     return;
   }
   if (p.task === 'look') {
-    const others = lay.flats.filter((f) => f.id !== p.flat);
+    const others = emptyFlats(sim).filter((f) => f.id !== p.flat);
     if (others.length > 0 && random(st) < 0.5) {
       p.task = 'go';
       p.flat = pick(st, others).id;
@@ -185,7 +206,8 @@ function think(sim: Sim, p: Pawn): void {
     return;
   }
   // Going to a flat: once there, look round for a while.
-  const flat = lay.flat(p.flat) ?? (lay.flats.length > 0 ? pick(st, lay.flats) : undefined);
+  const empty = emptyFlats(sim);
+  const flat = lay.flat(p.flat) ?? (empty.length > 0 ? pick(st, empty) : undefined);
   if (!flat) {
     p.task = 'leave';
     return;

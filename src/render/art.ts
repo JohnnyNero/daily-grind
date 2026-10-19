@@ -309,6 +309,29 @@ export function drawPerson(ctx: Ctx, p: Pawn, x: number, y: number, phase: numbe
   personShape(ctx, p, x, y, phase, walking, null);
 }
 
+/**
+ * Someone lying down, head at (x, y) (its top left) facing up. With a body when they're on
+ * a sofa or the floor; in bed the duvet covers it.
+ */
+export function drawSleeper(ctx: Ctx, p: Pawn, x: number, y: number, body: boolean, flip = false): void {
+  const skin = SKIN[p.look.skin % SKIN.length];
+  const hair = HAIR[p.look.hair % HAIR.length];
+  const top = TOPS[p.look.top % TOPS.length];
+  const legs = LEGS[p.look.legs % LEGS.length];
+  const d = flip ? -1 : 1;
+  const r = (rx: number, ry: number, rw: number, rh: number, c: string) => rect(ctx, d > 0 ? x + rx : x - rx - rw + 9, y + ry, rw, rh, c);
+  if (body) {
+    r(8, 2, 10, 6, PAL.outline);
+    r(9, 3, 8, 4, top);
+    r(17, 3, 9, 4, PAL.outline);
+    r(18, 4, 7, 2, legs);
+  }
+  r(-1, -1, 11, 10, PAL.outline);
+  r(0, 0, 9, 8, skin);
+  r(0, 0, 3, 8, hair);
+  r(5, 4, 2, 1, '#2a2020');
+}
+
 function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, walking: boolean, sil: string | null): void {
   const f = p.facing;
   const r = (rx: number, ry: number, rw: number, rh: number, c: string) => rect(ctx, f > 0 ? x + rx : x - rx - rw, y + ry, rw, rh, sil ?? c);
@@ -318,9 +341,16 @@ function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, wal
   const legs = LEGS[p.look.legs % LEGS.length];
   const stride = walking ? (phase < 0.5 ? 1 : -1) : 0;
   const bob = walking && phase % 0.5 < 0.25 ? -1 : 0;
-  r(-3 + stride, -4, 2, 4, legs);
-  r(1 - stride, -4, 2, 4, legs);
-  const by = -11 + bob;
+  const sitting = p.pose === 'sit';
+  if (sitting) {
+    // On a seat: thighs forward, shins down.
+    r(-1, -8, 6, 3, legs);
+    r(4, -5, 2, 5, legs);
+  } else {
+    r(-3 + stride, -4, 2, 4, legs);
+    r(1 - stride, -4, 2, 4, legs);
+  }
+  const by = (sitting ? -15 : -11) + bob;
   r(-4, by, 8, 7, top);
   r(-5, by + 1, 1, 4, top);
   r(4, by + 1, 1, 4, top);

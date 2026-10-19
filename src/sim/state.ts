@@ -54,7 +54,49 @@ export interface Furniture {
   flip?: boolean;
 }
 
-export type PawnKind = 'agent' | 'passerby';
+export type PawnKind = 'agent' | 'passerby' | 'tenant';
+
+export type NeedId = 'sleep' | 'food' | 'hygiene' | 'bladder' | 'fun' | 'comfort';
+
+/** A remembered moment that colours how someone feels for a while. */
+export interface Memory {
+  id: string;
+  /** Tick it happened. */
+  at: number;
+}
+
+/** What a tenant is doing with a piece of furniture. */
+export interface Using {
+  furniture: number;
+  /** Which of its spots (a sofa has three). */
+  spot: number;
+  /** The offer being used (index into its list). */
+  offer: number;
+  until: number;
+}
+
+/** Everything about a tenant beyond walking about. */
+export interface Life {
+  /** The flat they live in (its id). */
+  flat: string;
+  needs: Record<NeedId, number>;
+  memories: Memory[];
+  /** How much they like living here, as shown; it eases towards the total of their thoughts. */
+  liking: number;
+  /** Working hours in minutes of the day, Monday to Friday; null for no job. */
+  job: { leave: number; back: number; title: string } | null;
+  /** Off the map (at work, out) until this tick. */
+  away: { until: number; why: string } | null;
+  /** Heading out: where to, and when they'll be back. */
+  outing?: { why: string; until: number };
+  using: Using | null;
+  /** Carrying a meal they've just cooked, to eat somewhere. */
+  meal?: boolean;
+  /** The day they last went to work, so they go once a day. */
+  workedDay?: number;
+  /** How they slept last: in a bed, on the sofa or the floor (for the morning's memory). */
+  sleptOn?: 'bed' | 'sofa' | 'floor';
+}
 
 export interface Pawn {
   id: number;
@@ -84,6 +126,10 @@ export interface Pawn {
   front?: boolean;
   /** The column at the far end of the pavement walk. */
   frontTo?: number;
+  /** How they're posed: sitting or lying down (standing if missing). */
+  pose?: 'sit' | 'sleep';
+  /** Tenants only. */
+  life?: Life;
 }
 
 export interface State {

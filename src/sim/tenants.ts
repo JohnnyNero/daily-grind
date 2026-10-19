@@ -1,0 +1,448 @@
+// Tenants' lives. Each person has needs that run down (sleep, food, a wash, the loo, fun
+// and comfort) and meets them with the furniture you've put in their flat. Most go out to
+// work on weekdays. What's missing has a cost: no bed means the sofa or the floor, no loo
+// means popping to the pub, no kitchen means chips. All of it turns into thoughts, and the
+// thoughts add up to how much they like living here.
+
+import { furnitureDef, spotColumns, type Offer } from './defs';
+import { flatScore } from './impressiveness';
+import type { Flat } from './layout';
+import { findPath } from './layout';
+import { FIRST, LAST, keysOf, setGoal } from './pawns';
+import { pick, randInt, random } from './rng';
+import type { Sim } from './sim';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type Life, type NeedId, type Pawn } from './state';
+import { forget, likingTarget, remember, thoughtsOf } from './thoughts';
+
+export const NEED_NAMES: Record<NeedId, string> = {
+  sleep: 'Sleep',
+  food: 'Food',
+  hygiene: 'Hygiene',
+  bladder: 'Bladder',
+  fun: 'Fun',
+  comfort: 'Comfort',
+};
+
+/** How fast each need runs down while awake, per game hour. */
+const DECAY: Record<NeedId, number> = {
+  sleep: 1 / 17,
+  food: 1 / 7,
+  hygiene: 1 / 30,
+  bladder: 1 / 5,
+  fun: 1 / 10,
+  comfort: 1 / 8,
+};
+
+/** Below this, they go and do something about it. */
+const SEEK: Record<NeedId, number> = { sleep: 0.15, food: 0.4, hygiene: 0.3, bladder: 0.35, fun: 0.4, comfort: 0.35 };
+
+/** Eating a meal they've cooked: sitting down if there's a seat. */
+const EAT: Offer = { need: 'food', rate: 3, minutes: [15, 25], pose: 'sit', doing: 'Eating' };
+/** Sleeping on the floor, when there's no bed or sofa. */
+const FLOOR_SLEEP: Offer = { need: 'sleep', rate: 1 / 10, minutes: [480, 540], pose: 'sleep', doing: 'Asleep on the floor' };
+/** Sleeping on the sofa, when there's no bed. */
+const SOFA_SLEEP: Offer = { need: 'sleep', rate: 1 / 8.5, minutes: [420, 540], pose: 'sleep', doing: 'Asleep on the sofa' };
+
+const ON_THE_FLOOR = -1;
+
+const JOBS = ['Office manager', 'Nurse', 'Barista', 'Civil servant', 'Delivery driver', 'Teaching assistant', 'Software tester', 'Estate agent'];
+
+// ------------------------------------------------------------------ moving in
+
+/** A new household moves into a flat: `size` people, most of them with jobs. */
+export function moveIn(sim: Sim, flatId: string, size: number): Pawn[] {
+  const st = sim.state;
+  const lay = sim.layout;
+  const flat = lay.flat(flatId);
+  if (!flat) throw new Error(`No flat ${flatId}`);
+  const nodes = flat.rooms.flatMap((r) => lay.rooms[r].nodes);
+  const surname = pick(st, LAST);
+  const out: Pawn[] = [];
+  for (let i = 0; i < size; i++) {
+    const [x, s] = lay.xs(pick(st, nodes));
+    // The first has a nine-to-five; others might work from home.
+    const works = i === 0 || random(st) < 0.5;
+    const leave = randInt(st, 7 * 4, 9 * 4) * 15;
+    const life: Life = {
+      flat: flatId,
+      needs: { sleep: 0.8, food: 0.7, hygiene: 0.8, bladder: 0.8, fun: 0.6, comfort: 0.6 },
+      memories: [],
+      liking: 50,
+      job: works ? { leave, back: leave + randInt(st, 32, 40) * 15, title: pick(st, JOBS) } : null,
+      away: null,
+      using: null,
+    };
+    const p: Pawn = {
+      id: st.nextId++,
+      name: `${pick(st, FIRST.filter((n) => !out.some((o) => o.name.startsWith(`${n} `))))} ${i === 0 || random(st) < 0.5 ? surname : pick(st, LAST)}`,
+      kind: 'tenant',
+      x,
+      s,
+      path: [],
+      goal: null,
+      task: 'go',
+      exit: random(st) < 0.5 ? 0 : 1,
+      doing: 'Settling in',
+      waitUntil: 0,
+      flat: flatId,
+      look: { skin: randInt(st, 0, 5), hair: randInt(st, 0, 7), top: randInt(st, 0, 9), legs: randInt(st, 0, 5) },
+      facing: 1,
+      life,
+    };
+    st.pawns.push(p);
+    out.push(p);
+  }
+  for (const p of out) p.life!.liking = likingTarget(thoughtsOf(sim, p));
+  return out;
+}
+
+// ------------------------------------------------------------------ every minute
+
+/** Needs run down (or up, with whatever they're using), memories fade, liking moves. */
+export function minuteOfLife(sim: Sim, p: Pawn): void {
+  const life = p.life!;
+  const per = 1 / 60;
+  const using = life.using && life.using.until > 0 ? offerOf(sim, life.using) : null;
+  for (const need of Object.keys(DECAY) as NeedId[]) {
+    let rate = -DECAY[need];
+    if (life.away) {
+      // At work: lunch and a loo are sorted; comfort is a desk chair.
+      if (need === 'food') rate *= 0.35;
+      if (need === 'bladder') rate = 0;
+      if (need === 'comfort') rate *= 0.5;
+    }
+    if (using) {
+      if (using.need === need) rate = using.rate;
+      else if (using.also?.[need] !== undefined) rate = using.also[need]!;
+      else if (using.pose === 'sleep') rate *= need === 'food' ? 0.3 : need === 'bladder' ? 0.25 : 0.5;
+      if (using.pose === 'sleep' && need === 'fun') rate = 0;
+    }
+    life.needs[need] = Math.max(0, Math.min(1, life.needs[need] + rate * per));
+  }
+  // Liking eases towards what their thoughts add up to.
+  const target = likingTarget(thoughtsOf(sim, p));
+  life.liking += (target - life.liking) * 0.02;
+  if (sim.state.tick % TICKS_PER_HOUR === 0) forget(sim, life);
+}
+
+// ------------------------------------------------------------------ deciding
+
+function home(sim: Sim, p: Pawn): Flat | undefined {
+  return sim.layout.flat(p.life!.flat);
+}
+
+function flatNodes(sim: Sim, flat: Flat): number[] {
+  return flat.rooms.flatMap((r) => sim.layout.rooms[r].nodes);
+}
+
+function isWorkday(sim: Sim): boolean {
+  return (sim.day - 1) % 7 < 5;
+}
+
+/** When they wake up and go to bed, in minutes of the day. */
+function wakeAt(sim: Sim, life: Life): number {
+  return life.job && isWorkday(sim) ? life.job.leave - 75 : 8 * 60 + 30;
+}
+
+function bedtime(sim: Sim): number {
+  return (sim.day - 1) % 7 >= 4 ? 24 * 60 - 1 : 23 * 60;
+}
+
+function asleepHours(sim: Sim, life: Life): boolean {
+  const m = sim.minuteOfDay;
+  return m >= bedtime(sim) || m < wakeAt(sim, life);
+}
+
+export function tenantThink(sim: Sim, p: Pawn): void {
+  const life = p.life!;
+  const st = sim.state;
+  if (life.using) {
+    continueUsing(sim, p);
+    return;
+  }
+  delete p.pose;
+  const flat = home(sim, p);
+  const edge = p.exit === 0 ? 0 : st.w - 1;
+  // Off out: to work, or for whatever the flat doesn't have.
+  if (p.task === 'leave') {
+    if (Math.round(p.x) === edge && Math.round(p.s) === 0) {
+      goAway(sim, p);
+      return;
+    }
+    if (!setGoal(sim, p, [edge, 0])) {
+      p.doing = 'Stuck: no way out';
+      p.waitUntil = st.tick + 5 * TICKS_PER_MINUTE;
+    }
+    return;
+  }
+  if (!flat) {
+    p.doing = 'Wondering where their flat went';
+    p.waitUntil = st.tick + 30 * TICKS_PER_MINUTE;
+    return;
+  }
+  const here = sim.layout.flatAt(Math.round(p.x), Math.round(p.s));
+  if (here?.id !== flat.id || sim.layout.isDoorNode(sim.layout.node(Math.round(p.x), Math.round(p.s)))) {
+    goHome(sim, p, flat);
+    return;
+  }
+  const m = sim.minuteOfDay;
+  if (life.job && isWorkday(sim) && life.workedDay !== sim.day && m >= life.job.leave && m < life.job.back - 60) {
+    leaveFor(sim, p, 'At work', life.job.back);
+    return;
+  }
+  const needs = life.needs;
+  if (needs.bladder < SEEK.bladder) {
+    if (tryUse(sim, p, flat, 'bladder')) return;
+    leaveFor(sim, p, 'Popped to the pub for the loo', m + 25);
+    return;
+  }
+  if (asleepHours(sim, life) || needs.sleep < SEEK.sleep) {
+    goToSleep(sim, p, flat);
+    return;
+  }
+  if (life.meal) {
+    eat(sim, p, flat);
+    return;
+  }
+  const morning = m >= wakeAt(sim, life) && m < wakeAt(sim, life) + 45;
+  if (needs.hygiene < SEEK.hygiene || (morning && needs.hygiene < 0.85)) {
+    if (tryUse(sim, p, flat, 'hygiene')) return;
+  }
+  const teatime = m >= 18 * 60 && m < 20 * 60 && needs.food < 0.7;
+  if (needs.food < SEEK.food || teatime) {
+    if (tryUse(sim, p, flat, 'food')) return;
+    leaveFor(sim, p, 'Out for chips', m + 40);
+    return;
+  }
+  if (needs.fun < SEEK.fun) {
+    if (tryUse(sim, p, flat, 'fun')) return;
+    if (m >= 10 * 60 && m < 22 * 60) {
+      leaveFor(sim, p, random(st) < 0.5 ? 'Out at the pub' : 'Out for a walk', m + randInt(st, 60, 150));
+      return;
+    }
+  }
+  if (needs.comfort < SEEK.comfort && tryUse(sim, p, flat, 'comfort')) return;
+  potter(sim, p, flat);
+}
+
+// ------------------------------------------------------------------ using furniture
+
+function offerOf(sim: Sim, u: { furniture: number; offer: number }): Offer | null {
+  if (u.offer === -1) return EAT;
+  if (u.offer === -2) return u.furniture === ON_THE_FLOOR ? FLOOR_SLEEP : SOFA_SLEEP;
+  const f = sim.state.furniture.find((o) => o.id === u.furniture);
+  return f ? (furnitureDef(f.def).offers?.[u.offer] ?? null) : null;
+}
+
+/** Spots taken by someone else. */
+function taken(sim: Sim, f: Furniture, spot: number, me: Pawn): boolean {
+  return sim.state.pawns.some((o) => o !== me && o.life?.using?.furniture === f.id && o.life.using.spot === spot);
+}
+
+interface Choice {
+  f: Furniture;
+  spot: number;
+  offer: number;
+  at: [number, number];
+}
+
+/** Furniture in the flat that meets a need (and works where it is), nearest first. */
+function choices(sim: Sim, p: Pawn, flat: Flat, match: (o: Offer, f: Furniture) => boolean): Choice[] {
+  const lay = sim.layout;
+  const inFlat = new Set(flatNodes(sim, flat));
+  const out: Choice[] = [];
+  for (const f of sim.state.furniture) {
+    if (!inFlat.has(lay.node(f.x, f.s))) continue;
+    const def = furnitureDef(f.def);
+    const room = lay.roomOf[lay.node(f.x, f.s)];
+    def.offers?.forEach((o, i) => {
+      if (!match(o, f)) return;
+      if (o.needsNearby && !sim.state.furniture.some((g) => g.def === o.needsNearby && (inFlat.has(lay.node(g.x, g.s)) && (o.needsNearby === 'fridge' || lay.roomOf[lay.node(g.x, g.s)] === room)))) return;
+      spotColumns(def, f.x, f.flip).forEach((x, spot) => {
+        if (!taken(sim, f, spot, p)) out.push({ f, spot, offer: i, at: [x, f.s] });
+      });
+    });
+  }
+  return out.sort((a, b) => Math.abs(a.at[0] - p.x) + 4 * Math.abs(a.at[1] - p.s) - (Math.abs(b.at[0] - p.x) + 4 * Math.abs(b.at[1] - p.s)));
+}
+
+/** Goes to the nearest thing that meets a need and starts walking there. False if there's nothing. */
+function tryUse(sim: Sim, p: Pawn, flat: Flat, need: NeedId): boolean {
+  // Food means cooking if they can, else picking at the fridge.
+  const list = choices(sim, p, flat, (o) => o.need === need);
+  if (need === 'food') list.sort((a, b) => Number(a.f.def !== 'cooker') - Number(b.f.def !== 'cooker'));
+  // For fun, the telly comes first: a sofa with a telly beats the laptop.
+  for (const c of list) {
+    if (startUsing(sim, p, c.f.id, c.spot, c.offer, c.at)) return true;
+  }
+  return false;
+}
+
+function startUsing(sim: Sim, p: Pawn, furniture: number, spot: number, offer: number, at: [number, number]): boolean {
+  const lay = sim.layout;
+  const path = findPath(lay, lay.node(Math.round(p.x), Math.round(p.s)), lay.node(at[0], at[1]), keysOf(p));
+  if (!path) return false;
+  p.life!.using = { furniture, spot, offer, until: 0 };
+  const o = offerOf(sim, p.life!.using);
+  p.doing = o ? `Going to: ${o.doing.toLowerCase()}` : 'Off to do something';
+  p.goal = at;
+  p.path = path.map((n) => lay.xs(n));
+  return true;
+}
+
+/** Called when they've got there, and then whenever they're idle while using. */
+function continueUsing(sim: Sim, p: Pawn): void {
+  const life = p.life!;
+  const u = life.using!;
+  const st = sim.state;
+  const o = offerOf(sim, u);
+  const f = st.furniture.find((x) => x.id === u.furniture);
+  if (!o || (u.furniture !== ON_THE_FLOOR && u.offer !== -1 && !f)) {
+    stopUsing(sim, p, false);
+    return;
+  }
+  if (u.until === 0) {
+    // Just arrived.
+    u.until = st.tick + randInt(st, o.minutes[0], o.minutes[1]) * TICKS_PER_MINUTE;
+    p.doing = o.doing;
+    if (o.pose !== 'stand') p.pose = o.pose;
+    if (f) p.facing = f.flip ? -1 : 1;
+    if (o.pose === 'sleep') life.sleptOn = u.furniture === ON_THE_FLOOR ? 'floor' : u.offer === -2 ? 'sofa' : 'bed';
+    return;
+  }
+  const full = o.need !== 'sleep' && o.rate > 0 && life.needs[o.need] >= 1;
+  const sleeping = o.pose === 'sleep';
+  const woken = sleeping && !asleepHours(sim, life) && life.needs.sleep > 0.85;
+  const due = st.tick >= u.until;
+  if (sleeping ? woken || (due && life.needs.sleep >= 0.98) || life.needs.bladder < 0.1 : due || full) {
+    stopUsing(sim, p, true);
+    return;
+  }
+  if (o.pose !== 'stand') p.pose = o.pose;
+  p.waitUntil = st.tick + TICKS_PER_MINUTE;
+}
+
+function stopUsing(sim: Sim, p: Pawn, finished: boolean): void {
+  const life = p.life!;
+  const u = life.using!;
+  const o = offerOf(sim, u);
+  life.using = null;
+  delete p.pose;
+  if (!finished || !o) return;
+  if (o.memory) remember(sim, life, o.memory);
+  if (o.doing === 'Cooking') life.meal = true;
+  if (u.offer === -1) {
+    life.meal = false;
+    remember(sim, life, 'cookedMeal');
+    const f = sim.state.furniture.find((x) => x.id === u.furniture);
+    if (f?.def === 'chair' && sim.state.furniture.some((g) => g.def === 'table' && g.s === f.s && Math.abs(g.x - f.x) <= 2)) remember(sim, life, 'ateAtTable');
+  }
+  if (o.pose === 'sleep') {
+    if (life.sleptOn === 'floor') remember(sim, life, 'sleptFloor');
+    else if (life.sleptOn === 'sofa') remember(sim, life, 'sleptSofa');
+    else if (life.needs.sleep > 0.8) remember(sim, life, 'sleptWell');
+  }
+}
+
+function goToSleep(sim: Sim, p: Pawn, flat: Flat): void {
+  if (tryUse(sim, p, flat, 'sleep')) return;
+  // No bed: the sofa, then the floor.
+  const sofa = choices(sim, p, flat, (_o, f) => f.def === 'sofa')[0];
+  if (sofa && startUsing(sim, p, sofa.f.id, sofa.spot, -2, sofa.at)) return;
+  p.life!.using = { furniture: ON_THE_FLOOR, spot: 0, offer: -2, until: 0 };
+  continueUsing(sim, p);
+}
+
+function eat(sim: Sim, p: Pawn, flat: Flat): void {
+  // A chair by a table first, then anywhere to sit, else standing up.
+  const seats = choices(sim, p, flat, (o) => o.pose === 'sit' && o.need === 'comfort');
+  seats.sort((a, b) => Number(a.f.def !== 'chair') - Number(b.f.def !== 'chair'));
+  for (const c of seats) if (startUsing(sim, p, c.f.id, c.spot, -1, c.at)) return;
+  const life = p.life!;
+  life.meal = false;
+  life.needs.food = Math.min(1, life.needs.food + 0.75);
+  remember(sim, life, 'cookedMeal');
+  remember(sim, life, 'ateStanding');
+  p.doing = 'Eating standing up';
+  p.waitUntil = sim.state.tick + 12 * TICKS_PER_MINUTE;
+}
+
+// ------------------------------------------------------------------ going out and coming home
+
+/** What being out sorts out, by where they went. */
+const OUTINGS: Record<string, Partial<Record<NeedId, number>>> = {
+  'Out for chips': { food: 1 },
+  'Popped to the pub for the loo': { bladder: 1 },
+  'Out at the pub': { fun: 0.6 },
+  'Out for a walk': { fun: 0.5 },
+};
+
+function leaveFor(sim: Sim, p: Pawn, why: string, untilMinute: number): void {
+  const st = sim.state;
+  const dayStart = Math.floor(st.tick / TICKS_PER_DAY) * TICKS_PER_DAY;
+  p.life!.outing = { why, until: dayStart + untilMinute * TICKS_PER_MINUTE };
+  p.task = 'leave';
+  p.doing = why === 'At work' ? 'Off to work' : 'Heading out';
+  tenantThink(sim, p);
+}
+
+function goAway(sim: Sim, p: Pawn): void {
+  const life = p.life!;
+  const st = sim.state;
+  const out = life.outing ?? { why: 'Out', until: st.tick + TICKS_PER_HOUR };
+  delete life.outing;
+  life.away = { until: Math.max(st.tick + 15 * TICKS_PER_MINUTE, out.until), why: out.why };
+  if (out.why === 'At work') life.workedDay = sim.day;
+  p.doing = out.why;
+  p.path = [];
+  p.goal = null;
+  delete p.front;
+  delete p.frontTo;
+}
+
+/** Back from work or wherever: in at one end of the street and home. */
+export function tenantReturns(sim: Sim, p: Pawn): void {
+  const life = p.life!;
+  const st = sim.state;
+  const why = life.away?.why ?? '';
+  if (why === 'At work') {
+    if (random(st) < 0.3) remember(sim, life, 'commute');
+    life.needs.bladder = Math.min(life.needs.bladder, 0.5);
+  }
+  for (const [need, gain] of Object.entries(OUTINGS[why] ?? {}) as [NeedId, number][]) life.needs[need] = Math.min(1, life.needs[need] + gain);
+  life.away = null;
+  p.exit = random(st) < 0.5 ? 0 : 1;
+  p.x = p.exit === 0 ? 0 : st.w - 1;
+  p.s = 0;
+  p.task = 'go';
+  p.doing = 'Heading home';
+  p.waitUntil = 0;
+}
+
+function goHome(sim: Sim, p: Pawn, flat: Flat): void {
+  const st = sim.state;
+  const lay = sim.layout;
+  p.task = 'go';
+  const nodes = flatNodes(sim, flat).filter((n) => !lay.isDoorNode(n));
+  if (nodes.length === 0 || !setGoal(sim, p, lay.xs(pick(st, nodes)))) {
+    p.doing = `Can't get into ${flat.name}`;
+    p.waitUntil = st.tick + 10 * TICKS_PER_MINUTE;
+    return;
+  }
+  p.doing = 'Heading home';
+}
+
+function potter(sim: Sim, p: Pawn, flat: Flat): void {
+  const st = sim.state;
+  const lay = sim.layout;
+  if (p.life!.needs.comfort < 0.8 && random(st) < 0.4 && tryUse(sim, p, flat, 'comfort')) return;
+  const nodes = flatNodes(sim, flat).filter((n) => !lay.isDoorNode(n));
+  if (nodes.length > 0) setGoal(sim, p, lay.xs(pick(st, nodes)));
+  p.doing = 'Pottering about';
+  p.waitUntil = st.tick + randInt(st, 5, 20) * TICKS_PER_MINUTE;
+}
+
+/** For the info panel: how the flat they live in scores. */
+export function homeScore(sim: Sim, p: Pawn) {
+  return p.life ? flatScore(sim, p.life.flat) : null;
+}

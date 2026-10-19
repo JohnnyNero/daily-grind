@@ -21,7 +21,7 @@ describe('the simulation', () => {
     expect(serialize(b)).toBe(serialize(a));
   });
 
-  it('sends people past and the agent round every flat over a few days', () => {
+  it('sends people past and the agent round every empty flat over a few days', () => {
     const sim = Sim.create(3);
     const seen = new Set<string>();
     let passers = 0;
@@ -31,13 +31,15 @@ describe('the simulation', () => {
       for (const p of sim.state.pawns) {
         if (p.kind === 'agent' && p.task === 'look' && p.flat) seen.add(p.flat);
         if (p.kind === 'passerby' && !lastIds.has(p.id)) passers++;
-        expect(p.doing).not.toMatch(/Stuck|Can't/);
+        expect(p.doing).not.toMatch(/Stuck|Can't|Wondering/);
         // Passers-by stay on the pavement in front of the building, never inside it.
         if (p.kind === 'passerby' && p.x > sim.state.plot.x0 && p.x < sim.state.plot.x1) expect(p.front, `${p.name} at ${p.x}`).toBe(true);
       }
       lastIds = new Set(sim.state.pawns.map((p) => p.id));
     }
-    expect(seen.size).toBe(sim.layout.flats.length);
+    const lived = new Set(sim.state.pawns.flatMap((p) => (p.life ? [p.life.flat] : [])));
+    expect(seen.size).toBe(sim.layout.flats.length - lived.size);
+    for (const f of lived) expect(seen.has(f)).toBe(false);
     expect(passers).toBeGreaterThan(50);
   });
 });

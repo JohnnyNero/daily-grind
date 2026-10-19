@@ -3,6 +3,7 @@
 import { Layout } from './layout';
 import { stepPawns } from './pawns';
 import { newState } from './start';
+import { moveIn } from './tenants';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, type State } from './state';
 
 export class Sim {
@@ -12,8 +13,12 @@ export class Sim {
 
   constructor(public state: State) {}
 
+  /** A fresh game: the starting building, with a couple already living on the ground floor. */
   static create(seed: number): Sim {
-    return new Sim(newState(seed));
+    const sim = new Sim(newState(seed));
+    const first = sim.layout.flats[0];
+    if (first) moveIn(sim, first.id, 2);
+    return sim;
   }
 
   get layout(): Layout {

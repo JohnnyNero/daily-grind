@@ -202,3 +202,34 @@ body.building .recentre { bottom: calc(env(safe-area-inset-bottom) + 12px + var(
 }
 .build-actions button:disabled { opacity: 0.4; cursor: default; }
 .build-actions .primary { background: var(--accent); }
+
+/* Info panel: flats and tenants */
+.doing { margin: 0 0 10px !important; color: var(--sheet-ink) !important; font-weight: 600; }
+.score-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.score-head .tier { font-size: 18px; }
+.score-head span { color: var(--sheet-muted); font-size: 14px; }
+.meters { display: flex; flex-direction: column; gap: 6px; }
+.meter { display: grid; grid-template-columns: 110px 1fr 32px; align-items: center; gap: 10px; font-size: 14px; }
+.meter small { color: #b5543f; font-weight: 600; }
+.meter.weakest span { font-weight: 600; }
+.meter b { text-align: right; font-variant-numeric: tabular-nums; }
+.track { position: relative; height: 10px; border-radius: 5px; background: #e4dccd; overflow: visible; }
+.track.big { height: 16px; border-radius: 8px; }
+.fill { height: 100%; border-radius: inherit; background: var(--good); }
+.fill.low { background: var(--bad); }
+.target { position: absolute; top: -3px; bottom: -3px; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--sheet-ink); }
+.hint-line { margin-top: 10px !important; color: var(--sheet-ink) !important; }
+.people-line { margin-top: 8px !important; }
+.link { border: 0; background: none; padding: 0; color: #2f6b5a; font-weight: 600; text-decoration: underline; cursor: pointer; font-size: 14px; }
+.liking { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.liking-num { display: flex; align-items: baseline; gap: 8px; }
+.liking-num b { font-size: 28px; font-variant-numeric: tabular-nums; }
+.liking-num span { font-weight: 600; color: var(--sheet-muted); }
+.small { font-size: 12px !important; }
+.sheet .tabs button { min-height: 36px; }
+.thoughts { display: flex; flex-direction: column; }
+.thought { display: flex; justify-content: space-between; gap: 12px; padding: 6px 2px; border-bottom: 1px solid #ece5d8; font-size: 14px; }
+.thought b { font-variant-numeric: tabular-nums; }
+.thought b.good { color: var(--good); }
+.thought b.bad { color: var(--bad); }
+.thought.total { border-bottom: 0; color: var(--sheet-muted); }

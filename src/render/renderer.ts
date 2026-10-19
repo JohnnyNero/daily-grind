@@ -8,7 +8,7 @@ import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
 import { MAX_STOREYS, ROOM_ROWS, STOREY_ROWS, TILE, TICKS_PER_MINUTE, isDoor, type Pawn, type Segment } from '../sim/state';
-import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, drawFurniture, drawPerson, light, mix, rect } from './art';
+import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
 
 const SKY_ROWS = 4;
 const GROUND_ROWS = 3;
@@ -118,7 +118,7 @@ export class Renderer {
     const { wx, wy } = this.toWorld(sx, sy);
     let best: Pawn | null = null;
     let bestD = Infinity;
-    for (const p of this.sim.state.pawns) {
+    for (const p of this.visiblePawns()) {
       const { px, py } = this.feet(p);
       if (wx < px - 7 || wx > px + 7 || wy < py - PERSON_H - 2 || wy > py + 4) continue;
       const d = Math.abs(wx - px);
@@ -153,9 +153,13 @@ export class Renderer {
     ctx.setTransform(this.dpr * c.scale, 0, 0, this.dpr * c.scale, this.dpr * c.ox, this.dpr * c.oy);
     ctx.drawImage(this.layer, 0, 0);
     this.drawDoors(ctx);
-    const pawns = [...this.sim.state.pawns].sort((a, b) => Number(!!a.front) - Number(!!b.front));
+    const pawns = this.visiblePawns().sort((a, b) => Number(!!a.front) - Number(!!b.front));
     for (const p of pawns) {
       const { px, py } = this.feet(p);
+      if (p.pose === 'sleep') {
+        this.drawAsleep(ctx, p, px, py);
+        continue;
+      }
       const walking = p.path.length > 0;
       const phase = (Math.abs(p.x) * 1.6) % 1;
       drawPerson(ctx, p, Math.round(px), Math.round(py), phase, walking);
@@ -170,6 +174,35 @@ export class Renderer {
     // Text at screen resolution.
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawLabels();
+  }
+
+  /** Everyone on the map (tenants at work or out aren't). */
+  private visiblePawns(): Pawn[] {
+    return this.sim.state.pawns.filter((p) => !p.life?.away);
+  }
+
+  /** Asleep: head on the pillow in bed, or stretched out on the sofa or the floor. */
+  private drawAsleep(ctx: CanvasRenderingContext2D, p: Pawn, px: number, py: number): void {
+    const u = p.life?.using;
+    const f = u ? this.sim.state.furniture.find((o) => o.id === u.furniture) : undefined;
+    if (f && (f.def === 'bed' || f.def === 'doubleBed')) {
+      const def = furnitureDef(f.def);
+      const left = f.x * TILE;
+      const W = def.w * TILE;
+      const pillow = f.flip ? left + W - 13 : left + 3;
+      const across = (u?.spot ?? 0) * 11 * (f.flip ? -1 : 1);
+      drawSleeper(ctx, p, pillow + across, floorY(f.s) - 15, false);
+    } else if (f) {
+      const def = furnitureDef(f.def);
+      drawSleeper(ctx, p, f.x * TILE + (f.flip ? def.w * TILE - 14 : 4), floorY(f.s) - 15, true, f.flip);
+    } else drawSleeper(ctx, p, Math.round(px) - 12, Math.round(py) - 8, true);
+    // A little z above them.
+    const zx = Math.round(px) + 4;
+    const zy = Math.round(py) - 26 - (Math.floor(this.sim.state.tick / 90) % 3) * 2;
+    rect(ctx, zx, zy, 4, 1, PAL.white);
+    rect(ctx, zx + 2, zy + 1, 1, 1, PAL.white);
+    rect(ctx, zx + 1, zy + 2, 1, 1, PAL.white);
+    rect(ctx, zx, zy + 3, 4, 1, PAL.white);
   }
 
   private drawSky(): void {
@@ -401,7 +434,7 @@ export class Renderer {
       if (!isDoor(seg)) continue;
       const [x, s] = k.split(',').map(Number);
       const state = this.doors.get(k) ?? { open: 0, dir: 1 as 1 | -1 };
-      const near = st.pawns.find((p) => Math.abs(p.s - s) < 0.2 && Math.abs(p.x - x) < 1 && !p.front);
+      const near = st.pawns.find((p) => !p.life?.away && Math.abs(p.s - s) < 0.2 && Math.abs(p.x - x) < 1 && !p.front);
       if (near) state.dir = near.facing;
       state.open = Math.max(0, Math.min(1, state.open + (near ? 0.12 : -0.06)));
       this.doors.set(k, state);
@@ -555,7 +588,7 @@ export class Renderer {
     // Name tags under people, once zoomed in enough to read.
     if (c.scale < 1.6) return;
     ctx.font = `500 ${Math.min(11, c.scale * 3.5)}px system-ui, sans-serif`;
-    for (const p of this.sim.state.pawns) {
+    for (const p of this.visiblePawns()) {
       const { px, py } = this.feet(p);
       const [sx, sy] = toScreen(px, py + 1);
       const name = p.kind === 'agent' ? 'Denise' : p.name.split(' ')[0];
