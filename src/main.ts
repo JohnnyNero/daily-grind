@@ -87,7 +87,7 @@ function play(sim: Sim): void {
   }
   window.addEventListener('resize', onResize);
   onResize();
-  build.onToggle = fitView;
+  build.onFit = fitView;
   el('recentre').addEventListener('click', fitView);
 
   attachInput(canvas, renderer.camera, {

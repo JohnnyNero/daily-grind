@@ -72,8 +72,9 @@ type Box = { x: number; y: number; w: number; h: number };
 
 export class BuildUi {
   active = false;
-  private group = GROUPS[0];
-  private tool: Tool = 'wall';
+  /** Nothing's picked when build mode opens: no group, no tool. */
+  private group: (typeof GROUPS)[number] | null = null;
+  private tool: Tool | null = null;
   /** Undo steps: the plans as they were, or the furniture (and the money) as it was. */
   private undo: { plan?: string; furniture?: string; money?: number; ledger?: number }[] = [];
   /**
@@ -90,8 +91,8 @@ export class BuildUi {
   private hint = el('build-hint');
   private tools = el('build-tools');
   private zoom = el('build-zoom');
-  /** Called when build mode opens or closes (the view refits around the bar). */
-  onToggle: () => void = () => {};
+  /** Fits the whole building in view (the Whole building chip). */
+  onFit: () => void = () => {};
   /** A message for the player. */
   onNotify: (text: string, bad?: boolean) => void = () => {};
   /** The part of the screen the building shows in, for zooming to a flat. */
@@ -131,7 +132,6 @@ export class BuildUi {
     this.pending = null;
     this.loadDraft();
     this.render();
-    this.onToggle();
   }
 
   /** Straight into moving a piece (from its card, outside build mode): zooms to its flat. */
@@ -202,6 +202,7 @@ export class BuildUi {
     const ok = el('place-ok') as HTMLButtonElement;
     ok.disabled = problem !== null;
     ok.textContent = p.id === undefined ? `Place ${pounds(furniturePrice(p.def))}` : 'Place';
+    el('place-cancel').textContent = p.id === undefined ? 'Done' : 'Cancel';
     this.bump();
   }
 
@@ -224,7 +225,11 @@ export class BuildUi {
       el('place-why').textContent = out.problem;
       return;
     }
-    this.endPlacing();
+    // A new piece: another copy, just along from the last, until Done. A move is finished.
+    if (p.id === undefined) {
+      p.x += furnitureDef(p.def).w;
+      this.showPending();
+    } else this.endPlacing();
   }
 
   /** Where the ghost first goes: under the middle of the view, dropped to a floor. */
@@ -245,7 +250,6 @@ export class BuildUi {
     this.card.hide();
     this.bump();
     if (this.sim.state.works.plan) this.onNotify('Your plans are kept. Sign them off in build mode to get the builders in.');
-    this.onToggle();
   }
 
   private bump(): void {
@@ -368,7 +372,7 @@ export class BuildUi {
   }
 
   private isFurniture(): boolean {
-    return this.group.furniture !== undefined;
+    return this.group?.furniture !== undefined;
   }
 
   private select(id: number | null): void {
@@ -400,12 +404,14 @@ export class BuildUi {
     );
     groups.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     this.tools.replaceChildren();
-    if (this.group.tools) {
+    if (!this.group) {
+      // Nothing picked yet.
+    } else if (this.group.tools) {
       for (const t of this.group.tools) {
         this.tools.append(h('button', { type: 'button', 'aria-pressed': String(t === this.tool), onclick: () => this.pickTool(t) }, toolIcon(t), TOOLS[t].name, h('small', {}, toolPrice(t))));
       }
     } else {
-      for (const d of FURNITURE.filter((f) => this.group.furniture!.includes(f.group))) {
+      for (const d of FURNITURE.filter((f) => this.group!.furniture!.includes(f.group))) {
         this.tools.append(h('button', { type: 'button', onclick: () => this.pickPiece(d.id) }, pieceIcon(d.id), d.name, h('small', {}, pounds(furniturePrice(d.id)))));
       }
     }
@@ -418,7 +424,7 @@ export class BuildUi {
 
   private pickGroup(g: (typeof GROUPS)[number]): void {
     this.group = g;
-    if (g.tools) this.tool = g.tools[0];
+    this.tool = null;
     this.select(null);
     this.render();
   }
@@ -505,7 +511,7 @@ export class BuildUi {
   /** Chips to zoom straight to a flat, or back out to the whole building. */
   private renderZoom(): void {
     const lay = this.draftSim.layout;
-    const chips = [h('button', { type: 'button', onclick: () => this.onToggle() }, 'Whole building')];
+    const chips = [h('button', { type: 'button', onclick: () => this.onFit() }, 'Whole building')];
     for (const f of lay.flats) {
       chips.push(h('button', { type: 'button', onclick: () => this.zoomTo(f.id) }, f.name || 'New flat'));
     }
@@ -525,7 +531,8 @@ export class BuildUi {
 
   private setHint(text: string | null, bad = false): void {
     let base: string;
-    if (!this.isFurniture()) base = TOOLS[this.tool].hint;
+    if (!this.group) base = 'Pick what to build: walls, doors, stairs, or furniture for a room. Tap furniture in the building to move or sell it.';
+    else if (!this.isFurniture()) base = this.tool ? TOOLS[this.tool].hint : 'Pick a tool.';
     else base = 'Pick something to buy, or tap a piece in the building to move or sell it.';
     this.hint.textContent = text ?? base;
     this.hint.classList.toggle('bad', bad);
@@ -544,7 +551,7 @@ export class BuildUi {
     if (!this.active) return false;
     const cell = this.renderer.cellAt(sx, sy);
     if (!cell) return false;
-    if (this.pending || this.isFurniture()) {
+    if (this.pending || this.isFurniture() || !this.tool) {
       // Dragging near the piece being placed slides it (it doesn't jump under your finger,
       // so you can see it); anywhere else moves the view.
       if (!this.pending || !this.nearPending(sx, sy)) return false;
@@ -576,7 +583,7 @@ export class BuildUi {
     const cell = this.renderer.cellAt(sx, sy);
     if (!d || !cell || (cell.x === d.last.x && cell.s === d.last.s)) return;
     // The cell the drag started on gets painted too, once it's clear this is a drag.
-    if (!d.moved && d.furniture === undefined && PAINT.includes(this.tool)) this.apply(d.start, false);
+    if (!d.moved && d.furniture === undefined && this.tool && PAINT.includes(this.tool)) this.apply(d.start, false);
     d.moved = true;
     if (d.furniture !== undefined && this.pending) {
       // The ghost follows the finger, a cell at a time; it shows red where it won't fit.
@@ -587,7 +594,7 @@ export class BuildUi {
       return;
     }
     if (this.tool === 'room') this.markRoom(d.start, cell);
-    else if (PAINT.includes(this.tool)) {
+    else if (this.tool && PAINT.includes(this.tool)) {
       // Every cell along the way, so a quick swipe doesn't leave gaps.
       for (const c of between(d.last, cell)) this.apply(c, false);
     }
@@ -631,7 +638,7 @@ export class BuildUi {
   /** Does the current tool at a cell. `single` is a tap (keeps its own undo step). */
   private apply(cell: Cell, single: boolean): void {
     const st = this.draft;
-    if (this.pending || this.isFurniture()) {
+    if (this.pending || this.isFurniture() || !this.tool) {
       this.tapFurniture(cell);
       return;
     }
@@ -759,8 +766,8 @@ export class BuildUi {
       return;
     }
     const st = this.draft;
-    if (this.isFurniture()) {
-      // Nothing to show until a piece is picked.
+    if (this.isFurniture() || !this.tool) {
+      // Nothing to show until a piece or a tool is picked.
     } else if (this.tool === 'stair') {
       const foot = this.stairFoot(cell.x, cell.s);
       b.marks.push({ x: cell.x, s: foot, w: 1, h: FLIGHT, ok: stairsProblem(st, cell.x, foot) === null });
