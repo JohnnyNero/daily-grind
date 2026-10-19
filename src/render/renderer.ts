@@ -436,8 +436,8 @@ export class Renderer {
   }
 
   /**
-   * A stair cell, part of a flight climbing straight away from you: treads that get
-   * narrower and darker the higher they go, between two side rails.
+   * A stair cell, part of a flight climbing straight away from you: treads all the same
+   * width, a little darker the higher they go, between two side rails.
    */
   private drawStair(ctx: CanvasRenderingContext2D, x: number, s: number): void {
     const X = x * TILE;
@@ -447,7 +447,7 @@ export class Renderer {
     for (let j = 0; j < 4; j++) {
       const k = from + j;
       const t = k / Math.max(1, height - 1);
-      const inset = 1 + Math.round(t * 3);
+      const inset = 1;
       const y = floorY(s) - (j + 1) * 4;
       rect(ctx, X + inset, y, TILE - inset * 2, 4, dark(PAL.wood, 0.1 + t * 0.35));
       rect(ctx, X + inset, y, TILE - inset * 2, 1, light(PAL.wood, 0.25 - t * 0.2));
