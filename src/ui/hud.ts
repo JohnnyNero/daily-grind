@@ -20,6 +20,8 @@ interface Alert {
 export class Hud {
   private dayEl = el('day');
   private timeEl = el('time');
+  /** Skipping a quiet night. */
+  private night = false;
   private moneyEl = el('money');
   private changeEl = el('money-change');
   private moneyPop = el('money-pop');
@@ -98,6 +100,10 @@ export class Hud {
     }
   }
 
+  showNight(on: boolean): void {
+    this.night = on;
+  }
+
   notify(text: string, bad = false): void {
     this.toastQueue.push({ text, bad });
   }
@@ -106,7 +112,8 @@ export class Hud {
     const sim = this.sim;
     const st = sim.state;
     this.dayEl.textContent = `Day ${sim.day} · ${dayName(sim.day)}`;
-    this.timeEl.textContent = hhmm(sim.minuteOfDay);
+    this.timeEl.textContent = hhmm(sim.minuteOfDay) + (this.night ? ' ☾»' : '');
+    this.timeEl.title = this.night ? 'Everyone is asleep or out, so the night is passing quickly' : '';
     this.moneyEl.textContent = pounds(st.money);
     this.moneyEl.classList.toggle('negative', st.money < 0);
     // News from the sim becomes notices.
@@ -121,7 +128,8 @@ export class Hud {
       this.toastEl.textContent = t.text;
       this.toastEl.classList.toggle('bad', t.bad);
       this.toastEl.hidden = false;
-      this.toastUntil = now + 4500;
+      // Days go by faster now, so notices stay up for less, and less still when they're stacking up.
+      this.toastUntil = now + (this.toastQueue.length > 2 ? 2200 : 3500);
     } else if (now > this.toastUntil) this.toastEl.hidden = true;
     // The slower parts, twice a second.
     if (now - this.lastSlow > 500) {

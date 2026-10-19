@@ -3,6 +3,7 @@
 
 import { isFurniture } from './defs';
 import { MORTGAGE, START_MONEY } from './economy';
+import { EXPECT_START } from './expectations';
 import { Sim } from './sim';
 import { SAVE_VERSION, type State } from './state';
 import { noWorks } from './works';
@@ -56,6 +57,7 @@ function normalize(raw: Partial<State>): State {
   st.council ??= {};
   // Version 7 added the handover; a building already under way doesn't need one.
   st.handover ??= { stop: -1, cast: [], met: [], done: [], skipped: true };
+  st.expect ??= { level: EXPECT_START, good: 0 };
   for (const p of st.pawns) {
     if (!p.life) continue;
     p.life.social ??= [];

@@ -232,6 +232,8 @@ export interface State {
   planning: { top: number; applied?: { top: number; decideDay: number } };
   /** The council: a visit booked, and an improvement notice to put right by a day. */
   council: { visitDay?: number; notice?: { issues: string[]; byDay: number } };
+  /** What tenants expect of the building (0 to 100), and the days it has been going well. */
+  expect: { level: number; good: number };
   /** The first week: Denise's walk round, her to-do list, and the beats that teach the game. */
   handover: Handover;
 }

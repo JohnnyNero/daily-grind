@@ -7,6 +7,7 @@
 // shown eases towards the total, so one bad night is a dip, not a crash.
 
 import { flatInfo, goingRate } from './economy';
+import { expectGrade, expectThought } from './expectations';
 import { SHARED, binsOverflowing, dirtOf, tempOf } from './environment';
 import { flatScore, type FlatScore } from './impressiveness';
 import { opinion } from './social';
@@ -128,10 +129,13 @@ export function thoughtsOf(sim: Sim, p: Pawn): Thought[] {
     const score = flatScore(sim, flat.id);
     const tier = tierThought(score.tier, has(life, 'houseProud'));
     if (tier) out.push(tier);
+    const grade = expectGrade(sim);
+    const hoped = expectThought(score.tier, grade);
+    if (hoped) out.push(hoped);
     out.push(...missingThoughts(score));
     if (!flat.enclosed) out.push({ label: 'Flat is open to the weather', value: -20 });
     const lease = flatInfo(sim, flat.id).lease;
-    const rent = lease ? rentThought(lease.rent, goingRate(sim, flat.id)) : null;
+    const rent = lease ? rentThought(lease.rent, goingRate(sim, flat.id), grade) : null;
     if (rent) out.push(rent);
     out.push(...placeThoughts(sim, life, flat.id));
   }
@@ -181,12 +185,12 @@ export function tierThought(tier: string, houseProud: boolean): Thought | null {
   return { label: `Lives in a ${tier.toLowerCase()} flat${houseProud ? ' (house-proud)' : ''}`, value: houseProud ? Math.round(v * 1.5) : v };
 }
 
-/** What they think of the rent against the going rate for the flat. */
-export function rentThought(rent: number, going: number): Thought | null {
+/** What they think of the rent against the going rate for the flat. Tenants who expect more are quicker to call it steep and slower to call it fair. */
+export function rentThought(rent: number, going: number, grade = 0): Thought | null {
   const r = rent / Math.max(1, going);
-  if (r < 0.8) return { label: 'Rent is a bargain', value: 6 };
-  if (r < 0.95) return { label: 'Fair rent', value: 2 };
-  if (r <= 1.1) return null;
+  if (r < 0.8 - 0.02 * grade) return { label: 'Rent is a bargain', value: 6 };
+  if (r < 0.95 - 0.02 * grade) return { label: 'Fair rent', value: 2 };
+  if (r <= 1.1 - 0.03 * grade) return null;
   if (r <= 1.3) return { label: 'Rent is steep', value: -6 };
   return { label: 'Daylight robbery', value: -14 };
 }

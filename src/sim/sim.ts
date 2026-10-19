@@ -16,6 +16,7 @@ import { eventsMinute, storyHour } from './events';
 import { crimeMinute } from './crime';
 import { councilMorning, upkeepHour } from './upkeep';
 import { planningMorning } from './planning';
+import { expectationsMorning } from './expectations';
 import { handoverHour, startHandover } from './handover';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
 
@@ -93,6 +94,7 @@ export class Sim {
     const hour = Math.floor(this.minuteOfDay / 60);
     if (hour === 7) {
       morning(this);
+      expectationsMorning(this);
       rentMorning(this);
       postMorning(this);
       chatMorning(this);
