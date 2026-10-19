@@ -199,6 +199,12 @@ export function noiseOf(p: Pawn): number {
   if (d === 'At the party') return 2.5;
   if (d.startsWith('Chatting') || d.startsWith('Gossiping') || d.startsWith('Flirting')) return 1;
   if (d === 'Cooking') return 0.5;
+  if (d === 'Slamming doors') return 6;
+  if (d === 'Having a tantrum') return 7;
+  if (d === 'Blasting music out of spite') return 7;
+  if (d === 'Kicking the bins') return 4;
+  if (d === 'Carrying boxes out') return 1;
+  if (d === 'At the barbecue') return 2;
   return 0;
 }
 
@@ -250,7 +256,7 @@ export function dirtOf(sim: Sim, id: string): number {
   return sim.state.dirt[id] ?? 0;
 }
 
-function addDirt(sim: Sim, id: string, amount: number): void {
+export function addDirt(sim: Sim, id: string, amount: number): void {
   sim.state.dirt[id] = Math.max(0, Math.min(1, dirtOf(sim, id) + amount));
 }
 

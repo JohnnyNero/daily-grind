@@ -8,6 +8,7 @@
 // sends a friend your way or fixes something.
 
 import { POUND, book, flatInfo, letter, pounds } from './economy';
+import { startBreak, inspirations } from './breaks';
 import { newApplicant } from './leases';
 import { post, recently } from './chat';
 import { pick, random } from './rng';
@@ -186,6 +187,8 @@ function kickOff(sim: Sim, p: Pawn, level: Level): void {
     // Two days to calm down; a week after going to the council.
     life.calmUntil = sim.state.tick + (o.trait === 'knowsRights' ? 7 : 2) * TICKS_PER_DAY;
     remember(sim, life, 'letOffSteam');
+    // And you can watch it: sulking, slamming doors, kicking the bins, boxes down the stairs.
+    startBreak(sim, p, l, straw, flatInfo(sim, life.flat).lease?.notice?.by === 'tenant');
     return;
   }
 }
@@ -222,6 +225,8 @@ function goodTurn(sim: Sim, p: Pawn): void {
       noticeTrait(sim, p, 'handy');
     });
   }
+  // Good turns you can watch on the map: tidying, a barbecue, mending, painting, a plant.
+  options.push(...inspirations(sim, p));
   options.push(() => {
     letter(sim, { from: from(sim, p), title: 'A card', body: 'Just a card to say thanks. The flat\'s lovely. Well, it\'s fine. Thanks.', flat: life.flat, pawn: p.id });
   });
