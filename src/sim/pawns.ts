@@ -127,7 +127,7 @@ function step(sim: Sim, p: Pawn): void {
   }
   if (st.tick < p.waitUntil) return;
   if (!p.life) think(sim, p);
-  else if (!(p.partyAt && !p.life.using && guestThink(sim, p))) tenantThink(sim, p);
+  else if (!(p.partyAt && !p.life.using && !p.life.breakState && guestThink(sim, p))) tenantThink(sim, p);
 }
 
 /** If the building changed under them (a wall where they stand, a floor taken away), find somewhere to stand. */

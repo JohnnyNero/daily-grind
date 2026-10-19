@@ -22,7 +22,6 @@ import { remember } from './thoughts';
 import { has } from './traits';
 import { burglaryRisk, startBurglary } from './crime';
 import { bookInspection, breakDown, worn } from './upkeep';
-import { furnitureDef } from './defs';
 import { tale } from './tales';
 import { noticeTrait } from './outcomes';
 import { quietFor } from './handover';
@@ -292,7 +291,7 @@ function invitedJoin(sim: Sim, h: Happening, host: Pawn | undefined): void {
   const hour = hourOf(sim);
   for (const id of h.invited ?? []) {
     const n = byId(sim, id);
-    if (!n?.life || h.joined?.includes(id) || n.life.away || n.life.leaving || n.life.using || n.pose === 'sleep' || n.task === 'leave') continue;
+    if (!n?.life || h.joined?.includes(id) || n.life.away || n.life.leaving || n.life.using || n.life.breakState || n.pose === 'sleep' || n.task === 'leave') continue;
     if (!(hour >= 19 || hour < 2) || random(st) > 0.12) continue;
     n.partyAt = h.flat!;
     delete n.act;
@@ -615,7 +614,8 @@ export function startFight(sim: Sim, a: Pawn, b: Pawn): void {
 function bystanders(sim: Sim, h: Happening, a: Pawn, b: Pawn, seen: Pawn[]): Pawn | null {
   const st = sim.state;
   const lay = sim.layout;
-  const outAndAbout = (w: Pawn) => !w.life!.using && w.pose !== 'sleep' && w.life!.flat !== undefined && lay.rooms[lay.roomOf[lay.node(Math.round(w.x), Math.round(w.s))]]?.shared === true;
+  // Someone mid-tantrum has their own problems.
+  const outAndAbout = (w: Pawn) => !w.life!.using && !w.life!.breakState && w.pose !== 'sleep' && w.life!.flat !== undefined && lay.rooms[lay.roomOf[lay.node(Math.round(w.x), Math.round(w.s))]]?.shared === true;
   let stoppedIt = false;
   let filmer: Pawn | null = null;
   for (const w of seen) {
