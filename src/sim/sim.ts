@@ -18,6 +18,7 @@ import { councilMorning, upkeepHour } from './upkeep';
 import { planningMorning } from './planning';
 import { expectationsMorning } from './expectations';
 import { handoverHour, startHandover } from './handover';
+import { talesHour } from './tales';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
 
 export class Sim {
@@ -108,6 +109,7 @@ export class Sim {
     upkeepHour(this);
     handoverHour(this);
     storyHour(this);
+    talesHour(this);
     if (hour === 4) for (const p of st.pawns) if (p.life) forgetSocial(this, p);
     // Mondays at nine: the mortgage and the bills.
     if (hour === 9 && (this.day - 1) % 7 === 0 && this.day > 1) {

@@ -17,6 +17,7 @@ import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
 import { MEMORIES, remember } from './thoughts';
 import { has } from './traits';
 import { maybeFight } from './events';
+import { tale } from './tales';
 
 export interface SocialDef {
   label: string;
@@ -290,6 +291,7 @@ function flirt(sim: Sim, a: Pawn, b: Pawn): void {
     a.life!.partner = b.id;
     b.life!.partner = a.id;
     sim.notify(`${a.name.split(' ')[0]} and ${b.name.split(' ')[0]} are seeing each other.`);
+    tale(sim, 'couple', [a, b]);
     const busy = tenants(sim).find((p) => p !== a && p !== b && has(p.life!, 'busybody'));
     if (busy) post(sim, busy, `Not to gossip but has anyone noticed ${whoIs(sim, a).split(' · ')[1] ?? 'someone'} and ${whoIs(sim, b).split(' · ')[1] ?? 'someone'} 👀`);
   }
@@ -316,6 +318,7 @@ export function romanceHour(sim: Sim): void {
     remember(sim, life, 'brokeUp');
     remember(sim, b.life, 'brokeUp');
     sim.notify(`${a.name.split(' ')[0]} and ${b.name.split(' ')[0]} have split up.`);
+    tale(sim, 'breakup', [a, b]);
   }
 }
 

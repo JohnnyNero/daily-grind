@@ -15,6 +15,8 @@ import type { Furniture, Pawn } from './state';
 import { remember } from './thoughts';
 import { has } from './traits';
 import { noticeTrait } from './outcomes';
+import { threat } from './events';
+import { tale } from './tales';
 
 /** Wear from one go on something: about 250 goes from new to broken. */
 export const WEAR_PER_USE = 0.004;
@@ -38,6 +40,8 @@ export function breakIt(sim: Sim, f: Furniture): void {
   // Anyone using it stops; it no longer counts towards the flat.
   for (const p of sim.state.pawns) if (p.life?.using?.furniture === f.id) p.life.using.until = sim.state.tick;
   sim.changed();
+  const flat = sim.layout.flatAt(f.x, f.s);
+  tale(sim, 'broken', flat ? household(sim, flat.id) : [], { flat: flat?.id, what: furnitureDef(f.def).name.toLowerCase() });
 }
 
 /** Pieces in lived-in flats that are close to going. */
@@ -161,6 +165,11 @@ export function bookInspection(sim: Sim, inDays: number, why: string): void {
   });
 }
 
+/** A fine, stiffer for a bigger landlord (they get less sympathy), to the nearest £10. */
+function fineFor(sim: Sim, base: number): number {
+  return Math.round((base * threat(sim)) / (10 * POUND)) * 10 * POUND;
+}
+
 /** Every morning: an inspection, if one's due. */
 export function councilMorning(sim: Sim): void {
   const c = sim.state.council;
@@ -176,8 +185,9 @@ export function councilMorning(sim: Sim): void {
   const list = found.map((i) => `• ${i}`).join('\n');
   if (c.notice) {
     // A second visit, and it's still not done.
-    const fine = Math.min(COUNCIL_FINE_CAP, COUNCIL_FINE * found.length);
+    const fine = Math.min(fineFor(sim, COUNCIL_FINE_CAP), fineFor(sim, COUNCIL_FINE) * found.length);
     book(sim, 'Council fine: improvement notice not met', -fine);
+    tale(sim, 'councilFine', [], { what: `£${fine / POUND}` });
     c.notice = { issues: found, byDay: sim.day + REVISIT_DAYS };
     c.visitDay = sim.day + REVISIT_DAYS;
     letter(sim, { from, title: 'Improvement notice not met', body: `On our return visit the following were still not put right:\n${list}\nA fine of £${fine / POUND} has been applied. We will visit again on day ${c.visitDay}.` });
@@ -185,7 +195,8 @@ export function councilMorning(sim: Sim): void {
   }
   c.notice = { issues: found, byDay: sim.day + REVISIT_DAYS };
   c.visitDay = sim.day + REVISIT_DAYS;
-  letter(sim, { from, title: 'Improvement notice', body: `Our officer found the following:\n${list}\nThese must be put right by day ${c.notice.byDay}, when we will visit again. If they are not, you will be fined £${COUNCIL_FINE / POUND} for each (up to £${COUNCIL_FINE_CAP / POUND}).` });
+  tale(sim, 'councilNotice', []);
+  letter(sim, { from, title: 'Improvement notice', body: `Our officer found the following:\n${list}\nThese must be put right by day ${c.notice.byDay}, when we will visit again. If they are not, you will be fined £${fineFor(sim, COUNCIL_FINE) / POUND} for each (up to £${fineFor(sim, COUNCIL_FINE_CAP) / POUND}).` });
 }
 
 /** Answers in the chat about repairs. */

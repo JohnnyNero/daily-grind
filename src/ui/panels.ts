@@ -23,6 +23,7 @@ import { NEED_NAMES } from '../sim/tenants';
 import { expectGrade, expectName, expectNote } from '../sim/expectations';
 import { BASELINE, likingTarget, rentThought, thoughtsOf } from '../sim/thoughts';
 import { traitDef } from '../sim/traits';
+import { talesOf } from '../sim/tales';
 import { el, h, hhmm } from './dom';
 
 export type Showing =
@@ -296,7 +297,8 @@ export class Panels {
     const doing = life.away ? `${life.away.why} (back about ${hhmm(Math.floor((life.away.until % TICKS_PER_DAY) / TICKS_PER_MINUTE))})` : p.doing;
     const needsKey = this.pawnTab === 'needs' ? Object.values(life.needs).map((v) => Math.round(v * 50)) : 0;
     const socialKey = this.pawnTab === 'social' ? relationships(sim, p).map((r) => [r.other.id, r.opinion]) : 0;
-    this.fill([id, this.pawnTab, liking, target, doing, thoughts, needsKey, life.revealed, life.traits.length, socialKey], () => {
+    const history = this.pawnTab === 'about' ? talesOf(sim, id) : [];
+    this.fill([id, this.pawnTab, liking, target, doing, thoughts, needsKey, life.revealed, life.traits.length, socialKey, history.length], () => {
       const tab = (t: 'liking' | 'needs' | 'social' | 'about', label: string) =>
         h('button', { type: 'button', role: 'tab', 'aria-selected': String(this.pawnTab === t), onclick: () => { this.pawnTab = t; this.rerender(); } }, label);
       const out: (Node | string)[] = [h('p', { className: 'doing' }, doing), h('div', { className: 'tabs', role: 'tablist' }, tab('liking', 'Liking'), tab('needs', 'Needs'), tab('social', 'Social'), tab('about', 'About'))];
@@ -356,6 +358,16 @@ export class Panels {
         ];
         if (lease) rows.push(['Rent record (flat)', `${days(lease.paid)} paid, ${lease.late} late`], ['Owed', lease.owed > 0 ? pounds(lease.owed) : 'Nothing']);
         out.push(h('div', { className: 'sec' }, h('h3', {}, 'Record'), h('div', { className: 'lines' }, ...rows.map(([a, b]) => h('div', { className: 'line' }, h('span', {}, a), h('b', {}, b))))));
+        out.push(
+          h(
+            'div',
+            { className: 'sec' },
+            h('h3', {}, 'History', h('em', {}, history.length === 0 ? 'nothing yet' : `${history.length} thing${history.length === 1 ? '' : 's'}`)),
+            history.length === 0
+              ? h('p', { className: 'small muted' }, 'Nothing worth telling yet. Give it time.')
+              : h('div', { className: 'lines' }, ...history.slice(0, 12).map((t) => h('div', { className: 'line' }, h('span', {}, t.text), h('b', {}, `Day ${Math.floor(t.tick / TICKS_PER_DAY) + 1}`)))),
+          ),
+        );
         if (flat) out.push(h('button', { type: 'button', className: 'btn', onclick: () => this.show({ kind: 'flat', id: flat.id }) }, `Open ${flat.name}`));
       }
       return out;

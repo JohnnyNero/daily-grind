@@ -2,11 +2,13 @@
 // easier the way in, the likelier one turns up, always in the small hours. They try the
 // street door or a ground-floor window. Anyone awake nearby might spot them, and they leg
 // it; new locks hold them up and sometimes put them off; an alarm sends them running. If
-// they get in, they head for the flat with the most worth taking and help themselves.
+// they get in, they head for the flat with the most worth taking and help themselves. In a
+// building worth more, they're greedier: two things at once, or a second flat on the way out.
 
 import { post, poster, tenants } from './chat';
 import { ALARM_PRICE, LOCKS_PRICE, POUND, book, furniturePrice, spend } from './economy';
-import { beginHappening, canStart, finishHappening, running } from './events';
+import { beginHappening, canStart, finishHappening, running, threat } from './events';
+import { tale } from './tales';
 import { placeFurniture } from './build';
 import { furnitureDef } from './defs';
 import { household } from './leases';
@@ -113,7 +115,11 @@ export function startBurglary(sim: Sim): boolean {
   p.task = 'go';
   p.flat = best.f.id;
   p.doing = 'Having a look about';
-  p.burgle = { stage: 'case', entry: way.entry, until: 0, at: way.at, ...(way.inside ? { inside: way.inside } : {}) };
+  // The more the building's worth, the greedier they are.
+  const push = threat(sim);
+  const take = random(st) < push - 1 ? 2 : 1;
+  const more = random(st) < (push - 1.5) * 2 ? 1 : 0;
+  p.burgle = { stage: 'case', entry: way.entry, until: 0, at: way.at, ...(way.inside ? { inside: way.inside } : {}), ...(take > 1 ? { take } : {}), ...(more > 0 ? { more } : {}) };
   beginHappening(sim, 'burglary', ['crime'], 4, [p], best.f.id);
   return true;
 }
@@ -171,8 +177,7 @@ export function burglarThink(sim: Sim, p: Pawn): boolean {
     p.waitUntil = st.tick + randInt(st, 8, 15) * TICKS_PER_MINUTE;
     return true;
   }
-  steal(sim, p, flat);
-  return false;
+  return steal(sim, p, flat);
 }
 
 /** Once a minute: is anyone awake to see them? */
@@ -221,7 +226,8 @@ function flee(sim: Sim, p: Pawn, why: 'spotted' | 'passerby' | 'alarm' | 'gaveUp
   if (wasInside) climbOut(p);
   b.stage = 'out';
   p.task = 'leave';
-  p.path = [];
+  // Halfway along the pavement in front of the building, they finish the step first (there's no turning round inside the wall).
+  p.path = p.front ? p.path.slice(0, 1) : [];
   p.waitUntil = 0;
   p.doing = 'Legging it';
   const h = running(sim, 'burglary');
@@ -230,6 +236,7 @@ function flee(sim: Sim, p: Pawn, why: 'spotted' | 'passerby' | 'alarm' | 'gaveUp
     case 'spotted': {
       if (!by) return;
       remember(sim, by.life!, wasInside ? 'burgled' : 'attemptedBreakIn');
+      tale(sim, 'burglaryFoiled', [by], { what: first(by) });
       sim.notify(wasInside ? `${first(by)} woke up to someone in ${flatName}. They ran off empty-handed.` : `${first(by)} spotted someone trying to get in. They legged it.`);
       if (!st.security.locks) {
         post(sim, by, wasInside ? 'There was someone IN OUR FLAT last night. Can we please get proper locks??' : 'Someone was trying to get in last night!! Can we get better locks on the doors?', [
@@ -241,6 +248,7 @@ function flee(sim: Sim, p: Pawn, why: 'spotted' | 'passerby' | 'alarm' | 'gaveUp
     }
     case 'passerby':
       sim.notify('A passer-by shouted at someone trying to get into your building. They ran off.');
+      tale(sim, 'burglaryFoiled', [], { what: 'A passer-by' });
       return;
     case 'alarm': {
       if (h) {
@@ -249,46 +257,63 @@ function flee(sim: Sim, p: Pawn, why: 'spotted' | 'passerby' | 'alarm' | 'gaveUp
       }
       for (const t of tenants(sim)) if (!t.life!.away) remember(sim, t.life!, 'attemptedBreakIn');
       sim.notify('The burglar alarm went off in the night. Whoever it was ran off. Everyone is awake now.');
+      tale(sim, 'burglaryFoiled', [], { what: 'The alarm' });
       const who = poster(sim);
       if (who) post(sim, who, 'That alarm. At 3am. At least it works I suppose');
       return;
     }
     case 'gaveUp':
-      if (st.security.locks) sim.notify('Someone tried to get in last night, but the new locks held.');
+      if (st.security.locks) {
+        sim.notify('Someone tried to get in last night, but the new locks held.');
+        tale(sim, 'burglaryFoiled', [], { what: 'The new locks' });
+      }
       return;
   }
 }
 
-/** In and out with the best thing they can carry. */
-function steal(sim: Sim, p: Pawn, flat: Flat): void {
+/** The best thing they can carry (two, if they're greedy), then out, or on to the next flat. False once they're off. */
+function steal(sim: Sim, p: Pawn, flat: Flat): boolean {
   const st = sim.state;
+  const b = p.burgle!;
+  const things = valuables(sim, flat).sort((a, b) => furniturePrice(b.def) - furniturePrice(a.def)).slice(0, b.take ?? 1);
+  const people = household(sim, flat.id);
+  st.furniture = st.furniture.filter((f) => !things.includes(f));
+  const thing = things[0];
+  const what = things.length > 0 ? things.map((t) => furnitureDef(t.def).name.toLowerCase()) : null;
+  const took = what ? (what.length > 1 ? `the ${what[0]} and the ${what[1]}` : `the ${what[0]}`) : null;
+  for (const t of people) remember(sim, t.life!, 'burgled');
+  tale(sim, 'burglary', people, { flat: flat.id, what: took ?? 'nothing worth having' });
+  if (people.length === 0) {
+    sim.notify(took ? `Someone broke into ${flat.name} in the night and took ${took}.` : `Someone broke into ${flat.name} in the night and found nothing worth taking.`);
+  } else {
+    sim.notify(`${flat.name} has been burgled.`);
+    const lead = people[0];
+    if (!thing) {
+      post(sim, lead, 'We\'ve been burgled. They took a laptop and my nan\'s ring. Can we get better locks at least?', st.security.locks ? undefined : [
+        { label: `Fit better locks (£${LOCKS_PRICE / POUND})`, note: 'Harder to get in. Everyone feels safer.', act: 'locks' },
+        { label: 'That\'s what contents insurance is for', note: 'They won\'t forget it', act: 'notMine' },
+      ]);
+    } else {
+      const name = furnitureDef(thing.def).name.toLowerCase();
+      post(sim, lead, `We've been burgled. They took ${took}! Are you replacing ${things.length > 1 ? `the ${name} at least` : 'it'}?`, [
+        { label: `Replace the ${name} (£${furniturePrice(thing.def) / POUND})`, note: 'They\'ll appreciate it', act: `replace:${thing.def}:${thing.x}:${thing.s}:${thing.flip ? 1 : 0}` },
+        { label: 'That\'s what contents insurance is for', note: 'They won\'t forget it', act: 'notMine' },
+      ]);
+    }
+  }
+  // Greedy: on to the next best flat, from the inside.
+  const next = (b.more ?? 0) > 0 ? sim.layout.flats.filter((f) => f.id !== flat.id && valuables(sim, f).length > 0)[0] : undefined;
+  if (next) {
+    b.more = (b.more ?? 1) - 1;
+    p.flat = next.id;
+    p.doing = 'Creeping about';
+    return true;
+  }
   climbOut(p);
-  p.burgle!.stage = 'out';
+  b.stage = 'out';
   p.task = 'leave';
   p.doing = 'Legging it';
-  const things = valuables(sim, flat).sort((a, b) => furniturePrice(b.def) - furniturePrice(a.def));
-  const people = household(sim, flat.id);
-  const thing = things[0];
-  if (thing) st.furniture = st.furniture.filter((f) => f !== thing);
-  const what = thing ? furnitureDef(thing.def).name.toLowerCase() : null;
-  for (const t of people) remember(sim, t.life!, 'burgled');
-  if (people.length === 0) {
-    sim.notify(what ? `Someone broke into ${flat.name} in the night and took the ${what}.` : `Someone broke into ${flat.name} in the night and found nothing worth taking.`);
-    return;
-  }
-  sim.notify(`${flat.name} has been burgled.`);
-  const lead = people[0];
-  if (!thing) {
-    post(sim, lead, 'We\'ve been burgled. They took a laptop and my nan\'s ring. Can we get better locks at least?', st.security.locks ? undefined : [
-      { label: `Fit better locks (£${LOCKS_PRICE / POUND})`, note: 'Harder to get in. Everyone feels safer.', act: 'locks' },
-      { label: 'That\'s what contents insurance is for', note: 'They won\'t forget it', act: 'notMine' },
-    ]);
-    return;
-  }
-  post(sim, lead, `We've been burgled. They took the ${what}! Are you replacing it?`, [
-    { label: `Replace the ${what} (£${furniturePrice(thing.def) / POUND})`, note: 'They\'ll appreciate it', act: `replace:${thing.def}:${thing.x}:${thing.s}:${thing.flip ? 1 : 0}` },
-    { label: 'That\'s what contents insurance is for', note: 'They won\'t forget it', act: 'notMine' },
-  ]);
+  return false;
 }
 
 /** Answers in the chat about break-ins. */

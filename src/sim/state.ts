@@ -193,7 +193,7 @@ export interface Pawn {
   /** How they describe themselves: their job, or "Retired". */
   note?: string;
   /** A burglar's night: how far they've got, and how they're getting in. */
-  burgle?: { stage: 'case' | 'try' | 'in' | 'out'; entry: 'door' | 'window'; until: number; at?: [number, number]; inside?: [number, number] };
+  burgle?: { stage: 'case' | 'try' | 'in' | 'out'; entry: 'door' | 'window'; until: number; at?: [number, number]; inside?: [number, number]; take?: number; more?: number };
 }
 
 export interface State {
@@ -253,6 +253,29 @@ export interface State {
   expect: { level: number; good: number };
   /** The first week: Denise's walk round, her to-do list, and the beats that teach the game. */
   handover: Handover;
+  /** Tales: what's happened worth talking about, newest last, and the next tale's number. */
+  chronicle: { next: number; tales: Tale[] };
+}
+
+export type TaleKind =
+  | 'affair' | 'repossessed' | 'fight' | 'burglary' | 'councilFine' | 'missedMortgage' | 'breakup' | 'partyShutDown' | 'burglaryFoiled'
+  | 'couple' | 'gaveNotice' | 'councilNotice' | 'partyDamage' | 'party' | 'moveIn' | 'moveOut' | 'grant' | 'broken';
+
+/** Something that happened, as people will tell it. */
+export interface Tale {
+  id: number;
+  tick: number;
+  kind: TaleKind;
+  text: string;
+  /** Who it's about, with their names as they were. */
+  pawns: { id: number; name: string }[];
+  flat?: string;
+  /** How much people talk about it; it drops each time it's told. */
+  interest: number;
+  /** Times it's been in a recap. */
+  told?: number;
+  /** Moving out: the stars they left. */
+  stars?: number;
 }
 
 export interface Handover {

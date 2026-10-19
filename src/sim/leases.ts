@@ -14,6 +14,7 @@ import { post } from './chat';
 import { expectGrade, expectThought } from './expectations';
 import { likingTarget, rentThought, thoughtsOf, tierThought, type Thought } from './thoughts';
 import { rollTraits, traitDef, touchiness, has } from './traits';
+import { tale } from './tales';
 
 const JOBS: { title: string; leave: number; back: number }[] = [
   { title: 'Office manager', leave: 8 * 60, back: 17 * 60 + 30 },
@@ -78,8 +79,8 @@ const REVIEW_TEXT: Record<number, string[]> = {
 };
 
 /** They're leaving: they say what they thought, for everyone to read. */
-function review(sim: Sim, flatId: string, people: Pawn[]): void {
-  if (people.length === 0) return;
+function review(sim: Sim, flatId: string, people: Pawn[]): number | undefined {
+  if (people.length === 0) return undefined;
   const st = sim.state;
   const liking = people.reduce((n, p) => n + p.life!.liking, 0) / people.length;
   const stars = Math.max(1, Math.min(5, Math.round(liking / 20 + 0.5)));
@@ -91,6 +92,7 @@ function review(sim: Sim, flatId: string, people: Pawn[]): void {
   st.reviews.push({ day: sim.day, who: people.map((p) => p.name.split(' ')[0]).join(' & '), flat: sim.layout.flat(flatId)?.name ?? 'A flat', stars, text: text.charAt(0).toUpperCase() + text.slice(1) });
   if (st.reviews.length > 40) st.reviews.splice(0, st.reviews.length - 40);
   sim.notify(`${people[0].name.split(' ')[0]} left a ${stars}-star review.`);
+  return stars;
 }
 
 // ------------------------------------------------------------------ people
@@ -199,6 +201,7 @@ export function accept(sim: Sim, applicantId: number): string | null {
   const flatName = sim.layout.flat(a.flat)?.name ?? 'the flat';
   book(sim, `Deposit · ${flatName}`, lease.deposit);
   const pawns = moveIn(sim, a.flat, a.people, [a.shown]);
+  tale(sim, 'moveIn', pawns, { flat: a.flat });
   for (const p of pawns) p.life!.memories.push({ id: 'newPlace', at: st.tick });
   // What the listing promised colours the first week.
   if (info.style === 'agent') for (const p of pawns) p.life!.memories.push({ id: 'notAsAdvertised', at: st.tick });
@@ -341,7 +344,9 @@ export function moveOut(sim: Sim, flatId: string): void {
   const back = lease.deposit - lease.owed;
   if (back > 0) book(sim, `Deposit back · ${name}`, -back);
   const leaving = st.pawns.filter((q) => q.life?.flat === flatId);
-  review(sim, flatId, leaving.filter((q) => !q.life!.leaving));
+  const going = leaving.filter((q) => !q.life!.leaving);
+  const stars = review(sim, flatId, going);
+  if (going.length > 0) tale(sim, 'moveOut', going, { flat: flatId, what: stars === undefined ? 'no review' : `a ${stars}-star review`, stars });
   friendsLeaving(sim, leaving);
   for (const p of leaving) {
     p.life!.leaving = true;

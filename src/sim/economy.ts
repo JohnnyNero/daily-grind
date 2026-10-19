@@ -7,6 +7,7 @@ import { flatScore, TIERS } from './impressiveness';
 import type { Sim } from './sim';
 import { CLEANER_WEEKLY, gasBill } from './environment';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type FlatInfo, type Letter, type CellKind } from './state';
+import { tale } from './tales';
 
 export const POUND = 100;
 
@@ -187,9 +188,11 @@ export function mortgageDue(sim: Sim): void {
   const left = MISSES_ALLOWED - m.missed;
   if (left <= 0) {
     st.repossessed = sim.day;
+    tale(sim, 'repossessed', []);
     letter(sim, { from: 'Northfold Building Society', title: 'Repossession', body: 'Following four missed payments, the building is now in our possession. Please leave the keys under the mat. We will be changing the mat.' });
     return;
   }
+  tale(sim, 'missedMortgage', []);
   const tone = [
     'We notice this week\'s payment did not arrive. We are sure it is an oversight. We are writing to say we are sure.',
     'This is the second payment we have not received. We would like to remind you that the building is, in a sense, ours.',

@@ -57,7 +57,9 @@ function normalize(raw: Partial<State>): State {
   st.council ??= {};
   // Version 7 added the handover; a building already under way doesn't need one.
   st.handover ??= { stop: -1, cast: [], met: [], done: [], skipped: true };
+  // Version 8 added rising expectations, and tales for the weekly recap.
   st.expect ??= { level: EXPECT_START, good: 0 };
+  st.chronicle ??= { next: 1, tales: [] };
   for (const p of st.pawns) {
     if (!p.life) continue;
     p.life.social ??= [];
