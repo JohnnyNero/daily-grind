@@ -128,7 +128,7 @@ const TALK_GAP = 25;
 /** Awake, around, and not busy: sitting down counts as free (you can talk on the sofa). */
 function free(p: Pawn, tick: number): boolean {
   const life = p.life;
-  if (!life || life.away || life.leaving || p.pose === 'sleep') return false;
+  if (!life || life.away || life.leaving || p.pose === 'sleep' || life.breakState) return false;
   if (life.using && life.using.until !== 0 && p.pose !== 'sit') return false;
   return !life.lastTalk || tick - life.lastTalk > TALK_GAP * TICKS_PER_MINUTE;
 }

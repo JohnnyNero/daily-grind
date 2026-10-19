@@ -17,6 +17,7 @@ import { forget, likingTarget, remember, thoughtsOf } from './thoughts';
 import { has } from './traits';
 import { SHARED, dirtOf, isNight, noiseReaching, tempOf, tidy, warmthOf } from './environment';
 import { noticeTrait } from './outcomes';
+import { breakThink } from './breaks';
 import { post, recently } from './chat';
 import { rememberAbout } from './social';
 import { hhmm } from './time';
@@ -213,6 +214,9 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   delete p.pose;
   const flat = home(sim, p);
   const edge = p.exit === 0 ? 0 : st.w - 1;
+  // Kicking off (or a good turn) comes before everything but moving out.
+  const base = home(sim, p);
+  if (base && !life.leaving && breakThink(sim, p, base)) return;
   if (life.leaving && p.task !== 'leave') {
     life.outing = { why: 'Moved out', until: st.tick };
     p.task = 'leave';
@@ -326,7 +330,7 @@ interface Choice {
 }
 
 /** Furniture in the flat that meets a need (and works where it is), nearest first. */
-function choices(sim: Sim, p: Pawn, flat: Flat, match: (o: Offer, f: Furniture) => boolean): Choice[] {
+export function choices(sim: Sim, p: Pawn, flat: Flat, match: (o: Offer, f: Furniture) => boolean): Choice[] {
   const lay = sim.layout;
   // Every cell of the flat (wall furniture hangs above where anyone stands).
   const inFlat = new Set(lay.flatCells(flat));

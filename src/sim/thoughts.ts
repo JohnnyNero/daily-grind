@@ -75,6 +75,10 @@ export const MEMORIES: Record<string, MemoryDef> = {
   caughtOut: { label: 'Got found out', value: -6, hours: 4 * 24, stack: 1 },
   notAsAdvertised: { label: 'Not what the listing said', value: -8, hours: 7 * 24, stack: 1 },
   betterThanExpected: { label: 'Better than the listing said', value: 5, hours: 7 * 24, stack: 1 },
+  gotBarbecue: { label: 'Went to the building barbecue', value: 5, hours: 2 * 24, stack: 1 },
+  freshPaint: { label: 'Lobby smells of fresh paint', value: 3, hours: 3 * 24, stack: 1 },
+  mendedForMe: { label: 'A neighbour mended my things', value: 5, hours: 4 * 24, stack: 1, gossip: true },
+  stairsDone: { label: 'Someone did the stairs', value: 2, hours: 2 * 24, stack: 1 },
 };
 
 export interface Thought {

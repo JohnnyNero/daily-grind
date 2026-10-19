@@ -135,6 +135,23 @@ export interface Life {
   postDay?: number;
   /** Seeing someone behind their partner's back (a pawn id). */
   affair?: number;
+  /** A break (kicking off where you can see it) or an inspiration (a good turn): see breaks.ts. */
+  breakState?: BreakState;
+}
+
+export type BreakKind = 'sulk' | 'slam' | 'bins' | 'bed' | 'tantrum' | 'music' | 'boxes' | 'tidy' | 'bbq' | 'mend' | 'paint' | 'plant';
+
+export interface BreakState {
+  kind: BreakKind;
+  /** When it runs out. */
+  until: number;
+  /** The last straw, for a break. */
+  straw?: string;
+  /** Where they're doing it, and how far through. */
+  at?: [number, number];
+  step?: number;
+  /** A furniture id (to mend), or the host's pawn id for a guest at a barbecue. */
+  target?: number;
 }
 
 export interface Pawn {
