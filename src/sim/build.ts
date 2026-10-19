@@ -52,6 +52,11 @@ export function taken(st: State, x: number, s: number): boolean {
  * sideways costs one.
  */
 export function unsupported(cells: Record<string, CellKind>): string | null {
+  return unsupportedCells(cells)[0] ?? null;
+}
+
+/** Every cell that isn't held up (a door counts as its bottom cell). */
+export function unsupportedCells(cells: Record<string, CellKind>): string[] {
   const dist = new Map<string, number>();
   const occupied = new Map<string, CellKind | 'top'>();
   for (const [k, c] of Object.entries(cells)) {
@@ -85,8 +90,16 @@ export function unsupported(cells: Record<string, CellKind>): string | null {
       deque.push(n);
     }
   }
-  for (const k of occupied.keys()) if (!dist.has(k)) return k;
-  return null;
+  const out: string[] = [];
+  for (const [k, kind] of occupied) {
+    if (dist.has(k)) continue;
+    if (kind === 'top') {
+      const [x, s] = k.split(',').map(Number);
+      const bottom = key(x, s - 1);
+      if (!out.includes(bottom)) out.push(bottom);
+    } else if (!out.includes(k)) out.push(k);
+  }
+  return out;
 }
 
 const NOT_HELD = `Nothing holding it up: a ledge can stick out ${MAX_OVERHANG} cells at most`;
@@ -113,7 +126,11 @@ function standingOn(st: State, x: number, s: number): Furniture | undefined {
   return st.furniture.find((f) => !furnitureDef(f.def).wall && f.s === s + 1 && x >= f.x && x < f.x + furnitureDef(f.def).w);
 }
 
-export function cellProblem(st: State, x: number, s: number, kind: CellKind): string | null {
+/**
+ * Why a cell can't go in. `held` false skips the check that it's held up (when drawing
+ * plans, which can be anything until they're signed off).
+ */
+export function cellProblem(st: State, x: number, s: number, kind: CellKind, held = true): string | null {
   const rows = isDoor(kind) ? DOOR_ROWS : 1;
   if (!inPlot(st, x) || s < 0 || s + rows > MAX_ROWS) return 'Outside your plot';
   const here = cellOf(st, x, s);
@@ -128,7 +145,7 @@ export function cellProblem(st: State, x: number, s: number, kind: CellKind): st
     if (furnitureAt(st, x, s + r)) return 'Furniture in the way';
   }
   if (isDoor(kind) && s > 0 && !isSolid(cellOf(st, x, s - 1)) && cellOf(st, x, s - 1) !== 'stair') return 'A door needs something to stand on';
-  if (!stillHeld(st, (cells) => setCell(cells, x, s, kind))) return NOT_HELD;
+  if (held && !stillHeld(st, (cells) => setCell(cells, x, s, kind))) return NOT_HELD;
   return null;
 }
 
@@ -138,8 +155,8 @@ function setCell(cells: Record<string, CellKind>, x: number, s: number, kind: Ce
   if (isDoor(kind)) delete cells[key(x, s + 1)];
 }
 
-export function placeCell(st: State, x: number, s: number, kind: CellKind): string | null {
-  const problem = cellProblem(st, x, s, kind);
+export function placeCell(st: State, x: number, s: number, kind: CellKind, held = true): string | null {
+  const problem = cellProblem(st, x, s, kind, held);
   if (problem) return problem;
   if (cellOf(st, x, s) === kind) return null;
   setCell(st.cells, x, s, kind);
@@ -149,18 +166,18 @@ export function placeCell(st: State, x: number, s: number, kind: CellKind): stri
 }
 
 /** Why a cell can't be knocked out (a door's upper half means the door). */
-export function removeProblem(st: State, x: number, s: number): string | null {
+export function removeProblem(st: State, x: number, s: number, held = true): string | null {
   if (!inPlot(st, x)) return 'Outside your plot';
   const at = isDoorTop(st, x, s) ? s - 1 : s;
   if (cellOf(st, x, at) === undefined) return 'Nothing to knock down there';
   const rows = cellOf(st, x, at) === 'stair' ? flightOf(st, x, at) : [at];
   if (rows.some((r) => standingOn(st, x, r))) return 'Furniture is standing on it';
-  if (!stillHeld(st, (cells) => rows.forEach((r) => delete cells[key(x, r)]))) return "It's holding other bits up";
+  if (held && !stillHeld(st, (cells) => rows.forEach((r) => delete cells[key(x, r)]))) return "It's holding other bits up";
   return null;
 }
 
-export function removeCell(st: State, x: number, s: number): string | null {
-  const problem = removeProblem(st, x, s);
+export function removeCell(st: State, x: number, s: number, held = true): string | null {
+  const problem = removeProblem(st, x, s, held);
   if (problem) return problem;
   const at = isDoorTop(st, x, s) ? s - 1 : s;
   // A stair takes the whole flight with it.
@@ -179,7 +196,7 @@ export const FLIGHT = 4;
  * (away from you), through the floor above, which it replaces. It needs a floor (or the top
  * of another flight) to start from, and room for itself.
  */
-export function stairsProblem(st: State, x: number, s: number): string | null {
+export function stairsProblem(st: State, x: number, s: number, held = true): string | null {
   if (!inPlot(st, x) || s < 0 || s + FLIGHT > MAX_ROWS) return 'Outside your plot';
   const below = cellOf(st, x, s - 1);
   if (s > 0 && !isSolid(below) && below !== 'stair') return 'Stairs need a floor to start from';
@@ -192,14 +209,14 @@ export function stairsProblem(st: State, x: number, s: number): string | null {
     if (furnitureAt(st, x, s + r)) return 'Furniture in the way';
   }
   if (standingOn(st, x, s + FLIGHT - 1)) return 'Furniture is standing where the stairs come up';
-  if (!stillHeld(st, (cells) => {
+  if (held && !stillHeld(st, (cells) => {
     for (let r = 0; r < FLIGHT; r++) cells[key(x, s + r)] = 'stair';
   })) return NOT_HELD;
   return null;
 }
 
-export function placeStairs(st: State, x: number, s: number): string | null {
-  const problem = stairsProblem(st, x, s);
+export function placeStairs(st: State, x: number, s: number, held = true): string | null {
+  const problem = stairsProblem(st, x, s, held);
   if (problem) return problem;
   for (let r = 0; r < FLIGHT; r++) {
     st.cells[key(x, s + r)] = 'stair';

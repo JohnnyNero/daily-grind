@@ -10,7 +10,7 @@ import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, type CellKind, type Pawn } from '../sim/state';
 import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, edge, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
-import { flightOf, type BuildParts } from '../sim/build';
+import { flightOf, unsupportedCells, type BuildParts } from '../sim/build';
 import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
 
 const SKY_ROWS = 4;
@@ -647,7 +647,7 @@ export class Renderer {
 
   // ------------------------------------------------------------------ building work
 
-  private worksCache: { version: number; target: BuildParts; pieces: Piece[] } | null = null;
+  private worksCache: { version: number; target: BuildParts; pieces: Piece[]; unheld: string[] } | null = null;
 
   /**
    * Blueprints: what's planned (in build mode) or what the builders have still to do, drawn
@@ -659,10 +659,21 @@ export class Renderer {
     if (!target) return;
     let c = this.worksCache;
     if (!c || c.version !== this.sim.version || c.target !== target) {
-      c = { version: this.sim.version, target, pieces: piecesBetween(partsOf(st), target) };
+      c = { version: this.sim.version, target, pieces: piecesBetween(partsOf(st), target), unheld: this.build.active ? unsupportedCells(target.cells) : [] };
       this.worksCache = c;
     }
     for (const p of c.pieces) this.drawPiece(ctx, p);
+    // Anything in the plans that wouldn't be held up, in red.
+    for (const k of c.unheld) {
+      const [x, s] = k.split(',').map(Number);
+      const rows = isDoor(target.cells[k]) ? DOOR_ROWS : 1;
+      const y = floorY(s) - rows * TILE;
+      ctx.fillStyle = '#e0453acc';
+      ctx.fillRect(x * TILE, y, TILE, rows * TILE);
+      ctx.strokeStyle = '#ffd8d0';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x * TILE + 0.5, y + 0.5, TILE - 1, rows * TILE - 1);
+    }
     const now = currentPiece(this.sim);
     if (now) this.drawBuilder(ctx, now);
   }

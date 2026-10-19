@@ -1,9 +1,11 @@
-// Build mode: change the building. Everything goes in straight away and is paid for on the
-// spot. Pick a group, then a tool or a piece. Walls are drawn a cell at a time (drag to
-// draw a line) and erased the same way. Picking a piece of furniture (or Move on a piece's
+// Build mode: change the building. Walls, doors, windows, stairs and insulation are drawn
+// as a draft first, free: anything that wouldn't be held up shows in red. Sign off builds
+// the lot there and then and takes the money (and can't be pressed while anything's red).
+// Pick a group, then a tool or a piece. Walls are drawn a cell at a time (drag to draw a
+// line) and erased the same way. Picking a piece of furniture (or Move on a piece's
 // card) puts the bar away and shows the piece as a ghost: tap or drag to put it where you
-// want, and nothing happens until you press Place. The chips at the top zoom straight to a
-// flat. Everything can be undone, with the money back.
+// want, and nothing happens until you press Place (furniture goes in straight away then).
+// The chips at the top zoom straight to a flat. Everything can be undone.
 
 import {
   FLIGHT,
@@ -17,6 +19,7 @@ import {
   removeCell,
   removeProblem,
   stairsProblem,
+  unsupportedCells,
 } from '../sim/build';
 import { FURNITURE, furnitureDef, type FurnitureGroup } from '../sim/defs';
 import { CELL_PRICE, DEMOLISH_PRICE, INSULATE_PRICE, book, furniturePrice, pounds } from '../sim/economy';
@@ -70,7 +73,7 @@ export class BuildUi {
   /** Nothing's picked when build mode opens: no group, no tool. */
   private group: (typeof GROUPS)[number] | null = null;
   private tool: Tool | null = null;
-  /** Undo steps: the building or the furniture as it was, and the money. */
+  /** Undo steps: the draft as it was, or the furniture (and the money) as it was. */
   private undo: { plan?: string; furniture?: string; money?: number; ledger?: number }[] = [];
   /**
    * A piece being placed: what, where and which way round it would go, and (if it's
@@ -78,6 +81,8 @@ export class BuildUi {
    */
   private pending: { def: string; x: number; s: number; flip: boolean; id?: number } | null = null;
   private placeBar = el('place-bar');
+  /** The draft: the building as you've drawn it (its cells and insulation; the rest is the real thing). */
+  private draft!: State;
   private drag: { start: Cell; last: Cell; moved: boolean; furniture?: number } | null = null;
   private bar = el('buildbar');
   private hint = el('build-hint');
@@ -96,6 +101,7 @@ export class BuildUi {
     el('place-flip').addEventListener('click', () => this.turn());
     el('place-ok').addEventListener('click', () => this.place());
     el('place-cancel').addEventListener('click', () => this.endPlacing());
+    el('build-sign').addEventListener('click', () => this.signOff());
     // A mouse shows where things would go before you click.
     const canvas = document.getElementById('view') as HTMLCanvasElement;
     canvas.addEventListener('pointermove', (e) => {
@@ -121,8 +127,7 @@ export class BuildUi {
     this.renderer.build.active = true;
     this.undo = [];
     this.pending = null;
-    // Plans from before building went in straight away are dropped.
-    this.sim.state.works.plan = null;
+    this.loadDraft();
     this.render();
   }
 
@@ -173,7 +178,8 @@ export class BuildUi {
   private pendingProblem(): string | null {
     const p = this.pending;
     if (!p) return null;
-    const problem = furnitureProblem(this.sim.state, p.def, p.x, p.s, p.id);
+    this.syncDraft();
+    const problem = furnitureProblem(this.sim.state, p.def, p.x, p.s, p.id) ?? furnitureProblem(this.draft, p.def, p.x, p.s, p.id);
     if (problem) return problem;
     if (p.id === undefined && this.sim.state.money < furniturePrice(p.def)) return `Can't afford it: you have ${pounds(this.sim.state.money)}`;
     return null;
@@ -204,11 +210,11 @@ export class BuildUi {
     const out = { problem: null as string | null };
     this.furnish(() => {
       if (p.id === undefined) {
-        const f = buyFurniture(this.sim, p.def, p.x, p.s, p.flip);
+        const f = buyFurniture(this.sim, p.def, p.x, p.s, p.flip, this.draft);
         if (typeof f === 'string') out.problem = f;
         return;
       }
-      out.problem = shiftFurniture(this.sim, p.id, p.x, p.s);
+      out.problem = shiftFurniture(this.sim, p.id, p.x, p.s, this.draft);
       const f = this.sim.state.furniture.find((o) => o.id === p.id);
       if (!out.problem && f && !!f.flip !== p.flip) turnFurniture(this.sim, p.id);
     });
@@ -248,10 +254,29 @@ export class BuildUi {
 
   // ------------------------------------------------------------------ changes and undo
 
-  /** The building (not the furniture) and the money, for undo. */
-  private buildingSnap(): (typeof this.undo)[number] {
+  /** A draft to draw on: the plans you left last time, or the building as it is. */
+  private loadDraft(): void {
     const st = this.sim.state;
-    return { plan: JSON.stringify({ cells: st.cells, insulated: st.insulated }), money: st.money, ledger: st.ledger.length };
+    const from = st.works.plan ?? st;
+    this.draft = { ...st, cells: { ...from.cells }, insulated: { ...from.insulated } };
+  }
+
+  /** The draft's copy of everything but the cells is the real thing, kept up to date. */
+  private syncDraft(): void {
+    const { cells, insulated } = this.draft;
+    Object.assign(this.draft, this.sim.state, { cells, insulated });
+  }
+
+  /** The draft, for undo. */
+  private buildingSnap(): (typeof this.undo)[number] {
+    return { plan: JSON.stringify({ cells: this.draft.cells, insulated: this.draft.insulated }) };
+  }
+
+  /** Keeps the draft as the plans (shown in blue), or none if it's no different from the building. */
+  private savePlan(): void {
+    const st = this.sim.state;
+    const d = this.draft;
+    st.works.plan = piecesBetween(partsOf(st), partsOf(d)).length > 0 ? { cells: { ...d.cells }, insulated: { ...d.insulated }, furniture: [] } : null;
   }
 
   private furnitureSnap(): (typeof this.undo)[number] {
@@ -273,27 +298,82 @@ export class BuildUi {
     this.bump();
   }
 
-  /**
-   * Runs a change to the building and pays for it there and then. If it can't be afforded,
-   * it's put back. `keepUndo` is false for each cell of a drag (the drag keeps one step).
-   */
-  private change(fn: () => unknown, keepUndo = true): string | null {
-    const st = this.sim.state;
+  /** Runs a change to the draft. `keepUndo` is false for each cell of a drag (the drag keeps one step). */
+  private change(fn: () => unknown, keepUndo = true): void {
+    this.syncDraft();
     const before = this.buildingSnap();
     fn();
-    const was = JSON.parse(before.plan!) as { cells: State['cells']; insulated: State['insulated'] };
-    if (JSON.stringify({ cells: st.cells, insulated: st.insulated }) === before.plan) return null;
-    const cost = quote(piecesBetween({ ...was, furniture: [] }, partsOf(st))).cost;
-    if (cost > st.money) {
-      Object.assign(st, was);
-      return `Can't afford that: it's ${pounds(cost)} and you have ${pounds(st.money)}`;
-    }
-    if (cost !== 0) book(this.sim, 'Building work', -cost);
+    if (this.buildingSnap().plan === before.plan) return;
     if (keepUndo) this.pushUndo(before);
+    this.draftChanged();
+  }
+
+  private draftChanged(): void {
+    this.savePlan();
+    this.bump();
+    this.updateFooter();
+  }
+
+  /** The cells in the draft that wouldn't be held up. */
+  private unheld(): string[] {
+    return unsupportedCells(this.draft.cells);
+  }
+
+  /** The cost of the draft, and Sign off (which can't be pressed while anything's red). */
+  private updateFooter(): void {
+    const st = this.sim.state;
+    const out = el('build-quote');
+    const sign = el('build-sign') as HTMLButtonElement;
+    const plan = st.works.plan;
+    out.replaceChildren();
+    if (!plan) {
+      sign.disabled = true;
+      sign.textContent = 'Sign off';
+      out.append(h('span', {}, 'Draw what you like: nothing is built or paid for until you sign it off.'));
+      return;
+    }
+    const cost = quote(piecesBetween(partsOf(st), plan)).cost;
+    const red = this.unheld().length;
+    sign.textContent = `Sign off ${pounds(cost)}`;
+    sign.disabled = red > 0 || cost > st.money;
+    out.append(
+      h('strong', {}, pounds(cost)),
+      red > 0
+        ? h('span', { class: 'down' }, `${red} cell${red === 1 ? " isn't" : "s aren't"} held up (in red)`)
+        : cost > st.money
+          ? h('span', { class: 'down' }, `You have ${pounds(st.money)}`)
+          : h('span', {}, 'Ready to build'),
+      h('button', { type: 'button', class: 'link', onclick: () => this.clearPlans() }, 'Clear'),
+    );
+  }
+
+  /** Builds the draft: everything goes in at once, and is paid for. */
+  private signOff(): void {
+    const st = this.sim.state;
+    const plan = st.works.plan;
+    if (!plan || this.unheld().length > 0) return;
+    const cost = quote(piecesBetween(partsOf(st), plan)).cost;
+    if (cost > st.money) return;
+    st.cells = { ...plan.cells };
+    st.insulated = { ...plan.insulated };
+    if (cost !== 0) book(this.sim, 'Building work', -cost);
+    st.works.plan = null;
     this.sim.changed();
+    this.undo = [];
+    this.loadDraft();
     this.bump();
     this.renderZoom();
-    return null;
+    this.updateButtons();
+    this.updateFooter();
+  }
+
+  private clearPlans(): void {
+    this.sim.state.works.plan = null;
+    this.undo = this.undo.filter((u) => u.furniture);
+    this.loadDraft();
+    this.bump();
+    this.updateButtons();
+    this.updateFooter();
   }
 
   private doUndo(): void {
@@ -305,13 +385,17 @@ export class BuildUi {
 
   private restoreStep(step: (typeof this.undo)[number]): void {
     const st = this.sim.state;
-    if (step.plan) Object.assign(st, JSON.parse(step.plan) as Partial<State>);
-    if (step.furniture) st.furniture.splice(0, st.furniture.length, ...(JSON.parse(step.furniture) as State['furniture']));
-    st.money = step.money!;
-    st.ledger.length = Math.min(st.ledger.length, step.ledger!);
-    this.sim.changed();
-    this.bump();
-    this.renderZoom();
+    if (step.plan) {
+      Object.assign(this.draft, JSON.parse(step.plan) as Partial<State>);
+      this.draftChanged();
+    }
+    if (step.furniture) {
+      st.furniture.splice(0, st.furniture.length, ...(JSON.parse(step.furniture) as State['furniture']));
+      st.money = step.money!;
+      st.ledger.length = Math.min(st.ledger.length, step.ledger!);
+      this.sim.changed();
+      this.bump();
+    }
   }
 
   private turn(): void {
@@ -367,6 +451,7 @@ export class BuildUi {
     this.renderZoom();
     this.setHint(null);
     this.updateButtons();
+    this.updateFooter();
     document.body.style.setProperty('--buildbar-h', `${this.bar.offsetHeight}px`);
   }
 
@@ -516,35 +601,34 @@ export class BuildUi {
 
   /** Does the current tool at a cell. `single` is a tap (keeps its own undo step). */
   private apply(cell: Cell, single: boolean): void {
-    const st = this.sim.state;
+    const st = this.draft;
     if (this.pending || this.isFurniture() || !this.tool) {
       this.tapFurniture(cell);
       return;
     }
     let problem: string | null = null;
-    const run = (fn: () => string | null | boolean) => {
-      const why = this.change(() => {
+    const run = (fn: () => string | null | boolean) =>
+      this.change(() => {
         const out = fn();
         if (typeof out === 'string') problem = out;
       }, single);
-      if (why) problem = why;
-    };
     const { x, s } = cell;
+    // Drawing the draft: anything goes, held up or not (what isn't shows in red).
     switch (this.tool) {
       case 'demolish':
-        run(() => removeCell(st, x, s));
+        run(() => removeCell(st, x, s, false));
         break;
       case 'insulate':
         run(() => insulate(st, key(x, s)));
         break;
       case 'stair':
-        if (single) run(() => placeStairs(st, x, this.stairFoot(x, s)));
+        if (single) run(() => placeStairs(st, x, this.stairFoot(x, s), false));
         break;
       default: {
         // A door goes in by its bottom cell: tapping the top half of a gap means the cell below.
         const kind = this.tool as CellKind;
-        const at = isDoor(kind) && s > 0 && cellProblem(st, x, s, kind) && !cellProblem(st, x, s - 1, kind) ? s - 1 : s;
-        run(() => placeCell(st, x, at, kind));
+        const at = isDoor(kind) && s > 0 && cellProblem(st, x, s, kind, false) && !cellProblem(st, x, s - 1, kind, false) ? s - 1 : s;
+        run(() => placeCell(st, x, at, kind, false));
       }
     }
     this.setHint(problem, problem !== null);
@@ -599,7 +683,7 @@ export class BuildUi {
 
   /** Where a flight starts for a tapped cell: the floor at or just under the tap. */
   private stairFoot(x: number, s: number): number {
-    const st = this.sim.state;
+    const st = this.draft;
     const at = (r: number) => st.cells[key(x, r)];
     if (isSolid(at(s))) return s + 1;
     let foot = s;
@@ -621,19 +705,19 @@ export class BuildUi {
       this.bump();
       return;
     }
-    const st = this.sim.state;
+    const st = this.draft;
     if (this.isFurniture() || !this.tool) {
       // Nothing to show until a piece or a tool is picked.
     } else if (this.tool === 'stair') {
       const foot = this.stairFoot(cell.x, cell.s);
-      b.marks.push({ x: cell.x, s: foot, w: 1, h: FLIGHT, ok: stairsProblem(st, cell.x, foot) === null });
+      b.marks.push({ x: cell.x, s: foot, w: 1, h: FLIGHT, ok: stairsProblem(st, cell.x, foot, false) === null });
     } else if (this.tool === 'insulate') {
       b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: insulateProblem(st, key(cell.x, cell.s)) === null });
     } else if (this.tool === 'demolish') {
-      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: removeProblem(st, cell.x, cell.s) === null });
+      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: removeProblem(st, cell.x, cell.s, false) === null });
     } else {
       const kind = this.tool as CellKind;
-      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: isDoor(kind) ? DOOR_ROWS : 1, ok: cellProblem(st, cell.x, cell.s, kind) === null });
+      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: isDoor(kind) ? DOOR_ROWS : 1, ok: cellProblem(st, cell.x, cell.s, kind, false) === null });
     }
     this.bump();
   }
