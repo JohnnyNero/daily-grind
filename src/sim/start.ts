@@ -51,6 +51,7 @@ export function newState(seed: number): State {
     planning: { top: 0 },
     council: {},
     handover: { stop: 0, cast: [], met: [], done: [] },
+    chronicle: { next: 1, tales: [] },
   };
   buildShell(st);
   // You can build up to the roof as it stands; above that needs planning permission.

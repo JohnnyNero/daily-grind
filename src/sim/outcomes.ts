@@ -15,6 +15,7 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type Pawn } from './state';
 import { remember, thoughtsOf, type Thought } from './thoughts';
 import { has, reveal, touchiness, traitDef } from './traits';
+import { tale } from './tales';
 
 /** The three lines, before traits move them. */
 export const LINES = { minor: 35, major: 25, extreme: 15 };
@@ -147,6 +148,7 @@ const OUTCOMES: Outcome[] = [
       const lease = flatInfo(sim, p.life!.flat).lease;
       if (!lease || lease.notice) return;
       lease.notice = { by: 'tenant', why: straw, day: sim.day + 7 };
+      tale(sim, 'gaveNotice', [p], { flat: p.life!.flat, what: straw });
       letter(sim, { from: from(sim, p), title: 'Notice', body: `We're leaving. Seven days. ${straw} was the last straw.`, flat: p.life!.flat, pawn: p.id });
     },
   },

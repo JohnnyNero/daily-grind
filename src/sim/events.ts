@@ -2,6 +2,8 @@
 // quiet in turns, never has more than a couple going at once, won't do the same sort of
 // thing twice running (each happening's tags cool down), and goes easier when you're
 // struggling and harder when you're flush. The first week is quiet, to get to know people.
+// It also has a budget, as RimWorld's does: the more the building's worth and brings in, the
+// bigger what it deals out (more guests, greedier burglars, stiffer fines, a bit more often).
 //
 // Some happenings come from the tenants rather than the storyteller (a party on a Friday, a
 // row that turns into a fight), but they still ask it first, so they count towards the cap.
@@ -19,6 +21,8 @@ import { remember } from './thoughts';
 import { has } from './traits';
 import { burglaryRisk, startBurglary } from './crime';
 import { bookInspection, breakDown, worn } from './upkeep';
+import { furnitureDef } from './defs';
+import { tale } from './tales';
 import { noticeTrait } from './outcomes';
 import { quietFor } from './handover';
 
@@ -77,6 +81,24 @@ function flush(sim: Sim): boolean {
   return sim.state.money > 5000 * POUND;
 }
 
+/** The storyteller's points at the start: a tired building, two flats let. */
+const BASE_POINTS = 120;
+
+/** What the building's worth to the storyteller: its furniture, flats let, weekly rent roll and tenants. */
+export function points(sim: Sim): number {
+  const st = sim.state;
+  const things = st.furniture.reduce((n, f) => n + furnitureDef(f.def).value, 0);
+  const lets = Object.values(st.flats).filter((f) => f.lease);
+  const roll = lets.reduce((n, f) => n + f.lease!.rent, 0) / POUND;
+  return Math.round(things / 10 + lets.length * 10 + roll / 5 + tenants(sim).length * 5);
+}
+
+/** How hard it pushes: 1 for the building you started with, up to 2 for a big, full one. Never harder when you're struggling. */
+export function threat(sim: Sim): number {
+  if (struggling(sim)) return 1;
+  return 1 + Math.max(0, Math.min(1, (points(sim) - BASE_POINTS) / (BASE_POINTS * 2)));
+}
+
 interface Option {
   tags: string[];
   /** Good for you (the storyteller deals more of these when you're struggling). */
@@ -101,7 +123,8 @@ export function storyHour(sim: Sim): void {
   // Parties: Friday and Saturday evenings, if someone's that way inclined.
   if (hourOf(sim) === 19 && (weekday(sim) === 4 || weekday(sim) === 5)) maybeParty(sim);
   const easy = struggling(sim);
-  let chance = story.busy ? 0.08 : 0.02;
+  const push = threat(sim);
+  let chance = (story.busy ? 0.08 : 0.02) * (1 + 0.3 * (push - 1));
   if (easy) chance *= 0.7;
   if (random(st) > chance) return;
   const options: Option[] = [];
@@ -109,7 +132,7 @@ export function storyHour(sim: Sim): void {
   if (pair) options.push({ tags: ['romance'], weight: 1, run: () => startAffair(sim, pair[0], pair[1]) });
   const hour = hourOf(sim);
   if (hour >= 1 && hour <= 3) options.push({ tags: ['crime'], weight: burglaryRisk(sim) * 2, run: () => startBurglary(sim) });
-  options.push({ tags: ['council'], weight: 0.35, run: () => surpriseInspection(sim) });
+  options.push({ tags: ['council'], weight: 0.35 * push, run: () => surpriseInspection(sim) });
   if (worn(sim).length > 0) options.push({ tags: ['repair'], weight: 0.8, run: () => breakDown(sim) });
   options.push({ tags: ['money'], good: true, weight: 0.2, run: () => grant(sim) });
   const usable = options
@@ -170,13 +193,15 @@ export function startParty(sim: Sim, flatId: string): Happening | null {
   // Over at half one, give or take.
   const ends = dayStart + TICKS_PER_DAY + randInt(st, 60, 150) * TICKS_PER_MINUTE;
   const h = begin(sim, 'party', ['party', `party:${flatId}`], (ends - st.tick) / TICKS_PER_HOUR, [], flatId);
-  h.queue = randInt(st, 3, 6);
+  // A bigger, busier building, a bigger party.
+  h.queue = randInt(st, 3, 6) + Math.round((threat(sim) - 1) * 5);
   h.next = st.tick + randInt(st, 45, 80) * TICKS_PER_MINUTE;
   const host = people.find((p) => has(p.life!, 'partyAnimal')) ?? people[0];
   if (has(host.life!, 'partyAnimal')) noticeTrait(sim, host, 'partyAnimal');
   if (random(st) < 0.6) post(sim, host, pick(st, ['Few people round tonight, sorry in advance if it gets loud x', 'Having some friends over later! Come up if you like 🎉', 'Bit of a do at ours tonight. Won\'t be late. (It will be late.)']));
   const name = sim.layout.flat(flatId)?.name ?? 'a flat';
   sim.notify(`${first(host)} is having a party in ${name} tonight.`);
+  tale(sim, 'party', [host], { flat: flatId });
   return h;
 }
 
@@ -245,9 +270,13 @@ export function endParty(sim: Sim, h: Happening, early: boolean): void {
       f.wear = 1;
       f.broken = sim.day;
       sim.notify(`Something got broken at the party in ${name}.`);
+      tale(sim, 'partyDamage', people.slice(0, 1), { flat: flatId, what: furnitureDef(f.def).name.toLowerCase() });
     }
   }
-  if (early) sim.notify(`The party in ${name} is over. ${people.length === 1 ? `${first(people[0])} is` : 'They\'re'} sulking.`);
+  if (early) {
+    sim.notify(`The party in ${name} is over. ${people.length === 1 ? `${first(people[0])} is` : 'They\'re'} sulking.`);
+    tale(sim, 'partyShutDown', people.slice(0, 1), { flat: flatId });
+  }
 }
 
 /** A guest: in to the party, mingle, and home when it's over. False when it's time to go. */
@@ -306,6 +335,7 @@ export function startFight(sim: Sim, a: Pawn, b: Pawn): void {
   const witness = seen[0] ?? poster(sim, tenants(sim).filter((p) => p !== a && p !== b));
   if (witness) post(sim, witness, `There is an actual FIGHT on the stairs. ${first(a)} and ${first(b)}. Someone do something`);
   sim.notify(`${first(a)} and ${first(b)} are fighting.`);
+  tale(sim, 'fight', [a, b]);
   if (random(st) < 0.4) {
     letter(sim, {
       from: 'Harrowgate Police',
@@ -423,6 +453,7 @@ export function found(sim: Sim, h: Happening, by: Pawn): void {
   if (by !== partner) post(sim, by, `I wasn't going to say anything but ${first(partner)} deserves to know. ${first(a)} and ${first(b)}. On the landing. Every night.`);
   post(sim, partner, pick(st, [`Thanks everyone. Really. ${whoIs(sim, a).split(' · ')[0]}, your stuff's on the landing.`, `So that's what "popping out for milk" means.`, `Great. Brilliant. Love that for me.`]));
   sim.notify(`${first(partner)} has found out about ${first(a)} and ${first(b)}.`);
+  tale(sim, 'affair', [a, b, partner]);
   // Sometimes the two of them end up together after all.
   if (random(st) < 0.5) {
     a.life!.partner = b.id;
@@ -442,6 +473,7 @@ function grant(sim: Sim): boolean {
   const st = sim.state;
   const amount = randInt(st, 2, 6) * 50 * POUND;
   book(sim, 'Warm Homes grant', amount);
+  tale(sim, 'grant', [], { what: `£${amount / POUND}` });
   letter(sim, {
     from: 'Harrowgate City Council, Warm Homes Fund',
     title: 'Your grant',

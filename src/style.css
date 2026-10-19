@@ -257,7 +257,7 @@ table.people { width: 100%; border-collapse: collapse; font-size: 12px; min-widt
 .paper header { display: flex; justify-content: space-between; gap: 8px; border-bottom: 2px solid var(--outline); padding-bottom: 6px; }
 .paper header b { font-size: 12px; }
 .paper header small { font-size: 10px; color: var(--sheet-muted); }
-.paper p { margin: 0; color: var(--sheet-ink); }
+.paper p { margin: 0; color: var(--sheet-ink); white-space: pre-line; }
 .opt { min-height: 44px; border: 2px solid #cdbfa8; border-radius: 8px; background: var(--sheet); text-align: left; padding: 6px 10px; display: grid; gap: 1px; font-size: 13px; cursor: pointer; width: 100%; }
 .opt small { font-size: 11px; color: var(--sheet-muted); }
 .opt.chosen { border-color: var(--outline); background: #f6edd9; }
