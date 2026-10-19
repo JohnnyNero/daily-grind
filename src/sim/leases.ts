@@ -11,6 +11,7 @@ import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type Lease, type Listing
 import { moveIn, type Person } from './tenants';
 import { friendsLeaving } from './social';
 import { post } from './chat';
+import { expectGrade, expectThought } from './expectations';
 import { likingTarget, rentThought, thoughtsOf, tierThought, type Thought } from './thoughts';
 import { rollTraits, traitDef, touchiness, has } from './traits';
 
@@ -122,7 +123,7 @@ export function applicantsHour(sim: Sim): void {
     const liveable = basics.bed && basics.toilet && basics.wash && basics.kitchen;
     const meanHours = Math.max(3, Math.min(120, 14 * ratio ** 3)) * (liveable ? 1 : 4) * LISTINGS[info.style ?? 'plain'].pace * ratingPace(sim);
     info.nextApplicant = st.tick + Math.round(-Math.log(1 - random(st) * 0.999) * meanHours * TICKS_PER_HOUR);
-    if (waiting < MAX_WAITING && ratio < 1.6) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
+    if (waiting < MAX_WAITING && ratio < 1.6 - 0.05 * expectGrade(sim)) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
   }
 }
 
@@ -162,12 +163,15 @@ export function likelyLiking(sim: Sim, a: Applicant): number {
   const thoughts: Thought[] = [];
   const tier = tierThought(score.tier, has({ traits: [a.shown] }, 'houseProud'));
   if (tier) thoughts.push(tier);
+  const grade = expectGrade(sim);
+  const hoped = expectThought(score.tier, grade);
+  if (hoped) thoughts.push(hoped);
   if (!score.has.bed) thoughts.push({ label: '', value: -12 });
   if (!score.has.toilet) thoughts.push({ label: '', value: -15 });
   if (!score.has.wash) thoughts.push({ label: '', value: -8 });
   if (!score.has.kitchen) thoughts.push({ label: '', value: -6 });
   if (score.perPerson < 5) thoughts.push({ label: '', value: -5 });
-  const rent = rentThought(a.offer, TIER_RENT[score.tier]);
+  const rent = rentThought(a.offer, TIER_RENT[score.tier], grade);
   if (rent) thoughts.push(rent);
   thoughts.push({ label: '', value: 5 }); // new place
   return Math.round(likingTarget(thoughts));

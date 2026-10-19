@@ -20,6 +20,7 @@ import { choose } from '../sim/post';
 import type { Sim } from '../sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, type Letter, type NeedId, type Pawn } from '../sim/state';
 import { NEED_NAMES } from '../sim/tenants';
+import { expectGrade, expectName, expectNote } from '../sim/expectations';
 import { BASELINE, likingTarget, rentThought, thoughtsOf } from '../sim/thoughts';
 import { traitDef } from '../sim/traits';
 import { el, h, hhmm } from './dom';
@@ -201,7 +202,7 @@ export class Panels {
         this.rerender();
       };
       const ratio = shown / Math.max(1, going);
-      const feel = rentThought(shown, going);
+      const feel = rentThought(shown, going, expectGrade(sim));
       rent.append(
         h('div', { className: 'row' }, h('span', {}, lease ? 'Their rent' : 'Asking rent'), h('span', { className: 'small' }, `${Math.round(ratio * 100)}% of the going rate`)),
         h(
@@ -369,7 +370,7 @@ export class Panels {
     const flats = sim.layout.flats;
     const empty = flats.filter((f) => !flatInfo(sim, f.id).lease);
     this.head('People', `${tenants.length} tenant${tenants.length === 1 ? '' : 's'} · ${flats.length} flats · ${empty.length} empty`);
-    const key = [sim.day, Math.floor(sim.minuteOfDay / 10), tenants.map((p) => [p.id, Math.round(p.life!.liking)]), empty.map((f) => f.id), sim.state.applicants.length, sim.state.reviews.length];
+    const key = [sim.day, Math.floor(sim.minuteOfDay / 10), tenants.map((p) => [p.id, Math.round(p.life!.liking)]), empty.map((f) => f.id), sim.state.applicants.length, sim.state.reviews.length, Math.round(sim.state.expect.level)];
     this.fill(key, () => {
       const avg = tenants.length ? Math.round(tenants.reduce((n, p) => n + p.life!.liking, 0) / tenants.length) : 0;
       const atRisk = tenants.filter((p) => p.life!.liking < linesFor(p).major);
@@ -385,6 +386,8 @@ export class Panels {
           h('div', { className: 'stat' }, h('small', {}, 'Rent owed'), h('b', {}, pounds(owed))),
           h('div', { className: 'stat' }, h('small', {}, 'Your rating'), h('b', {}, rating === null ? '–' : `${rating.toFixed(1)}★`), h('span', { className: 'small muted' }, rating === null ? 'No reviews yet' : `${Math.min(8, sim.state.reviews.length)} latest reviews`)),
         ),
+        h('div', { className: 'row' }, h('span', {}, 'Tenants expect'), h('b', {}, expectName(sim))),
+        h('p', { className: 'small muted' }, expectNote(sim)),
         h(
           'div',
           { className: 'table-wrap' },

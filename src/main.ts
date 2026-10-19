@@ -1,7 +1,7 @@
 import { Renderer } from './render/renderer';
 import { deserialize, serialize } from './sim/save';
 import { Sim } from './sim/sim';
-import { TICKS_PER_MINUTE } from './sim/state';
+import { planTicks, quietNight } from './sim/pace';
 import { BuildUi } from './ui/buildUi';
 import { el } from './ui/dom';
 import { Hud } from './ui/hud';
@@ -11,10 +11,6 @@ import { FurnitureCard } from './ui/furnitureCard';
 import { furnitureAt } from './sim/build';
 import { HandoverUi } from './ui/handover';
 
-/** At 1x an in-game minute takes 2.5 real seconds, so a day takes about an hour. */
-const BASE_TICKS_PER_SECOND = TICKS_PER_MINUTE / 2.5;
-/** Never simulate more than this per frame, so a slow phone can't spiral. */
-const MAX_TICKS_PER_FRAME = 20000;
 const AUTOSAVE_MS = 30_000;
 const SAVE_KEY = 'landlord:save';
 
@@ -217,10 +213,13 @@ function play(sim: Sim): void {
   function frame(now: number): void {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
-    carry += dt * BASE_TICKS_PER_SECOND * speed;
-    const ticks = Math.min(MAX_TICKS_PER_FRAME, Math.floor(carry));
-    carry -= ticks;
+    // Quiet nights (everyone asleep or out, nothing happening) run faster until something stirs.
+    const quiet = quietNight(sim);
+    const plan = planTicks(dt, speed, quiet, carry);
+    carry = plan.carry;
+    const ticks = plan.ticks;
     sim.run(ticks);
+    hud.showNight(quiet && speed > 0);
     if (sim.state.repossessed !== undefined && el('endscreen').hidden) {
       el('endscreen').hidden = false;
       el('end-body').textContent = `Four missed mortgage payments, and on day ${sim.state.repossessed} Northfold Building Society took the building. The tenants have been told. Some of them are pleased.`;

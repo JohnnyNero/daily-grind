@@ -5,6 +5,7 @@
 
 import { placeFurniture } from './build';
 import { MORTGAGE, POUND, START_MONEY, TIER_RENT, flatInfo } from './economy';
+import { EXPECT_START } from './expectations';
 import { flatScore, scoreFor } from './impressiveness';
 import { makePerson, sittingTenants } from './leases';
 import type { Sim } from './sim';
@@ -50,6 +51,7 @@ export function newState(seed: number): State {
     reviews: [],
     planning: { top: 0 },
     council: {},
+    expect: { level: EXPECT_START, good: 0 },
     handover: { stop: 0, cast: [], met: [], done: [] },
   };
   buildShell(st);
