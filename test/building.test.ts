@@ -52,6 +52,17 @@ describe('building', () => {
     expect(placeSegment(sim.state, x0 - 1, 0, 'wall')).toBe('Outside your plot');
   });
 
+  it('puts doors and windows in a slot in a wall, not on their own', () => {
+    const sim = Sim.create(1);
+    const st = sim.state;
+    const { x0 } = st.plot;
+    // Column 3 of the lobby is open floor.
+    expect(placeSegment(st, x0 + 3, 2, 'door')).toBe('Goes in a wall: put a wall up first');
+    expect(placeSegment(st, x0 + 7, 0, 'window')).toBe('Goes in a wall: put a wall up first');
+    // The studio's front door sits in its wall: it can be swapped for a window.
+    expect(placeSegment(st, x0 + 7, 1, 'window')).toBeNull();
+  });
+
   it('checks where furniture can go', () => {
     const sim = Sim.create(1);
     const st = sim.state;

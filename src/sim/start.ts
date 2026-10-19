@@ -57,7 +57,8 @@ function buildShell(st: State): void {
     for (let x = x0; x <= x1; x++) st.slabs[key(x, level)] = true;
   }
   const seg = (dx: number, s: number, kind: Parameters<typeof placeSegment>[3]) => {
-    const problem = placeSegment(st, at(dx), s, kind);
+    // Doors and windows go in a wall, so the wall goes up first.
+    const problem = placeSegment(st, at(dx), s, 'wall') ?? placeSegment(st, at(dx), s, kind);
     if (problem) throw new Error(`Start building: ${problem} at ${dx},${s}`);
   };
   // Columns: outer wall 0, studio 1-6, wall 7, stairwell 8-12, wall 13, one-bed 14-26, outer wall 27.

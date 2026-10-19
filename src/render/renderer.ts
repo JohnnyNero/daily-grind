@@ -9,7 +9,7 @@ import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
 import { MAX_STOREYS, ROOM_ROWS, STOREY_ROWS, TILE, TICKS_PER_MINUTE, isDoor, type Pawn, type Segment } from '../sim/state';
 import { SHARED, floorKey, noiseReaching, tempOf, wallKey, warmthOf } from '../sim/environment';
-import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
+import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, edge, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
 import type { BuildParts } from '../sim/build';
 import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
 
@@ -356,7 +356,7 @@ export class Renderer {
     const X = x * TILE;
     rect(ctx, X, y, TILE, TILE, PAL.slab);
     for (let xx = X + (level % 2); xx < X + TILE; xx += 2) rect(ctx, xx, y + TILE - 2, 1, 1, dark(PAL.slab, 0.25));
-    rect(ctx, X, y + TILE - 1, TILE, 1, PAL.outline);
+    rect(ctx, X, y + TILE - 1, TILE, 1, edge(PAL.slab));
     if (this.sim.state.insulated[floorKey(x, level)]) {
       // A layer of insulation in the floor.
       rect(ctx, X, y + 4, TILE, 5, '#e3c45a');
@@ -382,50 +382,59 @@ export class Renderer {
   }
 
   /**
-   * A wall segment: a thin wall (brick on the outside of the building) with the rooms either
-   * side showing behind it. Windows and doors are gaps; a window is a line of glass, and doors
-   * are drawn every frame so they can swing.
+   * A wall segment: a whole tile thick (brick on the outside of the building, plaster inside).
+   * Windows and doors sit in a slot in the wall: a window is a line of glass across the
+   * opening, and a doorway shows the room behind, with the door drawn every frame so it can
+   * swing.
    */
   private drawWall(ctx: CanvasRenderingContext2D, lay: Layout, colours: (string | null)[], x: number, s: number, seg: Segment): void {
     const X = x * TILE;
     const H = ROOM_ROWS * TILE;
     const y = floorY(s) - H;
-    for (const [side, ox] of [[-1, 0], [1, TILE / 2]] as const) {
-      const c = this.sideColour(lay, colours, x + side, s);
-      if (c) this.backWall(ctx, X + ox, s, TILE / 2, c === 'bare' ? null : c);
-    }
     const outer = x === this.sim.state.plot.x0 || x === this.sim.state.plot.x1;
-    const bw = outer ? 8 : 4;
-    const bx = X + (TILE - bw) / 2;
     const body = (top: number, h: number) => {
       if (h <= 0) return;
       if (outer) {
-        rect(ctx, bx, top, bw, h, PAL.brick);
+        rect(ctx, X, top, TILE, h, PAL.brick);
         for (let row = top; row < top + h; row += 4) {
-          rect(ctx, bx, row + 3, bw, 1, PAL.mortar);
-          rect(ctx, bx + ((row / 4) % 2 ? 2 : 5), row, 1, 3, PAL.mortar);
+          rect(ctx, X, row + 3, TILE, 1, PAL.mortar);
+          for (let bx = X + ((row / 4) % 2 ? 3 : 7); bx < X + TILE; bx += 8) rect(ctx, bx, row, 1, 3, PAL.mortar);
         }
       } else {
-        rect(ctx, bx, top, bw, h, '#8a7262');
-        rect(ctx, bx + 1, top, 2, h, '#a08878');
+        rect(ctx, X, top, TILE, h, '#8a7262');
+        rect(ctx, X + 2, top, 3, h, '#a08878');
+        rect(ctx, X + TILE - 3, top, 1, h, '#7a6252');
       }
-      rect(ctx, bx - 1, top, 1, h, PAL.outline);
-      rect(ctx, bx + bw, top, 1, h, PAL.outline);
+      const e = edge(outer ? PAL.brick : '#8a7262');
+      rect(ctx, X, top, 1, h, e);
+      rect(ctx, X + TILE - 1, top, 1, h, e);
     };
     const insulated = !!this.sim.state.insulated[wallKey(x, s)];
     const lagged = (top: number, h: number) => {
       body(top, h);
-      if (insulated && h > 0) for (let yy = top + 1; yy < top + h - 1; yy += 4) rect(ctx, bx + 1, yy, bw - 2, 2, '#e3c45a');
+      if (!insulated || h <= 0) return;
+      // Insulation batts packed into the middle of the wall.
+      rect(ctx, X + 4, top, TILE - 8, h, '#e3c45a');
+      for (let yy = top + 1; yy < top + h - 1; yy += 4) rect(ctx, X + 5 + ((yy - top) % 8 ? 0 : 3), yy, 3, 2, '#c9a63e');
     };
     if (seg === 'window') {
       lagged(y, 8);
       lagged(y + 38, H - 38);
+      // The opening, with the glass as a line across the middle of it.
+      rect(ctx, X, y + 8, TILE, 30, outer ? '#3e4a5c' : dark('#8a7262', 0.3));
+      rect(ctx, X + 1, y + 9, TILE - 2, 28, light(PAL.glass, 0.25));
       rect(ctx, X + 7, y + 8, 2, 30, PAL.glass);
       rect(ctx, X + 7, y + 20, 2, 1, light(PAL.glass, 0.6));
-      box(ctx, X + 2, y + 37, 12, 3, PAL.white);
+      box(ctx, X - 1, y + 37, TILE + 2, 3, PAL.white);
+      box(ctx, X - 1, y + 7, TILE + 2, 2, PAL.white);
     } else if (isDoor(seg)) {
-      body(y, H - DOOR_H - 1);
-      box(ctx, X + 1, y + H - DOOR_H - 2, TILE - 2, 3, PAL.woodDark);
+      // The rooms either side show through the doorway.
+      for (const [side, ox] of [[-1, 0], [1, TILE / 2]] as const) {
+        const c = this.sideColour(lay, colours, x + side, s);
+        if (c) this.backWall(ctx, X + ox, s, TILE / 2, c === 'bare' ? null : c);
+      }
+      // Wall over the slot; the door itself is just a line down it (drawn with the doors).
+      lagged(y, H - DOOR_H);
     } else lagged(y, H);
   }
 
@@ -690,15 +699,17 @@ export class Renderer {
           cross(X + 2, top, TILE - 4, H);
           break;
         }
-        ctx.fillStyle = `${BLUE}cc`;
+        ctx.fillStyle = `${BLUE}aa`;
         if (part.seg === 'window') {
-          ctx.fillRect(X + 6, top, 4, H);
+          ctx.fillRect(X, top, TILE, 8);
+          ctx.fillRect(X, top + 38, TILE, H - 38);
           ctx.fillStyle = '#d8f0ffcc';
-          ctx.fillRect(X + 7, top + 10, 2, 18);
+          ctx.fillRect(X + 7, top + 8, 2, 30);
         } else if (isDoor(part.seg)) {
-          ctx.fillRect(X + 6, top, 4, H - DOOR_H);
-          outline(X + 3, floorY(p.s) - DOOR_H, 10, DOOR_H);
-        } else ctx.fillRect(X + 6, top, 4, H);
+          ctx.fillRect(X, top, TILE, H - DOOR_H);
+          ctx.fillRect(X + 7, floorY(p.s) - DOOR_H, 2, DOOR_H);
+        } else ctx.fillRect(X, top, TILE, H);
+        outline(X, top, TILE, H);
         break;
       }
       case 'slab': {

@@ -64,6 +64,8 @@ export function segmentProblem(st: State, x: number, s: number, seg: Segment): s
   if (!inPlot(st, x) || s < 0 || s >= MAX_STOREYS) return 'Outside your plot';
   if (st.walls[key(x, s)] === seg) return null;
   if (!hasFloor(st, x, s)) return 'Needs a floor under it';
+  // Doors and windows fill a slot in a wall; they don't stand on their own.
+  if (seg !== 'wall' && st.walls[key(x, s)] === undefined) return 'Goes in a wall: put a wall up first';
   if (seg === 'entrance' && s !== 0) return 'The street door goes on the ground floor';
   if (furnitureIn(st, x, s).length > 0) return 'Furniture in the way';
   if (stairIn(st, x, s)) return 'Stairs in the way';

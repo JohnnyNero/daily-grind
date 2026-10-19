@@ -60,19 +60,24 @@ export function mix(a: string, b: string, t: number): string {
 }
 export const light = (c: string, t: number) => mix(c, '#ffffff', t);
 export const dark = (c: string, t: number) => mix(c, '#000000', t);
+/** The edge of a block: its own colour, darkened and warmed towards the old outline brown. */
+export const edge = (c: string) => mix(dark(c, 0.38), PAL.outline, 0.25);
 
 export function rect(ctx: Ctx, x: number, y: number, w: number, h: number, colour: string): void {
   ctx.fillStyle = colour;
   ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 
-/** A block with a dark outline, a highlight along the top and dithered shade at the bottom. */
+/**
+ * A block with an edge in a darker shade of its own colour (a black outline everywhere was
+ * too busy), a highlight along the top and dithered shade at the bottom.
+ */
 export function box(ctx: Ctx, x: number, y: number, w: number, h: number, c: string): void {
   if (w <= 2 || h <= 2) {
     rect(ctx, x, y, w, h, c);
     return;
   }
-  rect(ctx, x, y, w, h, PAL.outline);
+  rect(ctx, x, y, w, h, edge(c));
   const ix = x + 1;
   const iy = y + 1;
   const iw = w - 2;
