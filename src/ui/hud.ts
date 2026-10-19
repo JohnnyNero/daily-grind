@@ -33,6 +33,12 @@ export class Hud {
   onBuild: () => void = () => {};
 
   constructor(private readonly sim: Sim, private readonly panels: Panels, private readonly setSpeed: (s: number) => void) {
+    // The dock's height changes (tenants come and go, it shrinks while a tab is open), and
+    // the sheets and bars sit on top of it.
+    const dock = el('dock');
+    const measure = () => document.body.style.setProperty('--tab-h', `${dock.offsetHeight}px`);
+    new ResizeObserver(measure).observe(dock);
+    measure();
     for (const b of document.querySelectorAll<HTMLButtonElement>('.speeds [data-speed]')) {
       b.addEventListener('click', () => this.setSpeed(Number(b.dataset.speed)));
     }
@@ -135,9 +141,6 @@ export class Hud {
       this.renderTenantBar();
       this.renderAlerts();
       if (!this.moneyPop.hidden) this.renderMoneyPop();
-      // The bar's height can change (tenants come and go), and everything sits below it.
-      document.body.style.setProperty('--top-h', `${el('topbar').offsetHeight}px`);
-      document.body.style.setProperty('--tab-h', `${el('tabbar').offsetHeight}px`);
     }
     this.panels.render();
   }

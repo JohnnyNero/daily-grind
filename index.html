@@ -15,8 +15,32 @@
 <body>
   <canvas id="view" aria-label="Your building, side on. Drag to pan, pinch to zoom, tap a flat or a person."></canvas>
 
-  <header class="top" id="topbar">
-    <div class="bar">
+  <div class="alerts" id="alerts" aria-label="Alerts"></div>
+
+  <div class="overlays" id="overlays" role="group" aria-label="Show on the building">
+    <button type="button" data-overlay="none" aria-pressed="true">Off</button>
+    <button type="button" data-overlay="noise" aria-pressed="false">Noise</button>
+    <button type="button" data-overlay="warmth" aria-pressed="false">Warmth</button>
+    <button type="button" data-overlay="liking" aria-pressed="false">Liking</button>
+  </div>
+
+  <button type="button" class="toast" id="toast" hidden></button>
+
+  <button type="button" class="recentre" id="recentre" aria-label="Fit the building to the screen">
+    <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>
+  </button>
+
+  <footer class="dock" id="dock">
+    <div class="tenantbar" id="tenantbar" aria-label="Your tenants"></div>
+    <nav class="tabbar" id="tabbar" aria-label="Main">
+      <button type="button" data-tab="building" aria-current="page"><span class="ic" data-icon="building"></span>Building</button>
+      <button type="button" data-tab="people"><span class="ic" data-icon="people"></span>People</button>
+      <button type="button" data-tab="money"><span class="ic" data-icon="money"></span>Money</button>
+      <button type="button" data-tab="chat"><span class="ic" data-icon="chat"></span>Chat<span class="badge" id="chat-badge" hidden></span></button>
+      <button type="button" data-tab="post"><span class="ic" data-icon="post"></span>Post<span class="badge" id="post-badge" hidden></span></button>
+      <button type="button" data-tab="build"><span class="ic" data-icon="build"></span>Build</button>
+    </nav>
+    <div class="bar" id="statusbar">
       <div class="clock">
         <span id="day">Day 1 · Mon</span>
         <span id="time">08:00</span>
@@ -37,33 +61,8 @@
         <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4h10M3 8h10M3 12h10"/></svg>
       </button>
     </div>
-    <div class="tenantbar" id="tenantbar" aria-label="Your tenants"></div>
     <div class="money-pop" id="money-pop" hidden></div>
-  </header>
-
-  <div class="alerts" id="alerts" aria-label="Alerts"></div>
-
-  <div class="overlays" id="overlays" role="group" aria-label="Show on the building">
-    <button type="button" data-overlay="none" aria-pressed="true">Off</button>
-    <button type="button" data-overlay="noise" aria-pressed="false">Noise</button>
-    <button type="button" data-overlay="warmth" aria-pressed="false">Warmth</button>
-    <button type="button" data-overlay="liking" aria-pressed="false">Liking</button>
-  </div>
-
-  <button type="button" class="toast" id="toast" hidden></button>
-
-  <button type="button" class="recentre" id="recentre" aria-label="Fit the building to the screen">
-    <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>
-  </button>
-
-  <nav class="tabbar" id="tabbar" aria-label="Main">
-    <button type="button" data-tab="building" aria-current="page"><span class="ic" data-icon="building"></span>Building</button>
-    <button type="button" data-tab="people"><span class="ic" data-icon="people"></span>People</button>
-    <button type="button" data-tab="money"><span class="ic" data-icon="money"></span>Money</button>
-    <button type="button" data-tab="chat"><span class="ic" data-icon="chat"></span>Chat<span class="badge" id="chat-badge" hidden></span></button>
-    <button type="button" data-tab="post"><span class="ic" data-icon="post"></span>Post<span class="badge" id="post-badge" hidden></span></button>
-    <button type="button" data-tab="build"><span class="ic" data-icon="build"></span>Build</button>
-  </nav>
+  </footer>
 
   <section class="buildbar" id="buildbar" hidden aria-label="Build mode">
     <div class="groups" id="build-groups" role="tablist" aria-label="What to build"></div>

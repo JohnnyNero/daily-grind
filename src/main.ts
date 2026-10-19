@@ -43,7 +43,6 @@ function save(sim: Sim): void {
 
 function play(sim: Sim): void {
   const canvas = el<HTMLCanvasElement>('view');
-  const topbar = el('topbar');
   const renderer = new Renderer(canvas, sim);
   let speed = 1;
   let resetting = false;
@@ -69,10 +68,10 @@ function play(sim: Sim): void {
     renderer.overlay = mode;
   };
 
-  /** The part of the screen between the top bar and whatever's along the bottom. */
+  /** The part of the screen between the chips along the top and the dock along the bottom. */
   function viewBox(): { x: number; y: number; w: number; h: number } {
-    const top = topbar.getBoundingClientRect().bottom + (build.active ? el('build-zoom').offsetHeight + 8 : 0);
-    const bottom = build.active ? el('buildbar').offsetHeight : el('tabbar').offsetHeight;
+    const top = (build.active ? el('build-zoom') : el('overlays')).getBoundingClientRect().bottom;
+    const bottom = el('dock').offsetHeight + (build.active ? el('buildbar').offsetHeight : 0);
     return { x: 8, y: top + 8, w: window.innerWidth - 16, h: window.innerHeight - top - bottom - 16 };
   }
   function fitView(): void {
