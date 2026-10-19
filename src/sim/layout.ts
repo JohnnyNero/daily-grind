@@ -3,9 +3,10 @@
 // state whenever the building changes, never saved.
 //
 // A node is a cell someone can stand in: empty, with a wall under it (or the ground) and
-// room for their head above, or a stair (stairs are against the back wall, so people on
-// them don't need headroom). People walk sideways between nodes, and climb corner to
-// corner onto or off a stair. A door's bottom cell is a node, but belongs to no room.
+// room for their head above, or a stair. Stairs face away from you, up a single column, so
+// people climbing them don't need headroom; they walk sideways between nodes, and straight
+// up or down a flight (and off its top onto the floor above). A door's bottom cell is a
+// node, but belongs to no room.
 //
 // Rooms are found from the air: each patch of empty cells closed in by walls, windows and
 // doors is a room. A patch that reaches outside the plot is outdoors. The shared parts of
@@ -121,7 +122,7 @@ export class Layout {
     return isDoor(this.cell(x, s));
   }
 
-  /** Every node one step from n: along the floor, onto or off a stair, or along the pavement. */
+  /** Every node one step from n: along the floor, up or down the stairs, or along the pavement. */
   neighbours(n: number): number[] {
     const [x, s] = this.xs(n);
     const out: number[] = [];
@@ -129,14 +130,10 @@ export class Layout {
       const nx = x + dx;
       if (nx < 0 || nx >= this.w) continue;
       if (this.standable[n + dx]) out.push(n + dx);
-      // Corner to corner, when either end is a stair.
-      for (const ds of [-1, 1]) {
-        const ns = s + ds;
-        if (ns < 0 || ns >= this.rows) continue;
-        const m = this.node(nx, ns);
-        if (this.standable[m] && (this.stair(x, s) || this.stair(nx, ns))) out.push(m);
-      }
     }
+    // Up from a stair (to the next one, or off the top), or down onto one.
+    if (this.stair(x, s) && s + 1 < this.rows && this.standable[n + this.w]) out.push(n + this.w);
+    if (s > 0 && this.stair(x, s - 1) && this.standable[n - this.w]) out.push(n - this.w);
     if (this.pavement) {
       const [a, b] = this.pavement;
       if (n === a) out.push(b);

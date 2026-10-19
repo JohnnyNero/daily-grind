@@ -231,7 +231,8 @@ function talk(sim: Sim, a: Pawn, b: Pawn): void {
       return;
     case 'moan': {
       a.doing = `Moaning about the landlord to ${bName}`;
-      const worst = a.life!.memories.filter((m) => MEMORIES[m.id]?.gossip && MEMORIES[m.id].value < 0).sort((x, y) => MEMORIES[x.id].value - MEMORIES[y.id].value)[0];
+      // Only things they lived or heard first-hand go round: a moan travels two tellings at most, like any gossip.
+      const worst = a.life!.memories.filter((m) => MEMORIES[m.id]?.gossip && MEMORIES[m.id].value < 0 && (m.hops ?? 0) < 2).sort((x, y) => MEMORIES[x.id].value - MEMORIES[y.id].value)[0];
       if (worst && !b.life!.memories.some((m) => m.id === worst.id)) b.life!.memories.push({ id: worst.id, at: st.tick, from: a.id, hops: (worst.hops ?? 0) + 1 });
       if (random(st) < 0.15 && !recently(sim, 'Is it just me')) post(sim, a, 'Is it just me or is this building getting worse');
       return;

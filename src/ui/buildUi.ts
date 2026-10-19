@@ -7,14 +7,17 @@
 
 import {
   buildRoom,
+  FLIGHT,
   cellProblem,
   furnitureAt,
   furnitureProblem,
   insulate,
   insulateProblem,
   placeCell,
+  placeStairs,
   removeCell,
   removeProblem,
+  stairsProblem,
   type BuildParts,
 } from '../sim/build';
 import { FURNITURE, furnitureDef, type FurnitureGroup } from '../sim/defs';
@@ -39,7 +42,7 @@ const TOOLS: Record<Tool, { name: string; hint: string }> = {
   door: { name: 'Door', hint: 'Tap the bottom of a two-cell gap in a wall: an inside door, between rooms of one flat.' },
   flatDoor: { name: 'Flat door', hint: "Tap the bottom of a two-cell gap: a flat's front door. Everything behind it is that flat." },
   entrance: { name: 'Street door', hint: 'Tap the bottom of a two-cell gap on the ground: the way in from the street.' },
-  stair: { name: 'Stairs', hint: 'Draw stairs corner to corner, one cell up for each one across.' },
+  stair: { name: 'Stairs', hint: 'Tap a floor: a flight goes straight up from it, one cell wide, through the floor above.' },
   demolish: { name: 'Knock down', hint: 'Tap or drag to take out walls, windows, doors and stairs. Tap furniture to sell it.' },
 };
 
@@ -58,7 +61,7 @@ const GROUPS: { id: string; name: string; tools?: Tool[]; furniture?: FurnitureG
 ];
 
 /** Tools you paint with: drag across cells and each one gets done. */
-const PAINT: readonly Tool[] = ['wall', 'window', 'stair', 'insulate', 'demolish'];
+const PAINT: readonly Tool[] = ['wall', 'window', 'insulate', 'demolish'];
 
 const MAX_UNDO = 50;
 /** How near (in screen pixels) a drag has to start to the selected piece to move it, not the view. */
@@ -597,6 +600,9 @@ export class BuildUi {
       case 'insulate':
         run(() => insulate(st, key(x, s)));
         break;
+      case 'stair':
+        if (single) run(() => placeStairs(st, x, this.stairFoot(x, s)));
+        break;
       default: {
         // A door goes in by its bottom cell: tapping the top half of a gap means the cell below.
         const kind = this.tool as CellKind;
@@ -688,6 +694,16 @@ export class BuildUi {
     return { x, s };
   }
 
+  /** Where a flight starts for a tapped cell: the floor at or just under the tap. */
+  private stairFoot(x: number, s: number): number {
+    const st = this.draft;
+    const at = (r: number) => st.cells[key(x, r)];
+    if (isSolid(at(s))) return s + 1;
+    let foot = s;
+    for (let i = 0; i < FLIGHT - 1 && foot > 0 && !isSolid(at(foot - 1)) && at(foot - 1) !== 'stair'; i++) foot--;
+    return foot;
+  }
+
   private markRoom(a: Cell, b: Cell): void {
     const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
     const [s0, s1] = [Math.min(a.s, b.s), Math.max(a.s, b.s)];
@@ -717,6 +733,9 @@ export class BuildUi {
         const ok = furnitureProblem(this.sim.state, def, spot.x, spot.s, moving?.id) === null && furnitureProblem(st, def, spot.x, spot.s, moving?.id) === null;
         b.ghost = { def, ...spot, flip: moving ? !!moving.flip : this.flip, ok };
       }
+    } else if (this.tool === 'stair') {
+      const foot = this.stairFoot(cell.x, cell.s);
+      b.marks.push({ x: cell.x, s: foot, w: 1, h: FLIGHT, ok: stairsProblem(st, cell.x, foot) === null });
     } else if (this.tool === 'insulate') {
       b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: insulateProblem(st, key(cell.x, cell.s)) === null });
     } else if (this.tool === 'demolish') {
@@ -793,7 +812,8 @@ function toolIcon(t: Tool): HTMLCanvasElement {
       r(15, 6, 2, 17, t === 'flatDoor' ? '#2f6b5a' : t === 'entrance' ? '#23395b' : '#b07a4a');
       break;
     case 'stair':
-      for (let i = 0; i < 6; i++) r(4 + i * 4, 20 - i * 3, 4, 3 + i * 3, '#835a3c');
+      // A flight climbing away: treads narrowing as they go up.
+      for (let i = 0; i < 6; i++) r(9 + i, 20 - i * 3, 14 - i * 2, 3, i % 2 ? '#835a3c' : '#6d4a31');
       break;
     case 'insulate':
       r(11, 2, 10, 21, '#d6c9b2');
@@ -815,5 +835,6 @@ function toolPrice(t: Tool): string {
   if (t === 'room') return `${pounds(CELL_PRICE.wall)} a cell`;
   if (t === 'demolish') return `${pounds(DEMOLISH_PRICE)} a cell`;
   if (t === 'insulate') return `${pounds(INSULATE_PRICE)} a cell`;
-  return `${pounds(CELL_PRICE[t])}${t === 'wall' || t === 'stair' || t === 'window' ? ' a cell' : ''}`;
+  if (t === 'stair') return `${pounds(CELL_PRICE.stair * FLIGHT)} a flight`;
+  return `${pounds(CELL_PRICE[t])}${t === 'wall' || t === 'window' ? ' a cell' : ''}`;
 }

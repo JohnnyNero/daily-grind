@@ -10,7 +10,7 @@ import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, type CellKind, type Pawn } from '../sim/state';
 import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, edge, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
-import { stairDir, type BuildParts } from '../sim/build';
+import { flightOf, type BuildParts } from '../sim/build';
 import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
 
 const SKY_ROWS = 4;
@@ -386,7 +386,7 @@ export class Renderer {
    * One cell of the building. Walls are brick where they face the outside and plaster
    * inside, with floorboards on top where there's a room over them. A window is a line of
    * glass in its cell; a doorway shows the rooms either side (the door itself is drawn
-   * every frame, so it can swing); a stair is a pair of steps.
+   * every frame, so it can swing); a stair is part of a flight climbing away from you.
    */
   private drawCell(ctx: CanvasRenderingContext2D, lay: Layout, colours: (string | null)[], x: number, s: number, kind: CellKind): void {
     const X = x * TILE;
@@ -401,7 +401,7 @@ export class Renderer {
       return;
     }
     if (kind === 'stair') {
-      this.drawStair(ctx, x, s, stairDir(this.sim.state, x, s));
+      this.drawStair(ctx, x, s);
       return;
     }
     const outer = this.facesOutside(lay, x, s);
@@ -435,15 +435,25 @@ export class Renderer {
     if (lay.air(x, s + 1) && lay.roomOf[lay.node(x, s + 1)] !== -1 && !lay.rooms[lay.roomOf[lay.node(x, s + 1)]].outdoor) this.drawFloorTop(ctx, x, Y);
   }
 
-  /** A stair cell: two steps rising the way the flight goes. */
-  private drawStair(ctx: CanvasRenderingContext2D, x: number, s: number, dir: 1 | -1): void {
+  /**
+   * A stair cell, part of a flight climbing straight away from you: treads that get
+   * narrower and darker the higher they go, between two side rails.
+   */
+  private drawStair(ctx: CanvasRenderingContext2D, x: number, s: number): void {
     const X = x * TILE;
-    const F = floorY(s);
-    for (let i = 0; i < 2; i++) {
-      const sx = dir === 1 ? X + i * 8 : X + TILE - (i + 1) * 8;
-      const top = F - i * 8 - 4;
-      box(ctx, sx, top, 9, F + 6 - top, i % 2 ? PAL.wood : dark(PAL.wood, 0.08));
+    const rows = flightOf(this.sim.state, x, s);
+    const height = rows.length * 4;
+    const from = (s - rows[0]) * 4;
+    for (let j = 0; j < 4; j++) {
+      const k = from + j;
+      const t = k / Math.max(1, height - 1);
+      const inset = 1 + Math.round(t * 3);
+      const y = floorY(s) - (j + 1) * 4;
+      rect(ctx, X + inset, y, TILE - inset * 2, 4, dark(PAL.wood, 0.1 + t * 0.35));
+      rect(ctx, X + inset, y, TILE - inset * 2, 1, light(PAL.wood, 0.25 - t * 0.2));
     }
+    rect(ctx, X, floorY(s) - TILE, 1, TILE, edge(PAL.wood));
+    rect(ctx, X + TILE - 1, floorY(s) - TILE, 1, TILE, edge(PAL.wood));
   }
 
   // ------------------------------------------------------------------ doors
@@ -706,8 +716,7 @@ export class Renderer {
     } else if (isDoor(part.cell)) {
       ctx.fillRect(X + 7, floorY(p.s) - DOOR_H, 2, DOOR_H);
     } else if (part.cell === 'stair') {
-      const dir = stairDir(this.sim.state, p.x, p.s) === 1 || (this.build.active && this.sim.state.works.plan?.cells[key(p.x + 1, p.s + 1)] === 'stair') ? 1 : -1;
-      for (let i = 0; i < 2; i++) ctx.fillRect(dir === 1 ? X + i * 8 : X + TILE - (i + 1) * 8, floorY(p.s) - i * 8 - 4, 8, i * 8 + 6);
+      for (let j = 0; j < 4; j++) ctx.fillRect(X + 2, floorY(p.s) - (j + 1) * 4, TILE - 4, 3);
     } else ctx.fillRect(X, top, TILE, TILE);
     outline(X, top, TILE, rows * TILE);
   }

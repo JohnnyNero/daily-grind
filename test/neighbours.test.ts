@@ -51,8 +51,13 @@ describe('neighbours', () => {
 
   it('a musician keeps the light sleeper above awake, and they go off each other', () => {
     const { sim, sleeper, musician } = noisyNeighbours(false);
-    sim.run(10 * TICKS_PER_DAY);
-    expect(sleeper.life!.memories.some((m) => m.id === 'keptAwake')).toBe(true);
+    // Being kept awake is remembered for a night, so watch for it as the days go by.
+    let keptAwake = false;
+    for (let h = 0; h < 10 * 24; h++) {
+      sim.run(TICKS_PER_HOUR);
+      keptAwake ||= sleeper.life!.memories.some((m) => m.id === 'keptAwake');
+    }
+    expect(keptAwake).toBe(true);
     expect(opinion(sim, sleeper, musician)).toBeLessThan(0);
     expect(sim.state.chat.some((m) => m.text.startsWith('Some of us are trying to sleep'))).toBe(true);
   });

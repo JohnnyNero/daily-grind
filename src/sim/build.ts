@@ -4,7 +4,8 @@
 // The building is cells. Walls go anywhere, as long as they're held up: every wall,
 // window, door and stair has to connect to the ground, and a ledge can stick out at most
 // MAX_OVERHANG cells from whatever's holding it. Windows fill a one-cell gap and doors a
-// two-cell one (or replace the wall that's there). Stairs are drawn a cell at a time.
+// two-cell one (or replace the wall that's there). Stairs face away from you, up a single
+// column: a flight is FLIGHT cells tall, from one floor up through the floor above.
 
 import { furnitureDef } from './defs';
 import { DOOR_ROWS, MAX_ROWS, isDoor, isSolid, key, type BuildPartsData, type CellKind, type Furniture, type State } from './state';
@@ -43,20 +44,12 @@ export function taken(st: State, x: number, s: number): boolean {
   return cellOf(st, x, s) !== undefined || isDoorTop(st, x, s);
 }
 
-/** Which way a stair climbs: 1 up to the right, -1 up to the left (from the stairs next to it). */
-export function stairDir(st: State, x: number, s: number): 1 | -1 {
-  const at = (dx: number, ds: number) => cellOf(st, x + dx, s + ds) === 'stair';
-  if (at(1, 1) || at(-1, -1)) return 1;
-  if (at(-1, 1) || at(1, -1)) return -1;
-  return 1;
-}
-
 // ------------------------------------------------------------------ holding things up
 
 /**
  * The first cell that isn't held up, or null if everything is. Each cell's distance from
  * support is worked out from the ground: straight up or down costs nothing, each step
- * sideways costs one, and stairs hold each other up corner to corner.
+ * sideways costs one.
  */
 export function unsupported(cells: Record<string, CellKind>): string | null {
   const dist = new Map<string, number>();
@@ -81,12 +74,10 @@ export function unsupported(cells: Record<string, CellKind>): string | null {
     const d = dist.get(k)!;
     const [x, s] = k.split(',').map(Number);
     const steps: [number, number, number][] = [[0, 1, 0], [0, -1, 0], [1, 0, 1], [-1, 0, 1]];
-    if (occupied.get(k) === 'stair') steps.push([1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0]);
     for (const [dx, ds, cost] of steps) {
       const n = key(x + dx, s + ds);
       const kind = occupied.get(n);
       if (kind === undefined) continue;
-      if (dx !== 0 && ds !== 0 && kind !== 'stair') continue;
       const nd = d + cost;
       if (nd > MAX_OVERHANG || (dist.get(n) ?? Infinity) <= nd) continue;
       dist.set(n, nd);
@@ -162,8 +153,9 @@ export function removeProblem(st: State, x: number, s: number): string | null {
   if (!inPlot(st, x)) return 'Outside your plot';
   const at = isDoorTop(st, x, s) ? s - 1 : s;
   if (cellOf(st, x, at) === undefined) return 'Nothing to knock down there';
-  if (standingOn(st, x, s)) return 'Furniture is standing on it';
-  if (!stillHeld(st, (cells) => delete cells[key(x, at)])) return "It's holding other bits up";
+  const rows = cellOf(st, x, at) === 'stair' ? flightOf(st, x, at) : [at];
+  if (rows.some((r) => standingOn(st, x, r))) return 'Furniture is standing on it';
+  if (!stillHeld(st, (cells) => rows.forEach((r) => delete cells[key(x, r)]))) return "It's holding other bits up";
   return null;
 }
 
@@ -171,9 +163,58 @@ export function removeCell(st: State, x: number, s: number): string | null {
   const problem = removeProblem(st, x, s);
   if (problem) return problem;
   const at = isDoorTop(st, x, s) ? s - 1 : s;
-  delete st.cells[key(x, at)];
-  delete st.insulated[key(x, at)];
+  // A stair takes the whole flight with it.
+  for (const r of cellOf(st, x, at) === 'stair' ? flightOf(st, x, at) : [at]) {
+    delete st.cells[key(x, r)];
+    delete st.insulated[key(x, r)];
+  }
   return null;
+}
+
+/** How tall a flight of stairs is: one floor (three rows of room and the floor above). */
+export const FLIGHT = 4;
+
+/**
+ * Why a flight of stairs can't go up from this cell: it climbs FLIGHT cells straight up
+ * (away from you), through the floor above, which it replaces. It needs a floor (or the top
+ * of another flight) to start from, and room for itself.
+ */
+export function stairsProblem(st: State, x: number, s: number): string | null {
+  if (!inPlot(st, x) || s < 0 || s + FLIGHT > MAX_ROWS) return 'Outside your plot';
+  const below = cellOf(st, x, s - 1);
+  if (s > 0 && !isSolid(below) && below !== 'stair') return 'Stairs need a floor to start from';
+  for (let r = 0; r < FLIGHT; r++) {
+    const c = cellOf(st, x, s + r);
+    if (isDoor(c) || isDoorTop(st, x, s + r)) return 'A door is in the way';
+    if (c === 'stair') return 'Stairs are already there';
+    // The top cell can cut through a floor; the rest need clear space.
+    if (c !== undefined && r < FLIGHT - 1) return 'A wall is in the way';
+    if (furnitureAt(st, x, s + r)) return 'Furniture in the way';
+  }
+  if (standingOn(st, x, s + FLIGHT - 1)) return 'Furniture is standing where the stairs come up';
+  if (!stillHeld(st, (cells) => {
+    for (let r = 0; r < FLIGHT; r++) cells[key(x, s + r)] = 'stair';
+  })) return NOT_HELD;
+  return null;
+}
+
+export function placeStairs(st: State, x: number, s: number): string | null {
+  const problem = stairsProblem(st, x, s);
+  if (problem) return problem;
+  for (let r = 0; r < FLIGHT; r++) {
+    st.cells[key(x, s + r)] = 'stair';
+    delete st.insulated[key(x, s + r)];
+  }
+  return null;
+}
+
+/** The cells of the flight of stairs a stair cell is part of. */
+export function flightOf(st: State, x: number, s: number): number[] {
+  let bottom = s;
+  while (cellOf(st, x, bottom - 1) === 'stair') bottom--;
+  const rows: number[] = [];
+  for (let r = bottom; cellOf(st, x, r) === 'stair'; r++) rows.push(r);
+  return rows;
 }
 
 /**

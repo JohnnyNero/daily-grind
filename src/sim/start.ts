@@ -82,8 +82,8 @@ function buildShell(st: State): void {
     column(20, s, 'door');
     column(24, s, 'door');
   }
-  // Up the stairwell: right from the lobby to the first floor, then back left to the second.
-  for (const [dx, row] of [[9, 0], [10, 1], [11, 2], [12, 3], [11, 5], [10, 6], [9, 7]]) set(dx, row, 'stair');
+  // Up the stairwell: a flight from the lobby to the first floor, and another on to the second.
+  for (const [dx, from] of [[9, 0], [11, STOREY]]) for (let r = 0; r < STOREY; r++) set(dx, from + r, 'stair');
 
   const put = (def: string, dx: number, s: number, r = 0, flip = false) => {
     const f = placeFurniture(st, def, at(dx), s * STOREY + r, flip);

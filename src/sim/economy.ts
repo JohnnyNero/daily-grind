@@ -46,7 +46,7 @@ export const CELL_PRICE: Record<CellKind, number> = {
   door: 120 * POUND,
   flatDoor: 250 * POUND,
   entrance: 400 * POUND,
-  stair: 150 * POUND,
+  stair: 200 * POUND,
 };
 export const DEMOLISH_PRICE = 10 * POUND;
 export const INSULATE_PRICE = 40 * POUND;

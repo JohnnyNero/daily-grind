@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildRoom, furnitureProblem, placeCell, placeFurniture, removeCell, restore, snapshot, unsupported } from '../src/sim/build';
+import { buildRoom, furnitureProblem, placeCell, placeFurniture, placeStairs, removeCell, restore, snapshot, stairsProblem, unsupported } from '../src/sim/build';
+import { key } from '../src/sim/state';
 import { findPath } from '../src/sim/layout';
 import { Sim } from '../src/sim/sim';
 
@@ -105,15 +106,33 @@ describe('building', () => {
     let lay = sim.layout;
     const inside = lay.roomOf[lay.node(x0 + 10, 12)];
     expect(lay.rooms[inside].outdoor).toBe(false);
-    // A hole in the landing ceiling, and stairs up through it.
-    // (Stairs are drawn from the top down, so each hangs off the one above.)
-    expect(removeCell(st, x0 + 11, 11)).toBeNull();
-    expect(placeCell(st, x0 + 11, 11, 'stair')).toBeNull();
-    expect(placeCell(st, x0 + 10, 10, 'stair')).toBeNull();
-    expect(placeCell(st, x0 + 9, 9, 'stair')).toBeNull();
+    // A flight up from the top landing, through the roof into the box.
+    expect(placeStairs(st, x0 + 10, 8)).toBeNull();
     sim.changed();
     lay = sim.layout;
     expect(findPath(lay, lay.node(x0 + 8, 8), lay.node(x0 + 10, 12), { all: true })).not.toBeNull();
+  });
+
+  it('puts a flight of stairs up one column, from a floor through the floor above', () => {
+    const sim = Sim.create(1);
+    const st = sim.state;
+    const { x0 } = st.plot;
+    // Up from the bottom of the stairwell (row 0) through the first floor (row 3).
+    expect(placeStairs(st, x0 + 12, 0)).toBeNull();
+    for (let r = 0; r < 4; r++) expect(st.cells[key(x0 + 12, r)]).toBe('stair');
+    // Not from mid-air, not through a wall, not twice.
+    expect(stairsProblem(st, x0 + 3, 1)).toMatch(/floor to start from/);
+    expect(stairsProblem(st, x0 + 7, 0)).toMatch(/door|wall/i);
+    expect(stairsProblem(st, x0 + 12, 0)).toMatch(/already/);
+    expect(stairsProblem(st, x0 + 2, 4)).toMatch(/furniture/i);
+    sim.changed();
+    const lay = sim.layout;
+    // Someone can climb it, up the column and off the top onto the landing.
+    expect(findPath(lay, lay.node(x0 + 10, 0), lay.node(x0 + 12, 2), { all: true })).not.toBeNull();
+    expect(lay.neighbours(lay.node(x0 + 12, 3))).toContain(lay.node(x0 + 12, 4));
+    // Knocking down any of it takes the whole flight.
+    expect(removeCell(st, x0 + 12, 2)).toBeNull();
+    for (let r = 0; r < 4; r++) expect(st.cells[key(x0 + 12, r)]).toBeUndefined();
   });
 
   it('undoes', () => {
