@@ -1,9 +1,9 @@
 // Changing the building. Every change goes through here so it's checked the same way
 // (each check returns a reason in words, or null if it's fine) and can be undone.
 //
-// The building is cells. Walls go anywhere, as long as they're held up: every wall,
-// window, door and stair has to connect to the ground, and a ledge can stick out at most
-// MAX_OVERHANG cells from whatever's holding it. Windows fill a one-cell gap and doors a
+// The building is cells. Walls go anywhere, as long as they're held up: a cell standing on
+// something that's held up (or on the ground) is held up, and from there a ledge can go
+// MAX_OVERHANG cells sideways; the next one along isn't. Windows fill a one-cell gap and doors a
 // two-cell one (or replace the wall that's there). Stairs face away from you, up a single
 // column: a flight is FLIGHT cells tall, from one floor up through the floor above.
 
@@ -47,9 +47,10 @@ export function taken(st: State, x: number, s: number): boolean {
 // ------------------------------------------------------------------ holding things up
 
 /**
- * The first cell that isn't held up, or null if everything is. Each cell's distance from
- * support is worked out from the ground: straight up or down costs nothing, each step
- * sideways costs one.
+ * The first cell that isn't held up, or null if everything is. A cell on the ground, or
+ * standing on a cell that's held up, is fully held up (0); each step sideways from there
+ * counts one, and so does hanging under a cell (it keeps that cell's count). Up to
+ * MAX_OVERHANG is held up.
  */
 export function unsupported(cells: Record<string, CellKind>): string | null {
   return unsupportedCells(cells)[0] ?? null;
@@ -73,17 +74,18 @@ export function unsupportedCells(cells: Record<string, CellKind>): string[] {
       deque.push(k);
     }
   }
-  // 0-1 breadth-first: free steps go to the front of the queue, sideways ones to the back.
+  // Distances only ever go down as cells are re-queued, so this settles.
   for (let i = 0; i < deque.length; i++) {
     const k = deque[i];
     const d = dist.get(k)!;
     const [x, s] = k.split(',').map(Number);
-    const steps: [number, number, number][] = [[0, 1, 0], [0, -1, 0], [1, 0, 1], [-1, 0, 1]];
-    for (const [dx, ds, cost] of steps) {
+    const steps: [number, number][] = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+    for (const [dx, ds] of steps) {
       const n = key(x + dx, s + ds);
       const kind = occupied.get(n);
       if (kind === undefined) continue;
-      const nd = d + cost;
+      // Standing on it: fully held. Hanging under it: as held as it is. Beside it: one more.
+      const nd = ds === 1 ? 0 : ds === -1 ? d : d + 1;
       if (nd > MAX_OVERHANG || (dist.get(n) ?? Infinity) <= nd) continue;
       dist.set(n, nd);
       // Re-queuing at the end is fine at this size: distances only ever go down.

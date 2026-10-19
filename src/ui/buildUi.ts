@@ -617,6 +617,8 @@ export class BuildUi {
     switch (this.tool) {
       case 'demolish':
         run(() => removeCell(st, x, s, false));
+        // Rubbing out across empty cells is fine: only a tap on nothing says so.
+        if (!single) problem = null;
         break;
       case 'insulate':
         run(() => insulate(st, key(x, s)));

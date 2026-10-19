@@ -71,6 +71,17 @@ describe('building', () => {
     expect(removeCell(st, x0 + 7, 13)).toMatch(/holding other bits up/);
   });
 
+  it('counts a ledge from the post it comes off, wherever the post stands', () => {
+    const sim = Sim.create(1);
+    const st = sim.state;
+    const { x0 } = st.plot;
+    // A post on the roof, part-way between the walls under it: standing on the roof, it's held.
+    for (let s = 12; s <= 14; s++) expect(placeCell(st, x0 + 16, s, 'wall')).toBeNull();
+    // Four along from it is fine; the fifth isn't.
+    for (let i = 1; i <= 4; i++) expect(placeCell(st, x0 + 16 + i, 14, 'wall'), `cell ${i}`).toBeNull();
+    expect(placeCell(st, x0 + 21, 14, 'wall')).toMatch(/holding it up/);
+  });
+
   it('puts doors and windows in gaps and walls, and a door needs a floor', () => {
     const sim = Sim.create(1);
     const st = sim.state;
