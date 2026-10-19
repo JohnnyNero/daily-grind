@@ -3,17 +3,13 @@
 
 import type { Sim } from './sim';
 import { TICKS_PER_MINUTE } from './state';
+import { MAX_TICKS_PER_FRAME, NIGHT_BOOST, QUIET_NIGHT_FROM, QUIET_NIGHT_TO, SECONDS_PER_GAME_MINUTE } from './tuning';
 
-/** Real seconds per game minute at 1x (a day is 24 * 60 of these: about 21 minutes). */
-export const SECONDS_PER_GAME_MINUTE = 0.9;
+// The speeds are in tuning.ts.
+export { MAX_TICKS_PER_FRAME, NIGHT_BOOST, SECONDS_PER_GAME_MINUTE } from './tuning';
 export const BASE_TICKS_PER_SECOND = TICKS_PER_MINUTE / SECONDS_PER_GAME_MINUTE;
-/** A quiet night runs this many times faster than the speed you picked. */
-export const NIGHT_BOOST = 4;
-/** Night is from this hour to this one. */
-const NIGHT_FROM = 23 * 60;
-const NIGHT_TO = 6 * 60;
-/** Never simulate more than this per frame, so a slow phone can't spiral (about 5ms here; the fastest real frame needs under 600). */
-export const MAX_TICKS_PER_FRAME = 1500;
+const NIGHT_FROM = QUIET_NIGHT_FROM * 60;
+const NIGHT_TO = QUIET_NIGHT_TO * 60;
 
 /** Is it the dead of night, with every tenant asleep or out, and nothing going on that wants you? */
 export function quietNight(sim: Sim): boolean {

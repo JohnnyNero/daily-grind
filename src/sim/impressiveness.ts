@@ -8,6 +8,8 @@
 import { furnitureDef } from './defs';
 import type { Sim } from './sim';
 import { warmthOf } from './environment';
+import { curve } from './stat';
+import { IMPRESSIVE, TIERS, WARMTH } from './tuning';
 
 export type FactorId = 'space' | 'furnishing' | 'basics' | 'light' | 'decor' | 'clean' | 'warmth' | 'quiet';
 
@@ -22,15 +24,8 @@ export const FACTOR_NAMES: Record<FactorId, string> = {
   quiet: 'Quiet',
 };
 
-export const TIERS: readonly { min: number; name: string }[] = [
-  { min: 90, name: 'Impressive' },
-  { min: 78, name: 'Smart' },
-  { min: 65, name: 'Nice' },
-  { min: 50, name: 'Decent' },
-  { min: 35, name: 'Plain' },
-  { min: 20, name: 'Shabby' },
-  { min: 0, name: 'Grim' },
-];
+// The tiers and the weights are in tuning.ts.
+export { TIERS } from './tuning';
 
 export interface FlatScore {
   score: number;
@@ -41,8 +36,6 @@ export interface FlatScore {
   perPerson: number;
   has: { bed: boolean; toilet: boolean; wash: boolean; kitchen: boolean };
 }
-
-const MEAN_SHARE = 0.65;
 
 const cache = new WeakMap<Sim, { key: string; scores: Map<string, FlatScore> }>();
 
@@ -100,23 +93,24 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
   }
   const lamps = defs.filter((d) => d.id === 'lamp').length;
   const value = defs.reduce((n, d) => n + d.value, 0);
+  const I = IMPRESSIVE;
   const factors: Record<FactorId, number> = {
-    space: curve(perPerson, [[3, 15], [6, 45], [10, 70], [16, 90], [24, 100]]),
-    furnishing: Math.min(100, (value / Math.max(1, nodes.length)) * 4.5),
+    space: curve(perPerson, I.space),
+    furnishing: Math.min(100, (value / Math.max(1, nodes.length)) * I.furnishing),
     basics: (Number(has.bed) + Number(has.toilet) + Number(has.wash) + Number(has.kitchen)) * 25,
-    light: Math.min(100, 15 + windows * 30 + lamps * 20),
-    decor: Math.min(100, defs.filter((d) => d.decor).length * 20),
+    light: Math.min(100, I.light.base + windows * I.light.window + lamps * I.light.lamp),
+    decor: Math.min(100, defs.filter((d) => d.decor).length * I.decor),
     clean: 100 * (1 - (sim.state.dirt[flatId] ?? 0)),
-    warmth: 100 * warmthOf(sim.state.temps[flatId] ?? 18),
-    quiet: Math.max(0, 100 - (sim.state.noiseAvg[flatId] ?? 0) * 30),
+    warmth: 100 * warmthOf(sim.state.temps[flatId] ?? WARMTH.start),
+    quiet: Math.max(0, 100 - (sim.state.noiseAvg[flatId] ?? 0) * I.quietPerNoise),
   };
   const values = Object.values(factors);
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
-  let score = MEAN_SHARE * mean + (1 - MEAN_SHARE) * Math.min(...values);
-  const ceiling = factors.space * 1.4;
-  if (score > ceiling) score = ceiling + (score - ceiling) * 0.25;
+  let score = I.meanShare * mean + (1 - I.meanShare) * Math.min(...values);
+  const ceiling = factors.space * I.spaceCeiling;
+  if (score > ceiling) score = ceiling + (score - ceiling) * I.overCeiling;
   // Missing the basics caps it too: a gutted flat is grim however quiet it is.
-  score = Math.min(score, 19 + factors.basics * 0.6);
+  score = Math.min(score, I.basicsCapBase + factors.basics * I.basicsCapShare);
   score = Math.round(Math.max(0, Math.min(100, score)));
   const weakest = (Object.keys(factors) as FactorId[]).reduce((a, b) => (factors[b] < factors[a] ? b : a));
   return { score, tier: tierOf(score), factors, weakest, perPerson, has };
@@ -124,17 +118,6 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
 
 export function tierOf(score: number): string {
   return TIERS.find((t) => score >= t.min)!.name;
-}
-
-/** Straight lines between points. */
-function curve(x: number, points: [number, number][]): number {
-  if (x <= points[0][0]) return points[0][1] * (x / points[0][0]);
-  for (let i = 1; i < points.length; i++) {
-    const [x0, y0] = points[i - 1];
-    const [x1, y1] = points[i];
-    if (x <= x1) return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
-  }
-  return points[points.length - 1][1];
 }
 
 /** One line of what a flat needs: done or not, whether people won't live there without it, and the build group that has it. */

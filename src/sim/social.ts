@@ -18,35 +18,10 @@ import { MEMORIES, remember } from './thoughts';
 import { has } from './traits';
 import { maybeFight } from './events';
 import { tale } from './tales';
+import { GOSSIP, OPINION, REQUESTS, ROMANCE, SOCIAL, TALK } from './tuning';
 
-export interface SocialDef {
-  label: string;
-  value: number;
-  hours: number;
-  stack: number;
-}
-
-export const SOCIAL: Record<string, SocialDef> = {
-  chat: { label: 'Chats', value: 3, hours: 240, stack: 8 },
-  deepTalk: { label: 'Had a proper talk', value: 9, hours: 336, stack: 3 },
-  slight: { label: 'Was a bit off with me', value: -5, hours: 96, stack: 3 },
-  insult: { label: 'Said something nasty', value: -10, hours: 144, stack: 3 },
-  row: { label: 'Had a row', value: -15, hours: 192, stack: 2 },
-  flirt: { label: 'Flirted', value: 8, hours: 120, stack: 3 },
-  rebuffed: { label: 'Turned me down', value: -6, hours: 120, stack: 1 },
-  favour: { label: 'Did me a favour', value: 10, hours: 192, stack: 3 },
-  noise: { label: 'Keeps me up at night', value: -4, hours: 168, stack: 5 },
-  heardThings: { label: 'Heard things about them', value: -4, hours: 120, stack: 2 },
-  brokeUp: { label: 'Broke up with me', value: -25, hours: 336, stack: 1 },
-  fight: { label: 'Had a fight', value: -30, hours: 336, stack: 1 },
-  cheatedOn: { label: 'Went behind my back', value: -35, hours: 600, stack: 1 },
-  goodNight: { label: 'Threw a good night', value: 8, hours: 240, stack: 2 },
-};
-
-/** Each extra copy counts this much of the one before. */
-const STACK = 0.75;
-const PARTNER = 25;
-const EX = -10;
+// What each social memory is worth, and the odds of each kind of talk, are in tuning.ts.
+export { SOCIAL, type SocialDef } from './tuning';
 
 // ------------------------------------------------------------------ opinions
 
@@ -74,8 +49,8 @@ export function opinionParts(sim: Sim, a: Pawn, b: Pawn): OpinionPart[] {
   if (!life) return [];
   const now = sim.state.tick;
   const out: OpinionPart[] = [];
-  if (life.partner === b.id) out.push({ label: 'Partner', value: PARTNER });
-  if (life.exes?.includes(b.id)) out.push({ label: 'Ex', value: EX });
+  if (life.partner === b.id) out.push({ label: 'Partner', value: OPINION.partner });
+  if (life.exes?.includes(b.id)) out.push({ label: 'Ex', value: OPINION.ex });
   const groups = new Map<string, number[]>();
   for (const m of life.social) {
     if (m.about !== b.id) continue;
@@ -84,7 +59,7 @@ export function opinionParts(sim: Sim, a: Pawn, b: Pawn): OpinionPart[] {
     const age = (now - m.at) / (def.hours * TICKS_PER_HOUR);
     if (age >= 1) continue;
     // Fades out over the last third of its life.
-    const strength = age < 2 / 3 ? 1 : (1 - age) * 3;
+    const strength = age < OPINION.fadeFrom ? 1 : (1 - age) * 3;
     const list = groups.get(m.id) ?? [];
     list.push(strength);
     groups.set(m.id, list);
@@ -92,7 +67,7 @@ export function opinionParts(sim: Sim, a: Pawn, b: Pawn): OpinionPart[] {
   for (const [id, strengths] of groups) {
     const def = SOCIAL[id];
     const top = strengths.sort((x, y) => y - x).slice(0, def.stack);
-    const value = top.reduce((n, s, i) => n + def.value * s * STACK ** i, 0);
+    const value = top.reduce((n, s, i) => n + def.value * s * OPINION.stack ** i, 0);
     out.push({ label: top.length > 1 ? `${def.label} ×${top.length}` : def.label, value: Math.round(value * 10) / 10 });
   }
   return out;
@@ -124,20 +99,17 @@ export function relationships(sim: Sim, p: Pawn): { other: Pawn; opinion: number
 
 // ------------------------------------------------------------------ meeting
 
-/** Minutes between someone's conversations. */
-const TALK_GAP = 25;
-
 /** Awake, around, and not busy: sitting down counts as free (you can talk on the sofa). */
 function free(p: Pawn, tick: number): boolean {
   const life = p.life;
   if (!life || life.away || life.leaving || p.pose === 'sleep' || life.breakState) return false;
   if (life.using && life.using.until !== 0 && p.pose !== 'sit') return false;
-  return !life.lastTalk || tick - life.lastTalk > TALK_GAP * TICKS_PER_MINUTE;
+  return !life.lastTalk || tick - life.lastTalk > TALK.gapMinutes * TICKS_PER_MINUTE;
 }
 
 /** Same room (or both on the stairs and landings), close enough to talk. */
 function canTalk(sim: Sim, a: Pawn, b: Pawn): boolean {
-  if (Math.abs(a.s - b.s) > 0.1 || Math.abs(a.x - b.x) > 3) return false;
+  if (Math.abs(a.s - b.s) > 0.1 || Math.abs(a.x - b.x) > TALK.reach) return false;
   const lay = sim.layout;
   const ra = lay.roomOf[lay.node(Math.round(a.x), Math.round(a.s))];
   const rb = lay.roomOf[lay.node(Math.round(b.x), Math.round(b.s))];
@@ -150,7 +122,7 @@ export function socialMinute(sim: Sim): void {
   const st = sim.state;
   const people = tenants(sim).filter((p) => free(p, st.tick));
   for (const a of people) {
-    if (!free(a, st.tick) || random(st) > 1 / 6) continue;
+    if (!free(a, st.tick) || random(st) > TALK.chance) continue;
     const near = people.filter((b) => b !== a && free(b, st.tick) && canTalk(sim, a, b));
     if (near.length === 0) continue;
     talk(sim, a, pick(st, near));
@@ -173,19 +145,20 @@ function weights(sim: Sim, a: Pawn, b: Pawn): [Kind, number][] {
   let neg = (op < 0 ? 1 + -op / 25 : Math.max(0.15, 1 - op / 60)) * (1.2 - chem);
   let pos = (1 + Math.max(0, op) / 40) * (0.8 + chem);
   if (friendly) {
-    pos *= 1.5;
-    neg *= 0.4;
+    pos *= TALK.friendlyPos;
+    neg *= TALK.friendlyNeg;
   }
+  const W = TALK.weights;
   const canFlirt = single(a) && single(b) && !la.exes?.includes(b.id) && la.flat !== b.life!.flat;
   return [
-    ['chat', 1],
-    ['deepTalk', 0.12 * pos * (op > 10 ? 1.5 : 0.5)],
-    ['slight', 0.05 * neg],
-    ['insult', 0.015 * neg * (op < -20 ? 2 : 1)],
-    ['flirt', canFlirt ? 0.12 * Math.max(0, chem + 0.2) * (op >= 10 ? 1 : 0.2) : 0],
-    ['gossip', gossipFor(sim, a, b) ? 0.35 * (has(la, 'busybody') ? 3 : 1) : 0],
-    ['moan', la.liking < 40 ? 0.25 * (has(la, 'complainer') ? 2 : 1) : 0],
-    ['favour', (has(la, 'handy') || friendly) && op > 0 ? 0.06 : 0],
+    ['chat', W.chat],
+    ['deepTalk', W.deepTalk * pos * (op > 10 ? 1.5 : 0.5)],
+    ['slight', W.slight * neg],
+    ['insult', W.insult * neg * (op < -20 ? 2 : 1)],
+    ['flirt', canFlirt ? W.flirt * Math.max(0, chem + 0.2) * (op >= 10 ? 1 : 0.2) : 0],
+    ['gossip', gossipFor(sim, a, b) ? W.gossip * (has(la, 'busybody') ? TALK.busybodyGossip : 1) : 0],
+    ['moan', la.liking < TALK.moanUnder ? W.moan * (has(la, 'complainer') ? TALK.complainerMoan : 1) : 0],
+    ['favour', (has(la, 'handy') || friendly) && op > 0 ? W.favour : 0],
   ];
 }
 
@@ -223,7 +196,7 @@ function talk(sim: Sim, a: Pawn, b: Pawn): void {
     case 'insult': {
       rememberAbout(sim, b, 'insult', a);
       const temper = (opinion(sim, b, a) < -20 ? 2 : 1) * (has(b.life!, 'complainer') ? 1.5 : 1);
-      if (random(st) < 0.25 * temper) row(sim, a, b);
+      if (random(st) < TALK.row * temper) row(sim, a, b);
       return;
     }
     case 'flirt':
@@ -237,16 +210,16 @@ function talk(sim: Sim, a: Pawn, b: Pawn): void {
     case 'moan': {
       a.doing = `Moaning about the landlord to ${bName}`;
       // Only things they lived or heard first-hand go round: a moan travels two tellings at most, like any gossip.
-      const worst = a.life!.memories.filter((m) => MEMORIES[m.id]?.gossip && MEMORIES[m.id].value < 0 && (m.hops ?? 0) < 2).sort((x, y) => MEMORIES[x.id].value - MEMORIES[y.id].value)[0];
+      const worst = a.life!.memories.filter((m) => MEMORIES[m.id]?.gossip && MEMORIES[m.id].value < 0 && (m.hops ?? 0) < GOSSIP.hops).sort((x, y) => MEMORIES[x.id].value - MEMORIES[y.id].value)[0];
       if (worst && !b.life!.memories.some((m) => m.id === worst.id)) b.life!.memories.push({ id: worst.id, at: st.tick, from: a.id, hops: (worst.hops ?? 0) + 1 });
-      if (random(st) < 0.15 && !recently(sim, 'Is it just me')) post(sim, a, 'Is it just me or is this building getting worse');
+      if (random(st) < TALK.moanPost && !recently(sim, 'Is it just me')) post(sim, a, 'Is it just me or is this building getting worse');
       return;
     }
     case 'favour':
       rememberAbout(sim, b, 'favour', a);
       if (has(a.life!, 'handy')) {
         b.doing = `${aName} is fixing something of theirs`;
-        if (random(st) < 0.3) sim.notify(`${aName} has fixed ${bName}'s wobbly shelf. Nobody asked them to.`);
+        if (random(st) < TALK.favourNotice) sim.notify(`${aName} has fixed ${bName}'s wobbly shelf. Nobody asked them to.`);
       }
       return;
   }
@@ -281,14 +254,14 @@ function flirt(sim: Sim, a: Pawn, b: Pawn): void {
   const st = sim.state;
   a.doing = `Flirting with ${b.name.split(' ')[0]}`;
   b.doing = `Flirting with ${a.name.split(' ')[0]}`;
-  const chance = 0.5 + chemistry(sim, a.id, b.id) * 0.3 + opinion(sim, b, a) / 200;
+  const chance = ROMANCE.flirtBase + chemistry(sim, a.id, b.id) * ROMANCE.flirtChemistry + opinion(sim, b, a) / ROMANCE.flirtOpinionPer;
   if (random(st) > chance) {
     rememberAbout(sim, a, 'rebuffed', b);
     return;
   }
   rememberAbout(sim, a, 'flirt', b);
   rememberAbout(sim, b, 'flirt', a);
-  if (opinion(sim, a, b) >= 40 && opinion(sim, b, a) >= 40 && random(st) < 0.3) {
+  if (opinion(sim, a, b) >= ROMANCE.coupleOpinion && opinion(sim, b, a) >= ROMANCE.coupleOpinion && random(st) < ROMANCE.couple) {
     a.life!.partner = b.id;
     b.life!.partner = a.id;
     sim.notify(`${a.name.split(' ')[0]} and ${b.name.split(' ')[0]} are seeing each other.`);
@@ -309,7 +282,7 @@ export function romanceHour(sim: Sim): void {
       delete life.partner;
       continue;
     }
-    if (Math.min(opinion(sim, a, b), opinion(sim, b, a)) - PARTNER >= 0 || random(st) > 1 / 36) continue;
+    if (Math.min(opinion(sim, a, b), opinion(sim, b, a)) - OPINION.partner >= 0 || random(st) > ROMANCE.splitPerHour) continue;
     delete life.partner;
     delete b.life.partner;
     life.exes = [...(life.exes ?? []), b.id];
@@ -330,19 +303,19 @@ function gossipFor(sim: Sim, a: Pawn, b: Pawn) {
   const now = sim.state.tick;
   return a.life!.memories.find((m) => {
     const def = MEMORIES[m.id];
-    return def?.gossip && (m.hops ?? 0) < 2 && now - m.at < (def.hours * TICKS_PER_HOUR) / 2 && !b.life!.memories.some((n) => n.id === m.id);
+    return def?.gossip && (m.hops ?? 0) < GOSSIP.hops && now - m.at < (def.hours * TICKS_PER_HOUR) / 2 && !b.life!.memories.some((n) => n.id === m.id);
   });
 }
 
 function gossip(sim: Sim, a: Pawn, b: Pawn): void {
   const st = sim.state;
   // Sometimes it's about rent: who pays what.
-  if (random(st) < 0.35 && compareRent(sim, a, b)) return;
+  if (random(st) < GOSSIP.aboutRent && compareRent(sim, a, b)) return;
   const item = gossipFor(sim, a, b);
   if (item) b.life!.memories.push({ id: item.id, at: st.tick, from: a.id, hops: (item.hops ?? 0) + 1, ...(item.note ? { note: item.note } : {}) });
   // Busybodies talk about the neighbours too.
   if (has(a.life!, 'busybody')) {
-    const rival = tenants(sim).find((o) => o !== a && o !== b && opinion(sim, a, o) <= -20);
+    const rival = tenants(sim).find((o) => o !== a && o !== b && opinion(sim, a, o) <= GOSSIP.busybodyRival);
     if (rival) rememberAbout(sim, b, 'heardThings', rival);
   }
 }
@@ -353,7 +326,7 @@ function compareRent(sim: Sim, a: Pawn, b: Pawn): boolean {
   const lb = flatInfo(sim, b.life!.flat).lease;
   if (!la || !lb || a.life!.flat === b.life!.flat) return false;
   const [hi, lo, hiLease, loLease] = la.rent >= lb.rent ? [a, b, la, lb] : [b, a, lb, la];
-  if (hiLease.rent < loLease.rent * 1.15) return false;
+  if (hiLease.rent < loLease.rent * GOSSIP.paysMore) return false;
   // Only a grievance if the dearer flat isn't better.
   if (goingRate(sim, hi.life!.flat) > goingRate(sim, lo.life!.flat)) return false;
   const name = sim.layout.flat(lo.life!.flat)?.name ?? 'next door';
@@ -369,8 +342,8 @@ export function requestsHour(sim: Sim): void {
   const st = sim.state;
   for (const p of tenants(sim)) {
     const life = p.life!;
-    if (random(st) > 1 / 24 || sim.day - life.since < 2) continue;
-    if (has(life, 'petOwner') && life.pet === undefined && random(st) < 0.3) {
+    if (random(st) > REQUESTS.perHour || sim.day - life.since < REQUESTS.settleDays) continue;
+    if (has(life, 'petOwner') && life.pet === undefined && random(st) < REQUESTS.pet) {
       const pet = pick(st, ['a cat', 'a small dog', 'a rabbit called Nigel']);
       life.pet = 'asked';
       post(sim, p, `Would it be all right if I got ${pet}? Very well behaved. Mostly.`, [
@@ -379,7 +352,7 @@ export function requestsHour(sim: Sim): void {
       ]);
       continue;
     }
-    if (life.needs.warmth < 0.45 && !recently(sim, 'Is the heating on', 2)) {
+    if (life.needs.warmth < REQUESTS.coldUnder && !recently(sim, 'Is the heating on', 2)) {
       const temp = Math.round(st.temps[life.flat] ?? 15);
       post(sim, p, `Is the heating on? It's ${temp}° in here`, [
         { label: 'Turn the boiler up', note: 'Warmer, dearer gas', act: 'boilerUp' },
@@ -387,7 +360,7 @@ export function requestsHour(sim: Sim): void {
       ]);
       continue;
     }
-    if ((has(life, 'houseProud') || has(life, 'handy')) && random(st) < 0.1 && !recently(sim, 'Can I paint', 7)) {
+    if ((has(life, 'houseProud') || has(life, 'handy')) && random(st) < REQUESTS.paint && !recently(sim, 'Can I paint', 7)) {
       post(sim, p, 'Can I paint the bedroom? Thinking "Elephant\'s Breath". I\'ll do it myself.', [
         { label: 'Go for it', note: 'They\'ll be pleased', act: 'paint' },
         { label: 'Magnolia stays', note: 'They won\'t', act: 'noPaint' },
@@ -400,6 +373,6 @@ export function requestsHour(sim: Sim): void {
 export function friendsLeaving(sim: Sim, leaving: Pawn[]): void {
   for (const p of tenants(sim)) {
     if (leaving.includes(p)) continue;
-    for (const l of leaving) if (opinion(sim, p, l) >= 30) remember(sim, p.life!, 'friendLeft');
+    for (const l of leaving) if (opinion(sim, p, l) >= OPINION.friend) remember(sim, p.life!, 'friendLeft');
   }
 }

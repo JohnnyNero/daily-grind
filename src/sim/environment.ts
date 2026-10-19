@@ -16,11 +16,12 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, isDoor, key, type Pawn } from './state';
 import { has } from './traits';
 import { BUILDER_NOISE, currentPiece, whereIs } from './works';
+import { DIRT, GAS_PER_RADIATOR, NOISE, WARMTH } from './tuning';
+
+// Heat, noise and dirt rates are in tuning.ts.
+export { CLEANER_WEEKLY, GAS_PER_RADIATOR } from './tuning';
 
 export const SHARED = 'shared';
-
-/** How much noise an insulated wall or floor lets through, against a bare one. */
-const INSULATED = 0.15;
 
 // ------------------------------------------------------------------ weather
 
@@ -112,8 +113,8 @@ function shapesOf(sim: Sim) {
           t++;
           const c = lay.cell(nx, ns);
           if (st.insulated[key(nx, ns)]) lagged = true;
-          if (isDoor(c) || lay.doorTop(nx, ns)) leak = Math.max(leak, 1.5);
-          else if (c === 'window') leak = Math.max(leak, 1.2);
+          if (isDoor(c) || lay.doorTop(nx, ns)) leak = Math.max(leak, NOISE.door);
+          else if (c === 'window') leak = Math.max(leak, NOISE.window);
         }
         if (t === 0 && other !== 'ground') continue;
         const thick = Math.max(1, t);
@@ -124,7 +125,7 @@ function shapesOf(sim: Sim) {
             if (lagged) shape.insulated += weight / thick;
           }
         } else if (other && other !== me) {
-          add(me, other, ((ds === 0 ? 0.035 : 0.08) * leak * (lagged ? INSULATED : 1)) / (thick * thick));
+          add(me, other, ((ds === 0 ? NOISE.wall : NOISE.floor) * leak * (lagged ? NOISE.insulated : 1)) / (thick * thick));
         }
       }
     }
@@ -152,9 +153,6 @@ export function radiators(sim: Sim, flat: Flat): number {
   return sim.state.furniture.filter((f) => f.def === 'radiator' && nodes.has(lay.node(f.x, f.s))).length;
 }
 
-/** Weekly gas for the central boiler: per radiator, per setting. */
-export const GAS_PER_RADIATOR = 300;
-
 export function gasBill(sim: Sim): number {
   const all = sim.state.furniture.filter((f) => f.def === 'radiator').length;
   return all * sim.state.boiler * GAS_PER_RADIATOR;
@@ -170,21 +168,22 @@ function warmthHour(sim: Sim): void {
     const ins = shape.outside ? shape.insulated / shape.outside : 0;
     const exposure = shape.outside / Math.max(1, shape.area * 2);
     const people = sim.state.pawns.filter((p) => p.life?.flat === f.id && !p.life.away).length;
-    const heat = (radiators(sim, f) * st.boiler * 3.5) / Math.max(1, f.area / 8) + 4 + people * 0.8;
+    const W = WARMTH;
+    const heat = (radiators(sim, f) * st.boiler * W.perRadiator) / Math.max(1, f.area / W.radiatorTiles) + W.base + people * W.perPerson;
     const target = outside + heat * (1 + ins);
-    const rate = (0.25 * Math.min(1.5, exposure + 0.3) * (1 - 0.6 * ins)) / (1 + f.area / 15);
+    const rate = (W.rate * Math.min(W.mostExposure, exposure + W.exposureBase) * (1 - W.insulationKeeps * ins)) / (1 + f.area / W.sizeTiles);
     const now = st.temps[f.id] ?? target;
     st.temps[f.id] = now + (target - now) * Math.min(1, rate);
   }
 }
 
 export function tempOf(sim: Sim, flatId: string): number {
-  return sim.state.temps[flatId] ?? 18;
+  return sim.state.temps[flatId] ?? WARMTH.start;
 }
 
 /** Warmth as a need: 0 at 10° or below, full at 19° and up. */
 export function warmthOf(temp: number): number {
-  return Math.max(0, Math.min(1, (temp - 10) / 9));
+  return Math.max(0, Math.min(1, (temp - WARMTH.cold) / WARMTH.range));
 }
 
 // ------------------------------------------------------------------ noise
@@ -192,22 +191,22 @@ export function warmthOf(temp: number): number {
 /** How much noise someone's making right now, by what they're doing. */
 export function noiseOf(p: Pawn): number {
   const d = p.doing;
-  if (d === 'Watching telly') return 2;
-  if (d === 'Practising') return 6;
-  if (d.startsWith('Having a row')) return 8;
-  if (d.startsWith('Fighting')) return 10;
-  if (d === 'At the party') return 2.5;
-  if (d === 'Dancing at the party') return 3.5;
-  if (d === 'Mingling at the party' || d === 'Hosting the party' || d === 'Out on the landing') return 1.5;
-  if (d === 'Winding down at the party') return 1;
-  if (d.startsWith('Chatting') || d.startsWith('Gossiping') || d.startsWith('Flirting')) return 1;
-  if (d === 'Cooking') return 0.5;
-  if (d === 'Slamming doors') return 6;
-  if (d === 'Having a tantrum') return 7;
-  if (d === 'Blasting music out of spite') return 7;
-  if (d === 'Kicking the bins') return 4;
-  if (d === 'Carrying boxes out') return 1;
-  if (d === 'At the barbecue') return 2;
+  if (d === 'Watching telly') return NOISE.telly;
+  if (d === 'Practising') return NOISE.practising;
+  if (d.startsWith('Having a row')) return NOISE.row;
+  if (d.startsWith('Fighting')) return NOISE.fighting;
+  if (d === 'At the party') return NOISE.party;
+  if (d === 'Dancing at the party') return NOISE.dancing;
+  if (d === 'Mingling at the party' || d === 'Hosting the party' || d === 'Out on the landing') return NOISE.mingling;
+  if (d === 'Winding down at the party') return NOISE.windingDown;
+  if (d.startsWith('Chatting') || d.startsWith('Gossiping') || d.startsWith('Flirting')) return NOISE.chatting;
+  if (d === 'Cooking') return NOISE.cooking;
+  if (d === 'Slamming doors') return NOISE.slammingDoors;
+  if (d === 'Having a tantrum') return NOISE.tantrum;
+  if (d === 'Blasting music out of spite') return NOISE.spite;
+  if (d === 'Kicking the bins') return NOISE.kickingBins;
+  if (d === 'Carrying boxes out') return NOISE.carryingBoxes;
+  if (d === 'At the barbecue') return NOISE.barbecue;
   return 0;
 }
 
@@ -249,7 +248,7 @@ export function noiseReaching(sim: Sim, made: Map<string, number>, flatId: strin
 
 export function isNight(sim: Sim): boolean {
   const m = sim.minuteOfDay;
-  return m >= 22 * 60 || m < 7 * 60;
+  return m >= NOISE.nightFrom * 60 || m < NOISE.nightTo * 60;
 }
 
 // ------------------------------------------------------------------ dirt and bins
@@ -263,9 +262,6 @@ export function addDirt(sim: Sim, id: string, amount: number): void {
   sim.state.dirt[id] = Math.max(0, Math.min(1, dirtOf(sim, id) + amount));
 }
 
-/** People bin about this much a week each; a set of wheelie bins takes six people's worth. */
-const BIN_PEOPLE = 6;
-
 /** Too many people for the bins in the shared parts, and it's late in the week. */
 export function binsOverflowing(sim: Sim): boolean {
   const lay = sim.layout;
@@ -273,7 +269,7 @@ export function binsOverflowing(sim: Sim): boolean {
   const bins = sim.state.furniture.filter((f) => f.def === 'bins' && shared.has(lay.node(f.x, f.s))).length;
   const people = sim.state.pawns.filter((p) => p.life && !p.life.leaving).length;
   const weekday = (sim.day - 1) % 7;
-  return people > 0 && (bins === 0 || (people > bins * BIN_PEOPLE && weekday >= 3));
+  return people > 0 && (bins === 0 || (people > bins * DIRT.binPeople && weekday >= 3));
 }
 
 function dirtHour(sim: Sim): void {
@@ -283,12 +279,12 @@ function dirtHour(sim: Sim): void {
   // People walk dirt in from the street; a doormat in the lobby halves it.
   const shared = new Set(lay.rooms.filter((r) => r.shared).flatMap((r) => r.cells));
   const mat = st.furniture.some((f) => f.def === 'doormat' && shared.has(lay.node(f.x, f.s)));
-  addDirt(sim, SHARED, 0.0025 * tenants.length * (mat ? 0.5 : 1));
+  addDirt(sim, SHARED, DIRT.shared * tenants.length * (mat ? DIRT.doormat : 1));
   for (const f of lay.flats) {
     const people = tenants.filter((p) => p.life!.flat === f.id && !p.life!.away);
     if (people.length === 0) continue;
     const messy = people.filter((p) => has(p.life!, 'messy')).length;
-    addDirt(sim, f.id, 0.004 * (people.length + messy * 2));
+    addDirt(sim, f.id, DIRT.flat * (people.length + messy * DIRT.messyExtra));
   }
 }
 
@@ -297,19 +293,17 @@ function dirtMorning(sim: Sim): void {
   if (sim.state.cleaner) sim.state.dirt[SHARED] = 0;
 }
 
-export const CLEANER_WEEKLY = 3000;
-
 /** Once a game hour. */
 export function environmentHour(sim: Sim): void {
   warmthHour(sim);
   dirtHour(sim);
-  if (Math.floor(sim.minuteOfDay / 60) === 10) dirtMorning(sim);
+  if (Math.floor(sim.minuteOfDay / 60) === DIRT.cleanerHour) dirtMorning(sim);
   // A rolling average of how noisy each flat has been, for how impressive it is.
   const made = noiseMade(sim);
   for (const f of sim.layout.flats) {
     const got = noiseReaching(sim, made, f.id).amount;
     const avg = sim.state.noiseAvg[f.id] ?? 0;
-    sim.state.noiseAvg[f.id] = avg + (got - avg) * 0.08;
+    sim.state.noiseAvg[f.id] = avg + (got - avg) * NOISE.averageRate;
   }
 }
 

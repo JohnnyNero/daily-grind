@@ -17,19 +17,21 @@ import { has } from './traits';
 import { noticeTrait } from './outcomes';
 import { threat } from './events';
 import { tale } from './tales';
+import { stat } from './stat';
+import { COUNCIL, UPKEEP } from './tuning';
 
 /** Wear from one go on something: about 250 goes from new to broken. */
-export const WEAR_PER_USE = 0.004;
+export const WEAR_PER_USE = UPKEEP.wearPerUse;
 
 /** Wear from a go on a piece of furniture. Clumsy people are harder on things; handy ones gentler. */
 export function useUp(sim: Sim, f: Furniture, p: Pawn): void {
   if (f.broken) return;
   const life = p.life!;
-  const rate = WEAR_PER_USE * (has(life, 'clumsy') ? 2.5 : 1) * (has(life, 'handy') ? 0.7 : 1);
+  const rate = stat(WEAR_PER_USE, [], [has(life, 'clumsy') ? UPKEEP.clumsy : 1, has(life, 'handy') ? UPKEEP.handy : 1]);
   f.wear = Math.min(1, (f.wear ?? 0) + rate);
   if (f.wear >= 1) {
     breakIt(sim, f);
-    if (has(life, 'clumsy') && random(sim.state) < 0.5) noticeTrait(sim, p, 'clumsy');
+    if (has(life, 'clumsy') && random(sim.state) < UPKEEP.clumsyNoticed) noticeTrait(sim, p, 'clumsy');
   }
 }
 
@@ -49,7 +51,7 @@ export function worn(sim: Sim): Furniture[] {
   const lay = sim.layout;
   const lived = new Set<number>();
   for (const f of lay.flats) if (household(sim, f.id).length > 0) for (const c of lay.flatCells(f)) lived.add(c);
-  return sim.state.furniture.filter((f) => !f.broken && (f.wear ?? 0) > 0.6 && lived.has(lay.node(f.x, f.s)) && furnitureDef(f.def).offers);
+  return sim.state.furniture.filter((f) => !f.broken && (f.wear ?? 0) > UPKEEP.worn && lived.has(lay.node(f.x, f.s)) && furnitureDef(f.def).offers);
 }
 
 /** The storyteller: something gives up. The bathroom and kitchen first. */
@@ -62,7 +64,7 @@ export function breakDown(sim: Sim): boolean {
 }
 
 export function repairCost(f: Furniture): number {
-  return Math.max(20 * POUND, Math.round((furniturePrice(f.def) * 0.2) / (5 * POUND)) * 5 * POUND);
+  return Math.max(UPKEEP.repairLeast, Math.round((furniturePrice(f.def) * UPKEEP.repairShare) / (5 * POUND)) * 5 * POUND);
 }
 
 export function condition(f: Furniture): string {
@@ -107,8 +109,8 @@ export function upkeepHour(sim: Sim): void {
     if (people.length === 0) continue;
     for (const f of brokenIn(sim, flat.id)) {
       const handy = people.find((p) => has(p.life!, 'handy'));
-      if (handy && random(st) < 0.03) {
-        f.wear = 0.5;
+      if (handy && random(st) < UPKEEP.handyFix) {
+        f.wear = UPKEEP.handyFixWear;
         delete f.broken;
         delete f.reported;
         sim.changed();
@@ -116,7 +118,7 @@ export function upkeepHour(sim: Sim): void {
         noticeTrait(sim, handy, 'handy');
         continue;
       }
-      if (f.reported || random(st) > 0.5) continue;
+      if (f.reported || random(st) > UPKEEP.report) continue;
       f.reported = true;
       const name = furnitureDef(f.def).name.toLowerCase();
       post(sim, pick(st, people), pick(st, [`The ${name}'s packed in. Can you get someone out?`, `So the ${name} has died. Any chance of it being fixed this week?`, `Not to be a pain but the ${name} is broken. Properly broken.`]), [
@@ -129,10 +131,6 @@ export function upkeepHour(sim: Sim): void {
 
 // ------------------------------------------------------------------ the council
 
-
-/** Days to put things right before the council comes back. */
-const REVISIT_DAYS = 14;
-
 /** What an inspector would write down. */
 export function issues(sim: Sim): string[] {
   const out: string[] = [];
@@ -144,12 +142,12 @@ export function issues(sim: Sim): string[] {
     if (!s.has.wash) out.push(`${f.name} has nowhere working to wash`);
     if (!s.has.kitchen) out.push(`${f.name} has no working kitchen`);
     if (!f.enclosed) out.push(`${f.name} is open to the weather`);
-    if (tempOf(sim, f.id) < 10) out.push(`${f.name} is too cold to live in (${Math.round(tempOf(sim, f.id))}°)`);
-    if (s.perPerson < 3) out.push(`${f.name} is overcrowded`);
-    const longBroken = brokenIn(sim, f.id).filter((b) => sim.day - (b.broken ?? sim.day) >= 7);
+    if (tempOf(sim, f.id) < COUNCIL.tooCold) out.push(`${f.name} is too cold to live in (${Math.round(tempOf(sim, f.id))}°)`);
+    if (s.perPerson < COUNCIL.overcrowded) out.push(`${f.name} is overcrowded`);
+    const longBroken = brokenIn(sim, f.id).filter((b) => sim.day - (b.broken ?? sim.day) >= COUNCIL.brokenDays);
     if (longBroken.length > 0) out.push(`${f.name}: ${furnitureDef(longBroken[0].def).name.toLowerCase()} broken for over a week`);
   }
-  if (dirtOf(sim, SHARED) > 0.7) out.push('The stairs and lobby are filthy');
+  if (dirtOf(sim, SHARED) > COUNCIL.filthy) out.push('The stairs and lobby are filthy');
   return out;
 }
 
@@ -188,13 +186,13 @@ export function councilMorning(sim: Sim): void {
     const fine = Math.min(fineFor(sim, COUNCIL_FINE_CAP), fineFor(sim, COUNCIL_FINE) * found.length);
     book(sim, 'Council fine: improvement notice not met', -fine);
     tale(sim, 'councilFine', [], { what: `£${fine / POUND}` });
-    c.notice = { issues: found, byDay: sim.day + REVISIT_DAYS };
-    c.visitDay = sim.day + REVISIT_DAYS;
+    c.notice = { issues: found, byDay: sim.day + COUNCIL.revisitDays };
+    c.visitDay = sim.day + COUNCIL.revisitDays;
     letter(sim, { from, title: 'Improvement notice not met', body: `On our return visit the following were still not put right:\n${list}\nA fine of £${fine / POUND} has been applied. We will visit again on day ${c.visitDay}.` });
     return;
   }
-  c.notice = { issues: found, byDay: sim.day + REVISIT_DAYS };
-  c.visitDay = sim.day + REVISIT_DAYS;
+  c.notice = { issues: found, byDay: sim.day + COUNCIL.revisitDays };
+  c.visitDay = sim.day + COUNCIL.revisitDays;
   tale(sim, 'councilNotice', []);
   letter(sim, { from, title: 'Improvement notice', body: `Our officer found the following:\n${list}\nThese must be put right by day ${c.notice.byDay}, when we will visit again. If they are not, you will be fined £${fineFor(sim, COUNCIL_FINE) / POUND} for each (up to £${fineFor(sim, COUNCIL_FINE_CAP) / POUND}).` });
 }
