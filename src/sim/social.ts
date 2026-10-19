@@ -40,6 +40,7 @@ export const SOCIAL: Record<string, SocialDef> = {
   brokeUp: { label: 'Broke up with me', value: -25, hours: 336, stack: 1 },
   fight: { label: 'Had a fight', value: -30, hours: 336, stack: 1 },
   cheatedOn: { label: 'Went behind my back', value: -35, hours: 600, stack: 1 },
+  goodNight: { label: 'Threw a good night', value: 8, hours: 240, stack: 2 },
 };
 
 /** Each extra copy counts this much of the one before. */

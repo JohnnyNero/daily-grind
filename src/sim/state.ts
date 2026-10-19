@@ -183,11 +183,15 @@ export interface Pawn {
   /** The column at the far end of the pavement walk. */
   frontTo?: number;
   /** How they're posed: sitting or lying down (standing if missing). */
-  pose?: 'sit' | 'sleep';
+  pose?: 'sit' | 'sleep' | 'dance';
   /** Stopped to talk until this tick. */
   talkUntil?: number;
   /** A speech bubble over their head, and when it goes. */
   bubble?: { text: string; until: number };
+  /** At a party in this flat (its id): the door's open to them, and they mingle rather than go about their day. */
+  partyAt?: string;
+  /** What they're off to do at the party (dance, mingle, landing, smoke, greet), done on arrival. */
+  act?: string;
   /** Tenants only. */
   life?: Life;
   /** How they describe themselves: their job, or "Retired". */
@@ -326,6 +330,17 @@ export interface Happening {
   next?: number;
   /** Something that's happened along the way (a complaint made, an alarm going off). */
   flag?: string;
+  /** A party's mood: arriving, in full swing, winding down, or seeing people off. */
+  phase?: 'arriving' | 'swing' | 'winding' | 'leaving';
+  /** How loud the music is: 0.5 turned down, 1 as usual (if missing), 2 turned up. */
+  volume?: number;
+  /** A party's host, the neighbours asked along, those who came, and the one knocking to complain. */
+  host?: number;
+  invited?: number[];
+  joined?: number[];
+  knock?: number;
+  /** Arrivals the host has still to greet. */
+  greet?: number;
 }
 
 export interface Review {

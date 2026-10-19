@@ -12,6 +12,7 @@ import { post, poster, recently, tenants, whoIs } from './chat';
 import { POUND, book, letter } from './economy';
 import { SHARED, noiseReaching } from './environment';
 import { household } from './leases';
+import { furnitureDef } from './defs';
 import { addPawn, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
@@ -158,7 +159,7 @@ export function eventsMinute(sim: Sim): void {
 /** Noise from happenings: a party's host, and a burglar alarm going off. */
 export function happeningNoise(sim: Sim, made: Map<string, number>): void {
   for (const h of sim.state.story.running) {
-    if (h.kind === 'party' && h.flat) made.set(h.flat, (made.get(h.flat) ?? 0) + 2);
+    if (h.kind === 'party' && h.flat) made.set(h.flat, (made.get(h.flat) ?? 0) + MUSIC[h.phase ?? 'swing'] * (h.volume ?? 1));
     if (h.kind === 'burglary' && h.flag === 'alarm' && sim.state.tick < h.until) made.set(SHARED, (made.get(SHARED) ?? 0) + 8);
   }
 }
@@ -196,7 +197,19 @@ export function startParty(sim: Sim, flatId: string): Happening | null {
   // A bigger, busier building, a bigger party.
   h.queue = randInt(st, 3, 6) + Math.round((threat(sim) - 1) * 5);
   h.next = st.tick + randInt(st, 45, 80) * TICKS_PER_MINUTE;
+  h.phase = 'arriving';
   const host = people.find((p) => has(p.life!, 'partyAnimal')) ?? people[0];
+  h.host = host.id;
+  host.partyAt = flatId;
+  delete host.act;
+  // Neighbours who like the host are asked along.
+  h.invited = tenants(sim)
+    .filter((n) => n.life!.flat !== flatId && !n.life!.away && !n.life!.leaving && !n.partyAt)
+    .map((n) => ({ n, op: opinion(sim, n, host) + (has(n.life!, 'friendly') || has(n.life!, 'partyAnimal') ? 8 : 0) }))
+    .filter((c) => c.op >= 8 && random(st) < 0.7)
+    .sort((x, y) => y.op - x.op)
+    .slice(0, 2)
+    .map((c) => c.n.id);
   if (has(host.life!, 'partyAnimal')) noticeTrait(sim, host, 'partyAnimal');
   if (random(st) < 0.6) post(sim, host, pick(st, ['Few people round tonight, sorry in advance if it gets loud x', 'Having some friends over later! Come up if you like 🎉', 'Bit of a do at ours tonight. Won\'t be late. (It will be late.)']));
   const name = sim.layout.flat(flatId)?.name ?? 'a flat';
@@ -205,11 +218,56 @@ export function startParty(sim: Sim, flatId: string): Happening | null {
   return h;
 }
 
+type Phase = NonNullable<Happening['phase']>;
+
+/** Where a party is in its evening: people arriving, full swing, winding down, seeing people off. */
+function phaseOf(sim: Sim, h: Happening): Phase {
+  const left = h.until - sim.state.tick;
+  if (left <= 25 * TICKS_PER_MINUTE) return 'leaving';
+  if (left <= 60 * TICKS_PER_MINUTE) return 'winding';
+  return (h.queue ?? 0) > 0 ? 'arriving' : 'swing';
+}
+
+/** The music's own noise in each phase, before the volume knob. */
+const MUSIC: Record<Phase, number> = { arriving: 1, swing: 3, winding: 1.5, leaving: 0.5 };
+
+const byId = (sim: Sim, id: number | undefined) => (id === undefined ? undefined : sim.state.pawns.find((p) => p.id === id));
+
+/** The inside and outside of a flat's front door, and the shared landing round it. */
+function doorSpots(sim: Sim, flatId: string): { inside?: [number, number]; landing: [number, number][] } {
+  const lay = sim.layout;
+  const flat = lay.flat(flatId);
+  if (!flat) return { landing: [] };
+  const [dx, ds] = flat.doors[0].split(',').map(Number);
+  const near = [dx - 1, dx + 1].map((x) => lay.node(x, ds)).filter((n) => lay.roomOf[n] !== -1);
+  const inside = near.find((n) => lay.rooms[lay.roomOf[n]].flat === flat.id);
+  const landing = lay.rooms
+    .filter((r) => r.shared)
+    .flatMap((r) => r.nodes)
+    .map((n) => lay.xs(n))
+    .filter(([x, s]) => s === ds && Math.abs(x - dx) <= 3 && !lay.isDoorNode(lay.node(x, s)));
+  return { inside: inside === undefined ? undefined : lay.xs(inside), landing };
+}
+
+/** Once a minute: the evening moves on, people arrive, neighbours come and knock. */
 function partyMinute(sim: Sim, h: Happening): void {
   const st = sim.state;
   if (st.tick >= h.until || household(sim, h.flat!).length === 0) {
     endParty(sim, h, false);
     return;
+  }
+  const host = byId(sim, h.host);
+  const phase = phaseOf(sim, h);
+  if (phase !== h.phase) {
+    h.phase = phase;
+    if (phase === 'winding' && (h.volume ?? 1) > 1) {
+      h.volume = 1;
+      if (host) host.bubble = { text: 'Shh', until: st.tick + 4 * TICKS_PER_MINUTE };
+    }
+    if (phase === 'leaving') {
+      h.queue = 0;
+      sendHome(sim, h);
+    }
   }
   if ((h.queue ?? 0) > 0 && st.tick >= (h.next ?? 0)) {
     const g = addPawn(sim, 'guest');
@@ -219,19 +277,247 @@ function partyMinute(sim: Sim, h: Happening): void {
     h.pawns.push(g.id);
     h.queue = (h.queue ?? 1) - 1;
     h.next = st.tick + randInt(st, 10, 35) * TICKS_PER_MINUTE;
+    // The host drops what they're doing to say hello.
+    h.greet = (h.greet ?? 0) + 1;
+    if (host?.partyAt && host.path.length === 0) host.waitUntil = Math.min(host.waitUntil, st.tick);
+  }
+  if (phase !== 'leaving') invitedJoin(sim, h, host);
+  knockAnswered(sim, h, host);
+}
+
+/** The neighbours who were asked wander over when they're free. */
+function invitedJoin(sim: Sim, h: Happening, host: Pawn | undefined): void {
+  const st = sim.state;
+  if (!host) return;
+  const hour = hourOf(sim);
+  for (const id of h.invited ?? []) {
+    const n = byId(sim, id);
+    if (!n?.life || h.joined?.includes(id) || n.life.away || n.life.leaving || n.life.using || n.pose === 'sleep' || n.task === 'leave') continue;
+    if (!(hour >= 19 || hour < 2) || random(st) > 0.12) continue;
+    n.partyAt = h.flat!;
+    delete n.act;
+    n.path = [];
+    n.goal = null;
+    n.waitUntil = 0;
+    n.doing = `Off to ${first(host)}'s party`;
+    (h.joined ??= []).push(id);
+    rememberAbout(sim, n, 'goodNight', host);
+    rememberAbout(sim, host, 'chat', n);
+    remember(sim, n.life, 'goodParty');
+    sim.notify(`${first(n)} has gone up to ${first(host)}'s party.`);
   }
 }
 
-/** Late on, the neighbours have had enough, and say so. */
+/** The one thing everyone at a party is doing: where they go next, and then what they do there. */
+export function guestThink(sim: Sim, p: Pawn): boolean {
+  const lay = sim.layout;
+  const id = p.partyAt ?? p.flat;
+  const h = running(sim, 'party', id ?? undefined);
+  const flat = lay.flat(id);
+  if (!h || !flat || p.act === 'home' || (!p.life && p.task === 'leave')) {
+    delete p.pose;
+    if (p.life) {
+      // The party's key stays with them until they're out of the flat.
+      const inside = flat && lay.flatAt(Math.round(p.x), Math.round(p.s))?.id === flat.id;
+      if (!inside) {
+        delete p.partyAt;
+        delete p.act;
+      }
+      return false;
+    }
+    delete p.act;
+    p.task = 'leave';
+    p.doing = 'Going home';
+    return false;
+  }
+  if (!p.life) p.task = 'look';
+  if (p.act) {
+    perform(sim, p, h);
+    return true;
+  }
+  delete p.pose;
+  const act = pickAct(sim, p, h);
+  const spot = spotFor(sim, flat.id, act);
+  const inFlat = lay.flatAt(Math.round(p.x), Math.round(p.s))?.id === flat.id;
+  if (!spot || !setGoal(sim, p, spot)) {
+    // No way there: if they're in, they stand about; if they're not, they give up and go home.
+    if (!inFlat && !p.life) {
+      p.task = 'leave';
+      return false;
+    }
+    p.act = 'mingle';
+    perform(sim, p, h);
+    return true;
+  }
+  p.act = act;
+  p.doing = !inFlat && !p.life ? 'Off to the party' : act === 'landing' || act === 'smoke' ? 'Popping out' : p.life ? 'Mingling at the party' : 'Off to the party';
+  if (p.path.length === 0) perform(sim, p, h);
+  return true;
+}
+
+/** What to do next: dance, talk, spill onto the landing, nip out for a smoke. */
+function pickAct(sim: Sim, p: Pawn, h: Happening): string {
+  const st = sim.state;
+  if (p.id === h.host) {
+    if ((h.greet ?? 0) > 0) {
+      h.greet = (h.greet ?? 1) - 1;
+      return 'greet';
+    }
+    if (h.phase === 'leaving') return 'seeOff';
+    return random(st) < 0.35 ? 'dance' : 'mingle';
+  }
+  const phase = h.phase ?? 'swing';
+  // One guest is always the smoker.
+  if (!p.life && p.id === h.pawns[0] && phase !== 'arriving' && random(st) < 0.45) return 'smoke';
+  const r = random(st);
+  const dance = phase === 'swing' ? 0.45 : phase === 'arriving' ? 0.2 : 0.12;
+  const out = phase === 'swing' ? 0.2 : 0.12;
+  return r < dance ? 'dance' : r < dance + out ? 'landing' : 'mingle';
+}
+
+/** Where to be for it: inside the flat, on the landing outside the door, or on the pavement. */
+function spotFor(sim: Sim, flatId: string, act: string): [number, number] | null {
+  const st = sim.state;
+  const lay = sim.layout;
+  const flat = lay.flat(flatId)!;
+  if (act === 'smoke') {
+    const x = st.plot.x0 > 0 ? st.plot.x0 - 1 : st.plot.x1 + 1;
+    return x < st.w ? [x, 0] : null;
+  }
+  const spots = doorSpots(sim, flatId);
+  if (act === 'greet' || act === 'seeOff') return spots.inside ?? null;
+  if (act === 'landing') return spots.landing.length > 0 ? pick(st, spots.landing) : null;
+  const nodes = flat.rooms.flatMap((r) => lay.rooms[r].nodes).filter((n) => !lay.isDoorNode(n));
+  return nodes.length > 0 ? lay.xs(pick(st, nodes)) : null;
+}
+
+/** Got there: do it for a while. */
+function perform(sim: Sim, p: Pawn, h: Happening): void {
+  const st = sim.state;
+  const act = p.act ?? 'mingle';
+  delete p.act;
+  const host = p.id === h.host;
+  const wait = randInt(st, 8, 20) * TICKS_PER_MINUTE;
+  p.waitUntil = st.tick + wait;
+  const say = (text: string, ticks = wait) => (p.bubble = { text, until: st.tick + ticks });
+  switch (act) {
+    case 'dance':
+      p.pose = 'dance';
+      p.doing = 'Dancing at the party';
+      say('♪', 5 * TICKS_PER_MINUTE);
+      return;
+    case 'landing':
+      p.doing = 'Out on the landing';
+      say(pick(st, ['ha ha', '…']), 6 * TICKS_PER_MINUTE);
+      return;
+    case 'smoke':
+      p.doing = 'Having a smoke out the front';
+      say('~', 6 * TICKS_PER_MINUTE);
+      return;
+    case 'greet':
+      p.waitUntil = st.tick + 3 * TICKS_PER_MINUTE;
+      p.doing = 'Greeting guests';
+      say('Hiya!', 3 * TICKS_PER_MINUTE);
+      return;
+    case 'seeOff':
+      p.waitUntil = st.tick + 4 * TICKS_PER_MINUTE;
+      p.doing = 'Seeing people off';
+      say('Bye!', 4 * TICKS_PER_MINUTE);
+      return;
+    default:
+      p.doing = h.phase === 'winding' || h.phase === 'leaving' ? 'Winding down at the party' : host ? 'Hosting the party' : 'Mingling at the party';
+      if (random(st) < 0.4) say(pick(st, ['haha', '…', 'cheers', '!?']), 4 * TICKS_PER_MINUTE);
+  }
+}
+
+/** Everyone not yet on their way out goes, one after another. */
+function sendHome(sim: Sim, h: Happening): void {
+  const st = sim.state;
+  let i = 0;
+  for (const id of [...h.pawns, ...(h.joined ?? [])]) {
+    const g = byId(sim, id);
+    if (!g || (!g.life && g.task === 'leave') || (g.life && (!g.partyAt || g.act === 'home'))) continue;
+    delete g.pose;
+    if (g.life) {
+      g.act = 'home';
+      g.life.needs.fun = 1;
+    } else {
+      delete g.act;
+      g.task = 'leave';
+    }
+    g.doing = g.life ? 'Heading home' : 'Getting their coat';
+    g.waitUntil = st.tick + Math.round(i++ * 1.5 * TICKS_PER_MINUTE);
+    if (i < 4) g.bubble = { text: 'Night!', until: st.tick + 3 * TICKS_PER_MINUTE };
+  }
+}
+
+/** Neighbours' words: music up, and then the knock at the door. */
 function partyHour(sim: Sim, h: Happening): void {
+  const st = sim.state;
   const hour = hourOf(sim);
+  if (h.phase === 'swing' && h.volume === undefined && hour >= 21 && hour <= 23 && random(st) < 0.35) {
+    h.volume = 2;
+    const host = byId(sim, h.host);
+    if (host) host.bubble = { text: '♪♪', until: st.tick + 5 * TICKS_PER_MINUTE };
+  }
   if (h.flag || !(hour >= 23 || hour < 3)) return;
   const made = sim.noise();
-  const name = sim.layout.flat(h.flat!)?.name ?? 'next door';
   const bothered = tenants(sim).filter((p) => p.life!.flat !== h.flat && !p.life!.away && noiseReaching(sim, made, p.life!.flat).amount >= 1);
   if (bothered.length === 0) return;
-  h.flag = 'complained';
   const who = poster(sim, bothered)!;
+  // Some knock on the door; the rest take it to the chat.
+  const awake = who.pose !== 'sleep' && !who.life!.using && !who.partyAt;
+  const landing = doorSpots(sim, h.flat!).landing;
+  if (awake && landing.length > 0 && random(st) < 0.6 && setGoal(sim, who, landing[0])) {
+    h.flag = 'knocking';
+    h.knock = who.id;
+    who.waitUntil = st.tick;
+    who.doing = `Going to knock on ${sim.layout.flat(h.flat!)?.name ?? 'next door'}`;
+    return;
+  }
+  complain(sim, h, who);
+}
+
+/** The neighbour's at the door (or couldn't get there): the host turns it down, or doesn't. */
+function knockAnswered(sim: Sim, h: Happening, host: Pawn | undefined): void {
+  if (h.knock === undefined) return;
+  const st = sim.state;
+  const n = byId(sim, h.knock);
+  if (!n?.life || n.life.away || !host) {
+    delete h.knock;
+    h.flag = 'complained';
+    return;
+  }
+  if (n.path.length > 0) return;
+  delete h.knock;
+  h.flag = 'complained';
+  const lay = sim.layout;
+  const [dx, ds] = lay.flat(h.flat!)!.doors[0].split(',').map(Number);
+  if (Math.round(n.s) !== ds || Math.abs(n.x - dx) > 4) {
+    complain(sim, h, n);
+    return;
+  }
+  const name = lay.flat(h.flat!)?.name ?? 'next door';
+  n.talkUntil = st.tick + 3 * TICKS_PER_MINUTE;
+  n.bubble = { text: '!', until: n.talkUntil };
+  n.doing = `Knocking on ${name} about the noise`;
+  n.facing = dx >= n.x ? 1 : -1;
+  const calm = has(host.life!, 'partyAnimal') ? 0.35 : 0.65;
+  if (random(st) < calm) {
+    h.volume = 0.5;
+    host.bubble = { text: 'Sorry!', until: st.tick + 4 * TICKS_PER_MINUTE };
+    sim.notify(`${first(n)} knocked on ${name} about the noise. The music went down.`);
+  } else {
+    host.bubble = { text: '♪♪', until: st.tick + 4 * TICKS_PER_MINUTE };
+    rememberAbout(sim, n, 'slight', host);
+    complain(sim, h, n);
+  }
+}
+
+function complain(sim: Sim, h: Happening, who: Pawn): void {
+  const hour = hourOf(sim);
+  const name = sim.layout.flat(h.flat!)?.name ?? 'next door';
+  h.flag = 'complained';
   post(sim, who, `Is there a PARTY in ${name}?? It's ${hour < 10 ? `${hour}am` : 'gone eleven'}`, [
     { label: `Tell ${name} to wrap it up`, note: `${name} won't thank you`, act: `endParty:${h.flat}` },
     { label: 'Let them have their night', note: `${first(who)} won't thank you`, act: 'notMine' },
@@ -242,14 +528,15 @@ function partyHour(sim: Sim, h: Happening): void {
 export function endParty(sim: Sim, h: Happening, early: boolean): void {
   const st = sim.state;
   finish(sim, h);
-  for (const id of h.pawns) {
-    const g = st.pawns.find((p) => p.id === id);
-    if (!g) continue;
-    g.task = 'leave';
-    g.path = [];
-    g.waitUntil = 0;
-    g.doing = 'Going home';
+  sendHome(sim, h);
+  const host = byId(sim, h.host);
+  if (host) {
+    delete host.partyAt;
+    delete host.act;
+    delete host.pose;
+    host.waitUntil = 0;
   }
+  if (h.knock !== undefined) delete h.knock;
   const flatId = h.flat!;
   const people = household(sim, flatId);
   for (const p of people) {
@@ -279,34 +566,6 @@ export function endParty(sim: Sim, h: Happening, early: boolean): void {
   }
 }
 
-/** A guest: in to the party, mingle, and home when it's over. False when it's time to go. */
-export function guestThink(sim: Sim, p: Pawn): boolean {
-  const st = sim.state;
-  const lay = sim.layout;
-  const h = running(sim, 'party', p.flat ?? undefined);
-  if (!h || p.task === 'leave') {
-    p.task = 'leave';
-    return false;
-  }
-  const flat = lay.flat(p.flat);
-  if (!flat) {
-    p.task = 'leave';
-    return false;
-  }
-  const here = lay.flatAt(Math.round(p.x), Math.round(p.s));
-  p.task = 'look';
-  if (here?.id === flat.id) {
-    p.doing = 'At the party';
-    p.waitUntil = st.tick + randInt(st, 10, 25) * TICKS_PER_MINUTE;
-  }
-  const nodes = flat.rooms.flatMap((r) => lay.rooms[r].nodes).filter((n) => !lay.isDoorNode(n));
-  if (nodes.length === 0 || !setGoal(sim, p, lay.xs(pick(st, nodes)))) {
-    p.task = 'leave';
-    return false;
-  }
-  return true;
-}
-
 // ------------------------------------------------------------------ fights
 
 /** A row between two people who already can't stand each other might turn into a fight. */
@@ -322,9 +581,11 @@ export function maybeFight(sim: Sim, a: Pawn, b: Pawn): boolean {
 
 export function startFight(sim: Sim, a: Pawn, b: Pawn): void {
   const st = sim.state;
-  begin(sim, 'fight', ['fight'], 1 / 3, [a, b]);
+  const h = begin(sim, 'fight', ['fight'], 1 / 3, [a, b]);
   rememberAbout(sim, a, 'fight', b);
   rememberAbout(sim, b, 'fight', a);
+  remember(sim, a.life!, 'cantStand');
+  remember(sim, b.life!, 'cantStand');
   for (const [p, q] of [[a, b], [b, a]]) {
     p.talkUntil = st.tick + 15 * TICKS_PER_MINUTE;
     p.bubble = { text: '!!', until: p.talkUntil };
@@ -332,8 +593,9 @@ export function startFight(sim: Sim, a: Pawn, b: Pawn): void {
   }
   const seen = tenants(sim).filter((w) => w !== a && w !== b && !w.life!.away && Math.abs(w.s - a.s) < 0.1 && Math.abs(w.x - a.x) <= 8);
   for (const w of seen) remember(sim, w.life!, 'sawFight');
-  const witness = seen[0] ?? poster(sim, tenants(sim).filter((p) => p !== a && p !== b));
-  if (witness) post(sim, witness, `There is an actual FIGHT on the stairs. ${first(a)} and ${first(b)}. Someone do something`);
+  const filmer = bystanders(sim, h, a, b, seen);
+  const witness = filmer ?? seen[0] ?? poster(sim, tenants(sim).filter((p) => p !== a && p !== b));
+  if (witness) post(sim, witness, filmer ? pick(st, [`Got the whole thing on video. Not posting it. (Posting it.) ${first(a)} v ${first(b)}`, `Filmed it, obviously. ${first(a)} and ${first(b)}. On the stairs.`]) : `There is an actual FIGHT on the stairs. ${first(a)} and ${first(b)}. Someone do something`);
   sim.notify(`${first(a)} and ${first(b)} are fighting.`);
   tale(sim, 'fight', [a, b]);
   if (random(st) < 0.4) {
@@ -343,6 +605,66 @@ export function startFight(sim: Sim, a: Pawn, b: Pawn): void {
       body: `Officers attended your building following reports of a disturbance between two residents. No further action. We would gently point out that this is the third building on your street this month.`,
     });
   }
+}
+
+/**
+ * Whoever's out on the stairs reacts: one might step in (and take a hit for it), the nosy
+ * film it, the sensible go and shut their door. A shove can break something on the landing.
+ * Returns the one filming, if anyone is.
+ */
+function bystanders(sim: Sim, h: Happening, a: Pawn, b: Pawn, seen: Pawn[]): Pawn | null {
+  const st = sim.state;
+  const lay = sim.layout;
+  const outAndAbout = (w: Pawn) => !w.life!.using && w.pose !== 'sleep' && w.life!.flat !== undefined && lay.rooms[lay.roomOf[lay.node(Math.round(w.x), Math.round(w.s))]]?.shared === true;
+  let stoppedIt = false;
+  let filmer: Pawn | null = null;
+  for (const w of seen) {
+    if (!outAndAbout(w)) continue;
+    const life = w.life!;
+    const fond = Math.max(opinion(sim, w, a), opinion(sim, w, b));
+    const stepIn = (fond >= 10 ? 0.45 : 0.08) + (has(life, 'friendly') ? 0.2 : 0) + (has(life, 'handy') ? 0.1 : 0);
+    if (!stoppedIt && random(st) < stepIn && setGoal(sim, w, [Math.round(a.x), Math.round(a.s)])) {
+      stoppedIt = true;
+      const side = opinion(sim, w, b) > opinion(sim, w, a) ? b : a;
+      rememberAbout(sim, side, 'favour', w);
+      remember(sim, life, 'brokeItUp');
+      w.doing = `Breaking up ${first(a)} and ${first(b)}`;
+      w.bubble = { text: 'Oi!', until: st.tick + 3 * TICKS_PER_MINUTE };
+      w.waitUntil = st.tick + 3 * TICKS_PER_MINUTE;
+      // It stops soon after they get there.
+      h.until = st.tick + 2 * TICKS_PER_MINUTE;
+      for (const p of [a, b]) {
+        p.talkUntil = h.until;
+        p.bubble = { text: '…', until: h.until };
+      }
+      sim.notify(`${first(w)} stepped in and broke up the fight. ${first(side)} owes them one.`);
+    } else if (has(life, 'busybody') ? random(st) < 0.7 : random(st) < 0.08) {
+      filmer ??= w;
+      w.doing = 'Filming the fight';
+      w.bubble = { text: '● REC', until: h.until };
+      w.talkUntil = h.until;
+    } else if (random(st) < 0.5) {
+      const flat = lay.flat(life.flat);
+      const nodes = flat ? flat.rooms.flatMap((r) => lay.rooms[r].nodes).filter((n) => !lay.isDoorNode(n)) : [];
+      if (nodes.length > 0 && setGoal(sim, w, lay.xs(pick(st, nodes)))) {
+        w.doing = 'Hiding in their flat';
+        w.bubble = { text: '!?', until: st.tick + 3 * TICKS_PER_MINUTE };
+        w.waitUntil = st.tick + 8 * TICKS_PER_MINUTE;
+      }
+    }
+  }
+  // A shove into the furniture.
+  if (outAndAbout(a) && random(st) < 0.35) {
+    const shared = new Set(lay.rooms.filter((r) => r.shared).flatMap((r) => r.cells));
+    const things = st.furniture.filter((f) => !f.broken && f.def !== 'radiator' && f.s === Math.round(a.s) && Math.abs(f.x - a.x) <= 6 && shared.has(lay.node(f.x, f.s)));
+    if (things.length > 0) {
+      const f = pick(st, things);
+      f.wear = 1;
+      f.broken = sim.day;
+      sim.notify(`The ${furnitureDef(f.def).name.toLowerCase()} got knocked over in the scuffle.`);
+    }
+  }
+  return filmer;
 }
 
 // ------------------------------------------------------------------ affairs

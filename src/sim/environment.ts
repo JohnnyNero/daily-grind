@@ -197,6 +197,9 @@ export function noiseOf(p: Pawn): number {
   if (d.startsWith('Having a row')) return 8;
   if (d.startsWith('Fighting')) return 10;
   if (d === 'At the party') return 2.5;
+  if (d === 'Dancing at the party') return 3.5;
+  if (d === 'Mingling at the party' || d === 'Hosting the party' || d === 'Out on the landing') return 1.5;
+  if (d === 'Winding down at the party') return 1;
   if (d.startsWith('Chatting') || d.startsWith('Gossiping') || d.startsWith('Flirting')) return 1;
   if (d === 'Cooking') return 0.5;
   if (d === 'Slamming doors') return 6;
