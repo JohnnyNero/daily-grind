@@ -10,6 +10,7 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type Lease, type ListingStyle, type Pawn } from './state';
 import { moveIn, type Person } from './tenants';
 import { friendsLeaving } from './social';
+import { amenities } from './shared';
 import { post } from './chat';
 import { expectGrade, expectThought } from './expectations';
 import { likingTarget, missingThoughts, rentThought, thoughtsOf, tierThought, type Thought } from './thoughts';
@@ -150,6 +151,11 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   const hints = hidden.slice(0, random(st) < 0.5 ? 1 : 2).map((t) => `Previous landlord: “${traitDef(t).hint}”`);
   const desperate = mustBeDesperate || ((info.tier === 'Grim' || info.tier === 'Shabby') && random(st) < L.desperate);
   if (desperate) hints.push('Can move in today. Any flat, honestly.');
+  // What the building has gets a mention (no dice: it's just what they notice).
+  const have = amenities(sim);
+  if (have.bikes && lead.job) hints.push('Asked where the bike goes before asking about the rent.');
+  else if (have.garden) hints.push(`Keeps mentioning the ${have.garden.name.toLowerCase()}.`);
+  else if (have.laundry) hints.push('Pleased there is a laundry room. Said so twice.');
   if (friendOf) hints.unshift(`A friend of ${friendOf.name.split(' ')[0]}, who lives here already.`);
   const offer = has(lead, 'haggler') ? Math.round((info.asking * L.hagglerOffer) / (5 * POUND)) * 5 * POUND : info.asking;
   return { id: st.nextId++, flat: flatId, people, traits: lead.traits, shown, hints, offer, until: st.tick + L.applicantDays * TICKS_PER_DAY, ...(desperate ? { desperate: true } : {}) };

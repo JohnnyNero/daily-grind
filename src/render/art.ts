@@ -267,6 +267,84 @@ const PIECES: Record<string, Draw> = {
     rect(c, 8, -11, 1, 4, '#222');
     rect(c, 8, -8, 3, 1, '#222');
   },
+  // Shared spaces
+  washer(c) {
+    box(c, 1, -15, 14, 15, PAL.white);
+    rect(c, 2, -14, 12, 3, light(PAL.metal, 0.3));
+    rect(c, 3, -13, 2, 1, PAL.fabricC);
+    rect(c, 6, -13, 5, 1, dark(PAL.white, 0.2));
+    box(c, 4, -10, 8, 8, PAL.metal);
+    rect(c, 5, -9, 6, 6, '#4a6a82');
+    rect(c, 6, -8, 3, 2, light('#4a6a82', 0.35));
+    rect(c, 3, -1, 2, 1, PAL.woodDark);
+    rect(c, 11, -1, 2, 1, PAL.woodDark);
+  },
+  bikeRack(c) {
+    // Two wheels and a frame, leaning in the hoops.
+    for (const wx of [3, 20]) {
+      box(c, wx, -12, 9, 9, '#2f3238');
+      rect(c, wx + 2, -10, 5, 5, '#7e8791');
+      rect(c, wx + 4, -8, 1, 1, '#2f3238');
+    }
+    rect(c, 8, -9, 14, 2, PAL.fabricC);
+    rect(c, 8, -9, 2, 6, PAL.fabricC);
+    rect(c, 18, -15, 2, 8, PAL.fabricC);
+    rect(c, 16, -16, 6, 2, '#2f3238');
+    rect(c, 7, -12, 5, 2, '#2f3238');
+    // The hoops they lock to.
+    for (const hx of [1, 15, 29]) {
+      rect(c, hx, -9, 2, 9, PAL.metal);
+      rect(c, hx, -10, 2, 1, light(PAL.metal, 0.3));
+    }
+    rect(c, 0, -1, 32, 1, dark(PAL.metal, 0.3));
+  },
+  bench(c, W) {
+    box(c, 1, -17, W - 2, 4, PAL.wood);
+    box(c, 1, -11, W - 2, 3, light(PAL.wood, 0.1));
+    box(c, 3, -9, 3, 9, PAL.woodDark);
+    box(c, W - 6, -9, 3, 9, PAL.woodDark);
+    rect(c, 4, -14, 2, 4, PAL.woodDark);
+    rect(c, W - 6, -14, 2, 4, PAL.woodDark);
+  },
+  planter(c) {
+    box(c, 2, -8, 12, 8, '#8a5a3a');
+    rect(c, 3, -7, 10, 1, light('#8a5a3a', 0.25));
+    box(c, 2, -12, 5, 5, PAL.plant);
+    box(c, 6, -14, 6, 7, light(PAL.plant, 0.12));
+    box(c, 10, -11, 4, 4, PAL.plant);
+    rect(c, 8, -16, 2, 2, PAL.fabricC);
+    rect(c, 4, -14, 2, 2, PAL.poster);
+    rect(c, 12, -13, 2, 2, PAL.fabricC);
+  },
+  bbq(c) {
+    // A bowl on legs with a grill over the coals, and a shelf at the side.
+    rect(c, 5, -9, 2, 9, PAL.metal);
+    rect(c, 18, -9, 2, 9, PAL.metal);
+    rect(c, 3, -2, 6, 2, '#2f3238');
+    rect(c, 16, -2, 6, 2, '#2f3238');
+    box(c, 2, -17, 22, 9, '#33353b');
+    rect(c, 3, -16, 20, 1, light('#33353b', 0.25));
+    rect(c, 4, -15, 18, 2, PAL.metal);
+    for (const gx of [6, 10, 14, 18]) rect(c, gx, -15, 1, 2, dark(PAL.metal, 0.4));
+    box(c, 7, -17, 4, 2, '#a85a3a'); // sausages
+    box(c, 13, -17, 4, 2, '#a85a3a');
+    rect(c, 6, -11, 14, 1, PAL.fabricC);
+    rect(c, 9, -11, 3, 1, PAL.poster);
+    box(c, 24, -12, 7, 3, PAL.wood);
+    rect(c, 26, -9, 2, 9, PAL.woodDark);
+    box(c, 25, -16, 3, 4, PAL.white);
+  },
+  parasolTable(c, W) {
+    box(c, 8, -32, W - 16, 4, dark(PAL.fabricC, 0.1));
+    box(c, 3, -29, W - 6, 5, PAL.fabricC);
+    for (let i = 0; i < 3; i++) rect(c, 6 + i * 8, -28, 4, 3, PAL.white);
+    rect(c, W / 2 - 1, -24, 2, 12, PAL.woodDark);
+    box(c, 2, -12, W - 4, 3, PAL.wood);
+    box(c, 5, -9, 3, 9, PAL.woodDark);
+    box(c, W - 8, -9, 3, 9, PAL.woodDark);
+    box(c, 10, -17, 4, 5, PAL.glass);
+    box(c, 19, -16, 4, 4, PAL.white);
+  },
 };
 
 function bed(c: Ctx, W: number, duvet: string): void {

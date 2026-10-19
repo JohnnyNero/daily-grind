@@ -6,6 +6,7 @@
 
 import { useUp } from './upkeep';
 import { furnitureDef, spotColumns, type Offer } from './defs';
+import { outdoorsOk } from './shared';
 import { flatScore } from './impressiveness';
 import type { Flat } from './layout';
 import { findPath } from './layout';
@@ -15,14 +16,14 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type Life, type NeedId, type Pawn, type Person } from './state';
 import { forget, likingTarget, remember, thoughtsOf } from './thoughts';
 import { has } from './traits';
-import { SHARED, dirtOf, isNight, noiseReaching, tempOf, tidy, warmthOf } from './environment';
+import { SHARED, dirtOf, isNight, outdoorTemp, noiseReaching, tempOf, tidy, warmthOf } from './environment';
 import { noticeTrait } from './outcomes';
 import { breakThink } from './breaks';
 import { post, recently } from './chat';
 import { rememberAbout } from './social';
 import { hhmm } from './time';
 import { stat } from './stat';
-import { DECAY, NEEDS, OUTINGS, SEEK, START_NEEDS } from './tuning';
+import { DECAY, NEEDS, OUTINGS, SEEK, SHARED_USE, START_NEEDS } from './tuning';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -229,6 +230,13 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   }
   const here = sim.layout.flatAt(Math.round(p.x), Math.round(p.s));
   if (here?.id !== flat.id || sim.layout.isDoorNode(sim.layout.node(Math.round(p.x), Math.round(p.s)))) {
+    // Bike out of the rack: off to work on it.
+    if (life.cycling && life.job) {
+      delete life.cycling;
+      life.cycled = true;
+      leaveFor(sim, p, 'At work', life.job.back);
+      return;
+    }
     // On the way in, a look at the post in the lobby: where neighbours bump into each other.
     const room = sim.layout.roomOf[sim.layout.node(Math.round(p.x), Math.round(p.s))];
     if (room !== -1 && sim.layout.rooms[room].shared && life.postDay !== sim.day && random(st) < 0.6) {
@@ -242,6 +250,7 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   }
   const m = sim.minuteOfDay;
   if (life.job && isWorkday(sim) && life.workedDay !== sim.day && m >= life.job.leave && m < life.job.back - 60) {
+    if (cycleToWork(sim, p)) return;
     leaveFor(sim, p, 'At work', life.job.back);
     return;
   }
@@ -277,6 +286,7 @@ export function tenantThink(sim: Sim, p: Pawn): void {
     }
   }
   if (needs.comfort < SEEK.comfort && tryUse(sim, p, flat, 'comfort')) return;
+  if (errands(sim, p, flat)) return;
   // Musicians practise in the evenings (night owls until gone midnight).
   const evening = has(life, 'nightOwl') ? m >= 18 * 60 || m < 30 : m >= 18 * 60 && m < 21 * 60 + 30;
   if (has(life, 'musician') && evening && needs.fun < NEEDS.practiseUnder && random(st) < NEEDS.practiseChance) {
@@ -341,7 +351,7 @@ export function choices(sim: Sim, p: Pawn, flat: Flat, match: (o: Offer, f: Furn
 /** Goes to the nearest thing that meets a need and starts walking there. False if there's nothing. */
 function tryUse(sim: Sim, p: Pawn, flat: Flat, need: NeedId): boolean {
   // Food means cooking if they can, else picking at the fridge.
-  const list = choices(sim, p, flat, (o) => o.need === need);
+  const list = choices(sim, p, flat, (o) => o.need === need && !o.errand);
   if (need === 'food') list.sort((a, b) => Number(a.f.def !== 'cooker') - Number(b.f.def !== 'cooker'));
   // For fun, the telly comes first: a sofa with a telly beats the laptop.
   for (const c of list) {
@@ -380,6 +390,12 @@ function continueUsing(sim: Sim, p: Pawn): void {
     if (o.pose !== 'stand') p.pose = o.pose;
     if (f) p.facing = f.flip ? -1 : 1;
     if (o.pose === 'sleep') life.sleptOn = u.furniture === ON_THE_FLOOR ? 'floor' : u.offer === -2 ? 'sofa' : 'bed';
+    if (f && o.join) meetAround(sim, p, f);
+    return;
+  }
+  // Sitting out is for daylight and decent weather: when that turns, they go in.
+  if (f && outdoors(sim, f) && !outdoorsOk(sim)) {
+    stopUsing(sim, p, true);
     return;
   }
   const full = o.need !== 'sleep' && o.rate > 0 && life.needs[o.need] >= 1;
@@ -416,6 +432,8 @@ function stopUsing(sim: Sim, p: Pawn, finished: boolean): void {
   if (used && u.offer >= 0) useUp(sim, used, p);
   if (o.memory) remember(sim, life, o.memory);
   if (o.doing === 'Cooking') life.meal = true;
+  if (used?.def === 'washer') life.washedDay = sim.day;
+  if (o.doing === 'Getting the bike out') life.cycling = true;
   if (u.offer === -1) {
     life.meal = false;
     remember(sim, life, 'cookedMeal');
@@ -440,7 +458,7 @@ function goToSleep(sim: Sim, p: Pawn, flat: Flat): void {
 
 function eat(sim: Sim, p: Pawn, flat: Flat): void {
   // A chair by a table first, then anywhere to sit, else standing up.
-  const seats = choices(sim, p, flat, (o) => o.pose === 'sit' && o.need === 'comfort');
+  const seats = choices(sim, p, flat, (o) => o.pose === 'sit' && o.need === 'comfort' && !o.errand);
   seats.sort((a, b) => Number(a.f.def !== 'chair') - Number(b.f.def !== 'chair'));
   for (const c of seats) if (startUsing(sim, p, c.f.id, c.spot, -1, c.at)) return;
   const life = p.life!;
@@ -487,7 +505,9 @@ export function tenantReturns(sim: Sim, p: Pawn): void {
   const st = sim.state;
   const why = life.away?.why ?? '';
   if (why === 'At work') {
-    if (random(st) < NEEDS.commute) remember(sim, life, 'commute');
+    if (life.cycled) remember(sim, life, 'cycledToWork');
+    else if (random(st) < NEEDS.commute) remember(sim, life, 'commute');
+    delete life.cycled;
     life.needs.bladder = Math.min(life.needs.bladder, 0.5);
   }
   for (const [need, gain] of Object.entries(OUTINGS[why] ?? {}) as [NeedId, number][]) life.needs[need] = Math.min(1, life.needs[need] + gain);
@@ -538,4 +558,114 @@ function potter(sim: Sim, p: Pawn, flat: Flat): void {
 /** For the info panel: how the flat they live in scores. */
 export function homeScore(sim: Sim, p: Pawn) {
   return p.life ? flatScore(sim, p.life.flat) : null;
+}
+
+// ------------------------------------------------------------------ shared spaces
+
+/** Is this piece out in the open (on the roof, in a garden)? */
+function outdoors(sim: Sim, f: Furniture): boolean {
+  const lay = sim.layout;
+  const room = lay.roomOf[lay.node(f.x, f.s)];
+  return room !== -1 && lay.rooms[room].outdoor;
+}
+
+/** Someone's at the grill in this room, with the sausages on. */
+function hostAt(sim: Sim, room: number): boolean {
+  const lay = sim.layout;
+  return sim.state.pawns.some((o) => {
+    const u = o.life?.using;
+    if (!u || u.until === 0 || u.offer !== 0) return false;
+    const g = sim.state.furniture.find((x) => x.id === u.furniture);
+    return g?.def === 'bbq' && lay.roomOf[lay.node(g.x, g.s)] === room;
+  });
+}
+
+/** Errands in the shared parts and out in the open (the laundry room, the roof), nearest first. Outdoors only in daylight and decent weather. */
+function sharedChoices(sim: Sim, p: Pawn, match: (o: Offer, f: Furniture) => boolean): Choice[] {
+  const lay = sim.layout;
+  const fine = outdoorsOk(sim);
+  const out: Choice[] = [];
+  for (const f of sim.state.furniture) {
+    if (f.broken !== undefined) continue;
+    const room = lay.roomOf[lay.node(f.x, f.s)];
+    if (room === -1 || (!lay.rooms[room].shared && !lay.rooms[room].outdoor) || (lay.rooms[room].outdoor && !fine)) continue;
+    const def = furnitureDef(f.def);
+    def.offers?.forEach((o, i) => {
+      if (!o.errand || !match(o, f) || (o.join && !hostAt(sim, room))) return;
+      spotColumns(def, f.x, f.flip).forEach((x, spot) => {
+        if (!taken(sim, f, spot, p)) out.push({ f, spot, offer: i, at: [x, f.s] });
+      });
+    });
+  }
+  const far = (c: Choice) => Math.abs(c.at[0] - p.x) + 4 * Math.abs(c.at[1] - p.s);
+  return out.sort((a, b) => far(a) - far(b));
+}
+
+/** Goes to the first of these that they can walk to. */
+function goTo(sim: Sim, p: Pawn, list: Choice[]): boolean {
+  for (const c of list) if (startUsing(sim, p, c.f.id, c.spot, c.offer, c.at)) return true;
+  return false;
+}
+
+const SOCIABLE = ['friendly', 'busybody', 'partyAnimal'];
+
+/**
+ * Things they do because they feel like it rather than because they must: the washing every
+ * few days, an hour out in the garden when it's nice, a barbecue (and joining one). Nothing
+ * here rolls the dice unless there's somewhere to go, so a building without any carries on
+ * exactly as before.
+ */
+function errands(sim: Sim, p: Pawn, flat: Flat): boolean {
+  const life = p.life!;
+  const st = sim.state;
+  const m = sim.minuteOfDay;
+  const U = SHARED_USE;
+  // The washing: in the flat if there's a machine there, else down in the laundry room.
+  if ((life.washedDay === undefined || sim.day - life.washedDay >= U.washEveryDays) && m >= U.washFrom && m < U.washTo) {
+    const wash = (o: Offer) => o.doing === 'Doing the washing';
+    if (goTo(sim, p, [...choices(sim, p, flat, wash), ...sharedChoices(sim, p, wash)])) return true;
+  }
+  // Joining a barbecue that's already going.
+  const join = sharedChoices(sim, p, (o) => !!o.join);
+  if (join.length > 0 && random(st) < U.joinChance) return goTo(sim, p, join);
+  // Firing up the grill: sociable types sooner.
+  const sociable = SOCIABLE.some((t) => has(life, t));
+  const warm = outdoorTemp(sim) >= U.bbqTemp && m >= U.bbqFrom && m < U.bbqTo;
+  const grill = warm ? sharedChoices(sim, p, (o) => o.doing === 'Firing up the barbecue') : [];
+  if (grill.length > 0 && life.gardenDay !== sim.day && random(st) < U.bbqChance * (sociable ? U.sociableBbq : 1)) {
+    life.gardenDay = sim.day;
+    return goTo(sim, p, grill);
+  }
+  // An hour on the bench, if they're after fun or comfort and it's nice out.
+  if (life.gardenDay === sim.day || (life.needs.fun >= U.leisureUnder && life.needs.comfort >= U.leisureUnder)) return false;
+  const sit = sharedChoices(sim, p, (o, f) => f.def !== 'bbq' && !o.join && furnitureDef(f.def).space === 'garden');
+  if (sit.length > 0 && random(st) < U.leisureChance) {
+    life.gardenDay = sim.day;
+    return goTo(sim, p, sit);
+  }
+  return false;
+}
+
+/** Arriving at the barbecue: a word with whoever's already there. */
+function meetAround(sim: Sim, p: Pawn, f: Furniture): void {
+  const lay = sim.layout;
+  const room = lay.roomOf[lay.node(f.x, f.s)];
+  const others = sim.state.pawns.filter((o) => {
+    const g = o.life?.using && o.life.using.until > 0 ? sim.state.furniture.find((x) => x.id === o.life!.using!.furniture) : undefined;
+    return o !== p && g && lay.roomOf[lay.node(g.x, g.s)] === room && (g.def === 'bbq' || g.def === 'parasolTable');
+  });
+  for (const o of others.slice(0, 4)) {
+    rememberAbout(sim, p, 'chat', o);
+    rememberAbout(sim, o, 'chat', p);
+  }
+}
+
+/** Before going to work: maybe the bike. Asked once a day, and only if there's a rack to hand. */
+function cycleToWork(sim: Sim, p: Pawn): boolean {
+  const life = p.life!;
+  if (life.cycleDay === sim.day) return false;
+  const racks = sharedChoices(sim, p, (o) => o.doing === 'Getting the bike out');
+  if (racks.length === 0) return false;
+  life.cycleDay = sim.day;
+  return random(sim.state) < SHARED_USE.cycleChance && goTo(sim, p, racks);
 }

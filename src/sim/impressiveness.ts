@@ -8,8 +8,9 @@
 import { furnitureDef } from './defs';
 import type { Sim } from './sim';
 import { warmthOf } from './environment';
+import { amenities, hasOwnWasher } from './shared';
 import { curve } from './stat';
-import { IMPRESSIVE, TIERS, WARMTH } from './tuning';
+import { AMENITIES, IMPRESSIVE, TIERS, WARMTH } from './tuning';
 
 export type FactorId = 'space' | 'furnishing' | 'basics' | 'light' | 'decor' | 'clean' | 'warmth' | 'quiet';
 
@@ -109,6 +110,11 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
   let score = I.meanShare * mean + (1 - I.meanShare) * Math.min(...values);
   const ceiling = factors.space * I.spaceCeiling;
   if (score > ceiling) score = ceiling + (score - ceiling) * I.overCeiling;
+  // A garden, a laundry or somewhere for the bikes makes every flat in the building a bit nicer.
+  const have = amenities(sim);
+  if (have.garden) score += AMENITIES.score.garden;
+  if (have.laundry || hasOwnWasher(sim, flatId)) score += AMENITIES.score.laundry;
+  if (have.bikes) score += AMENITIES.score.bikes;
   // Missing the basics caps it too: a gutted flat is grim however quiet it is.
   score = Math.min(score, I.basicsCapBase + factors.basics * I.basicsCapShare);
   score = Math.round(Math.max(0, Math.min(100, score)));
@@ -149,5 +155,6 @@ export function flatNeeds(sim: Sim, flatId: string): Need[] {
     { label: 'A radiator', done: any('radiator'), must: false, group: 'decor' },
     { label: 'Somewhere to sit', done: any('sofa', 'armchair', 'chair'), must: false, group: 'sit' },
     { label: 'A window or a lamp', done: s.factors.light > 15, must: false, group: 'decor' },
+    { label: 'Somewhere to do the washing', done: any('washer') || amenities(sim).laundry !== null, must: false, group: 'shared' },
   ];
 }

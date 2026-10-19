@@ -16,7 +16,8 @@ import { TICKS_PER_HOUR, type Life, type NeedId, type Pawn } from './state';
 import { has } from './traits';
 import { brokenIn } from './upkeep';
 import { furnitureDef } from './defs';
-import { BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
+import { amenities, hasOwnWasher } from './shared';
+import { AMENITIES, BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
 
 // The memories, need bands and what each thought is worth are in tuning.ts.
 export { BASELINE, MEMORIES, type MemoryDef } from './tuning';
@@ -53,6 +54,7 @@ export function thoughtsOf(sim: Sim, p: Pawn): Thought[] {
     if (rent) out.push(rent);
     out.push(...placeThoughts(sim, life, flat.id));
   }
+  out.push(...amenityThoughts(sim, life));
   out.push(...peopleThoughts(sim, p));
   out.push(...memoryThoughts(sim, life));
   return out;
@@ -72,6 +74,17 @@ function placeThoughts(sim: Sim, life: Life, flatId: string): Thought[] {
   if (binsOverflowing(sim)) out.push({ label: 'Bins overflowing', value: LIVE.binsOverflowing });
   if (life.pet && life.pet !== 'asked') out.push({ label: `Has ${life.pet}`, value: LIVE.hasPet });
   for (const f of brokenIn(sim, flatId).slice(0, LIVE.broken.most)) out.push({ label: `Broken ${furnitureDef(f.def).name.toLowerCase()}`, value: LIVE.broken.value });
+  return out;
+}
+
+/** What the building has that's worth having: a garden, a laundry, somewhere for the bike. */
+function amenityThoughts(sim: Sim, life: Life): Thought[] {
+  const out: Thought[] = [];
+  const have = amenities(sim);
+  if (have.garden) out.push({ label: `Building has a ${have.garden.name.toLowerCase()}`, value: AMENITIES.garden });
+  // The laundry matters to anyone who hasn't their own machine; with neither, the washing is a trial.
+  if (!hasOwnWasher(sim, life.flat)) out.push(have.laundry ? { label: 'Laundry downstairs', value: AMENITIES.laundry } : { label: 'Nowhere to do the washing', value: AMENITIES.noWashing });
+  if (have.bikes && life.job) out.push({ label: 'Somewhere to keep the bike', value: AMENITIES.bikes });
   return out;
 }
 

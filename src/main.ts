@@ -9,6 +9,7 @@ import { Panels } from './ui/panels';
 import { attachInput } from './ui/input';
 import { FurnitureCard } from './ui/furnitureCard';
 import { furnitureAt } from './sim/build';
+import { spaceAt } from './sim/shared';
 import { HandoverUi } from './ui/handover';
 
 const AUTOSAVE_MS = 30_000;
@@ -145,6 +146,12 @@ function play(sim: Sim): void {
       if (flat) {
         renderer.selectedPawn = null;
         panels.show({ kind: 'flat', id: flat.id });
+        return;
+      }
+      const space = cell ? spaceAt(sim, cell.x, cell.s) : undefined;
+      if (space) {
+        renderer.selectedPawn = null;
+        panels.show({ kind: 'space', x: cell!.x, s: cell!.s });
       } else panels.close();
     },
   });

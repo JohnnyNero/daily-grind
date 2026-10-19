@@ -3,7 +3,10 @@
 
 import type { NeedId } from './state';
 
-export type FurnitureGroup = 'sleep' | 'sit' | 'kitchen' | 'bathroom' | 'storage' | 'decor';
+export type FurnitureGroup = 'sleep' | 'sit' | 'kitchen' | 'bathroom' | 'storage' | 'decor' | 'shared';
+
+/** The shared spaces a piece can make: a laundry room, a bike store, a garden or roof terrace. */
+export type SpaceKind = 'laundry' | 'bikes' | 'garden';
 
 /**
  * Something a piece of furniture lets you do: which need it meets, how fast (per game hour),
@@ -22,6 +25,10 @@ export interface Offer {
   doing: string;
   /** A memory left when they finish. */
   memory?: string;
+  /** Not for a need: tenants go when they feel like it (the washing, the garden, the bike), not when they must. */
+  errand?: boolean;
+  /** Only works while someone is cooking at the grill in the same room: for guests. */
+  join?: boolean;
 }
 
 export interface FurnitureDef {
@@ -37,6 +44,8 @@ export interface FurnitureDef {
   decor?: boolean;
   /** Worth a burglar's while. */
   valuable?: boolean;
+  /** The kind of shared space this piece makes when it's in a shared room (or, for garden things, outdoors). */
+  space?: SpaceKind;
   /** Columns people use it from, counted from the left. */
   spots?: number[];
   offers?: Offer[];
@@ -71,6 +80,13 @@ export const FURNITURE: readonly FurnitureDef[] = [
   { id: 'picture', name: 'Picture', w: 1, h: 1, wall: true, group: 'decor', value: 12, decor: true },
   { id: 'mirror', name: 'Mirror', w: 1, h: 1, wall: true, group: 'bathroom', value: 8, decor: true },
   { id: 'clock', name: 'Wall clock', w: 1, h: 1, wall: true, group: 'decor', value: 6, decor: true },
+  // Shared spaces
+  { id: 'washer', name: 'Washing machine', w: 1, h: 1, group: 'shared', value: 30, space: 'laundry', offers: [{ need: 'hygiene', rate: 0.3, minutes: [40, 60], pose: 'stand', errand: true, doing: 'Doing the washing', memory: 'didWashing' }] },
+  { id: 'bikeRack', name: 'Bike rack', w: 2, h: 1, group: 'shared', value: 12, space: 'bikes', spots: [0, 1], offers: [{ need: 'fun', rate: 0, minutes: [2, 4], pose: 'stand', errand: true, doing: 'Getting the bike out' }] },
+  { id: 'bench', name: 'Garden bench', w: 2, h: 1, group: 'shared', value: 14, space: 'garden', spots: [0, 1], offers: [{ need: 'comfort', rate: 0.9, minutes: [30, 90], pose: 'sit', also: { fun: 0.5 }, errand: true, doing: 'Sitting out on the bench', memory: 'satOut' }] },
+  { id: 'planter', name: 'Planter', w: 1, h: 1, group: 'shared', value: 10, space: 'garden', decor: true },
+  { id: 'bbq', name: 'BBQ grill', w: 2, h: 1, group: 'shared', value: 25, space: 'garden', spots: [0, 1], offers: [{ need: 'fun', rate: 0.9, minutes: [30, 50], pose: 'stand', errand: true, doing: 'Firing up the barbecue', memory: 'firedUpBbq' }, { need: 'fun', rate: 0.8, minutes: [25, 45], pose: 'stand', errand: true, join: true, doing: 'At the barbecue', memory: 'gotBarbecue' }] },
+  { id: 'parasolTable', name: 'Table and parasol', w: 2, h: 2, group: 'shared', value: 25, space: 'garden', spots: [0, 1], offers: [{ need: 'comfort', rate: 0.7, minutes: [30, 60], pose: 'sit', also: { fun: 0.4 }, errand: true, doing: 'Sitting out at the table', memory: 'satOut' }, { need: 'fun', rate: 0.8, minutes: [25, 45], pose: 'sit', errand: true, join: true, doing: 'At the barbecue', memory: 'gotBarbecue' }] },
 ];
 
 const byId = new Map(FURNITURE.map((d) => [d.id, d]));
