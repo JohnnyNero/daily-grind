@@ -23,6 +23,9 @@ const STOREY = 4;
 /** World y of the bottom of row s (where the feet of someone standing in it are). */
 export const floorY = (s: number) => GROUND_Y - s * TILE;
 
+const STEP = '#b9ad98';
+const STEP_EDGE = '#d8cdb8';
+
 export interface Camera {
   /** Screen (CSS) pixels per world pixel. */
   scale: number;
@@ -261,6 +264,7 @@ export class Renderer {
       const [x, s] = k.split(',').map(Number);
       this.drawCell(ctx, lay, colours, x, s, kind);
     }
+    this.drawDoorsteps(ctx, lay);
     for (const f of st.furniture) {
       const d = furnitureDef(f.def);
       const top = floorY(f.s) - d.h * TILE;
@@ -376,6 +380,29 @@ export class Renderer {
     const room = lay.roomOf[lay.node(x, s)];
     if (room === -1) return null;
     return this.isBare(lay, room) ? 'bare' : colours[room];
+  }
+
+  /**
+   * Steps up from the pavement to a street door that's raised off the ground: two stone
+   * treads, seen side on, in the cell in front of the door.
+   */
+  private drawDoorsteps(ctx: CanvasRenderingContext2D, lay: Layout): void {
+    for (const [k, kind] of Object.entries(this.sim.state.cells)) {
+      if (kind !== 'entrance') continue;
+      const [x, s] = k.split(',').map(Number);
+      if (s !== 1) continue;
+      for (const dx of [-1, 1]) {
+        if (lay.inPlot(x + dx)) continue;
+        const X = (x + dx) * TILE;
+        const near = dx < 0 ? X + TILE / 2 : X;
+        const far = dx < 0 ? X : X + TILE / 2;
+        box(ctx, far, GROUND_Y - TILE / 2, TILE / 2, TILE / 2, STEP);
+        box(ctx, near, GROUND_Y - TILE, TILE / 2, TILE, STEP);
+        // Worn front edges.
+        rect(ctx, far, GROUND_Y - TILE / 2, TILE / 2, 1, STEP_EDGE);
+        rect(ctx, near, GROUND_Y - TILE, TILE / 2, 1, STEP_EDGE);
+      }
+    }
   }
 
   /** Does this cell face the outside (so it's brick)? */
