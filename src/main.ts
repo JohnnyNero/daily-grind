@@ -7,6 +7,8 @@ import { el } from './ui/dom';
 import { Hud } from './ui/hud';
 import { Panels } from './ui/panels';
 import { attachInput } from './ui/input';
+import { FurnitureCard } from './ui/furnitureCard';
+import { furnitureAt } from './sim/build';
 
 /** At 1x an in-game minute takes 2.5 real seconds, so a day takes about an hour. */
 const BASE_TICKS_PER_SECOND = TICKS_PER_MINUTE / 2.5;
@@ -55,7 +57,13 @@ function play(sim: Sim): void {
   panels.onClose = () => {
     renderer.selectedPawn = null;
   };
-  const build = new BuildUi(sim, renderer);
+  const card = new FurnitureCard(sim);
+  const build = new BuildUi(sim, renderer, card);
+  card.onMove = (id) => (build.active ? build.moveFromCard(id) : build.startMoving(id));
+  card.onChange = () => {
+    if (card.showing === null && !build.isMoving) renderer.build.selected = null;
+    renderer.build.version++;
+  };
   hud.onBuild = () => build.start();
   hud.onOverlay = (mode) => {
     renderer.overlay = mode;
@@ -93,12 +101,22 @@ function play(sim: Sim): void {
         return;
       }
       const p = renderer.pawnAt(x, y);
+      const was = card.showing;
+      card.hide();
       if (p) {
         renderer.selectedPawn = p.id;
         panels.show({ kind: 'pawn', id: p.id });
         return;
       }
       const cell = renderer.cellAt(x, y);
+      // Furniture brings up its card (tap it again, or anywhere else, to put the card away).
+      const piece = cell && cell.r < 3 ? furnitureAt(sim.state, cell.x, cell.s, cell.r) : undefined;
+      if (piece && was !== piece.id) {
+        panels.close();
+        renderer.build.selected = piece.id;
+        card.show(piece.id);
+        return;
+      }
       const flat = cell && cell.r < 3 ? sim.layout.flatAt(cell.x, cell.s) : undefined;
       if (flat) {
         renderer.selectedPawn = null;

@@ -400,6 +400,17 @@ function continueUsing(sim: Sim, p: Pawn): void {
   p.waitUntil = st.tick + TICKS_PER_MINUTE;
 }
 
+/** A piece of furniture was moved, turned or taken away: anyone using it or on their way to it stops. */
+export function disturb(sim: Sim, furnitureId: number): void {
+  for (const p of sim.state.pawns) {
+    if (p.life?.using?.furniture !== furnitureId) continue;
+    stopUsing(sim, p, false);
+    p.path = [];
+    p.goal = null;
+    p.waitUntil = 0;
+  }
+}
+
 function stopUsing(sim: Sim, p: Pawn, finished: boolean): void {
   const life = p.life!;
   const u = life.using!;

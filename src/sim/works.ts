@@ -9,11 +9,10 @@
 // there's no list of orders to keep in step.
 
 import type { BuildParts } from './build';
-import { furnitureDef } from './defs';
-import { DEMOLISH_PRICE, FLOOR_PRICE, INSULATE_PRICE, RESALE, SEGMENT_PRICE, STAIRS_PRICE, book, furniturePrice, pounds } from './economy';
+import { DEMOLISH_PRICE, FLOOR_PRICE, INSULATE_PRICE, SEGMENT_PRICE, STAIRS_PRICE, book, pounds } from './economy';
 import { SHARED } from './environment';
 import type { Sim } from './sim';
-import { type Furniture, type Segment, type Stair, type State } from './state';
+import type { Segment, Stair, State } from './state';
 import { remember } from './thoughts';
 
 export const BUILDERS = 'Bodge & Sons';
@@ -28,12 +27,12 @@ export const BUILDER_NOISE = 5;
 
 /** Minutes of work for each kind of piece. */
 const SEGMENT_MINUTES: Record<Segment, number> = { wall: 60, window: 90, door: 60, flatDoor: 90, entrance: 120 };
-const MINUTES = { knockDown: 30, floor: 20, stairs: 360, insulate: 45, furniture: 15, shift: 10 };
+const MINUTES = { knockDown: 30, floor: 20, stairs: 360, insulate: 45 };
 
 /** One thing to do: what, where (for drawing it and the noise), what it costs and how long. */
 export interface Piece {
   label: string;
-  /** Pence; negative for furniture sold off. */
+  /** Pence. */
   cost: number;
   minutes: number;
   /** Where the work is: a column and storey. */
@@ -41,12 +40,11 @@ export interface Piece {
   s: number;
   /** Takes something away (drawn crossed out) rather than adding it. */
   removes: boolean;
-  /** For drawing it: a wall segment, a floor slab, stairs, furniture (and where it was, if it's moving) or insulation. */
+  /** For drawing it: a wall segment, a floor slab, stairs or insulation. */
   part:
     | { kind: 'segment'; seg: Segment | null }
     | { kind: 'slab'; level: number }
     | { kind: 'stair'; stair: Stair }
-    | { kind: 'furniture'; f: Furniture; from?: Furniture }
     | { kind: 'insulate'; key: string };
   apply(st: State): void;
 }
@@ -61,32 +59,15 @@ export function copyParts(p: BuildParts): BuildParts {
 
 /**
  * What it takes to turn `now` into `target`, in the order it's done: things come out
- * before new things go in, floors before walls, walls before stairs, furniture last.
+ * before new things go in, floors before walls, walls before stairs. Furniture isn't
+ * building work: it goes in straight away (see furnish.ts).
  */
 export function piecesBetween(now: BuildParts, target: BuildParts): Piece[] {
   const out: Piece[] = [];
   const cols = (k: string) => k.split(',').map(Number) as [number, number];
-  const furnAfter = new Map(target.furniture.map((f) => [f.id, f]));
-  const furnBefore = new Map(now.furniture.map((f) => [f.id, f]));
   const stairsAfter = new Set(target.stairs.map((t) => t.id));
   const stairsBefore = new Set(now.stairs.map((t) => t.id));
 
-  for (const f of now.furniture) {
-    if (furnAfter.has(f.id)) continue;
-    const name = furnitureDef(f.def).name;
-    out.push({
-      label: `Took out the ${name.toLowerCase()}`,
-      cost: -Math.round(furniturePrice(f.def) * RESALE),
-      minutes: MINUTES.shift,
-      x: f.x,
-      s: f.s,
-      removes: true,
-      part: { kind: 'furniture', f },
-      apply: (st) => {
-        st.furniture = st.furniture.filter((o) => o.id !== f.id);
-      },
-    });
-  }
   for (const t of now.stairs) {
     if (stairsAfter.has(t.id)) continue;
     out.push({
@@ -220,42 +201,6 @@ export function piecesBetween(now: BuildParts, target: BuildParts): Piece[] {
       },
     });
   }
-  for (const f of target.furniture) {
-    const was = furnBefore.get(f.id);
-    const name = furnitureDef(f.def).name.toLowerCase();
-    if (!was) {
-      out.push({
-        label: `Delivered a ${name}`,
-        cost: furniturePrice(f.def),
-        minutes: MINUTES.furniture,
-        x: f.x,
-        s: f.s,
-        removes: false,
-        part: { kind: 'furniture', f },
-        apply: (st) => {
-          st.furniture.push({ ...f });
-        },
-      });
-    } else if (was.x !== f.x || was.s !== f.s || was.r !== f.r || !!was.flip !== !!f.flip) {
-      const moved = was.x !== f.x || was.s !== f.s || was.r !== f.r;
-      out.push({
-        label: moved ? `Moved the ${name}` : `Turned the ${name} round`,
-        cost: 0,
-        minutes: moved ? MINUTES.shift : 0,
-        x: f.x,
-        s: f.s,
-        removes: false,
-        part: { kind: 'furniture', f, from: was },
-        apply: (st) => {
-          const o = st.furniture.find((x) => x.id === f.id);
-          if (!o) return;
-          Object.assign(o, { x: f.x, s: f.s, r: f.r });
-          if (f.flip) o.flip = true;
-          else delete o.flip;
-        },
-      });
-    }
-  }
   return out;
 }
 
@@ -379,7 +324,7 @@ export function worksMinute(sim: Sim): void {
   const w = st.works;
   if (!w.job) return;
   let pieces = jobPieces(sim);
-  // Free, instant bits (turning furniture round) just happen.
+  // Free, instant bits (stripping insulation that's going anyway) just happen.
   if (pieces.some((x) => x.minutes === 0)) {
     for (const p of pieces.filter((x) => x.minutes === 0)) p.apply(st);
     sim.changed();

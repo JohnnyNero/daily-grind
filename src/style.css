@@ -352,3 +352,21 @@ body.building .overlays, body.panel-open .overlays { display: none; }
 .seg-row { display: flex; gap: 4px; flex-wrap: wrap; }
 .seg-row button { min-height: 40px; padding: 0 12px; border: 2px solid #cdbfa8; border-radius: 8px; background: var(--sheet); font-weight: 700; cursor: pointer; }
 .seg-row button[aria-pressed="true"] { border-color: var(--outline); background: var(--accent); }
+
+/* the card for a piece of furniture */
+.furn-card {
+  position: fixed; left: 12px; right: 12px; bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 10px); max-width: 420px; margin: 0 auto; z-index: 7;
+  padding: 10px 12px 12px; border-radius: 14px; background: var(--sheet); color: var(--sheet-ink); box-shadow: 0 6px 20px #00000055;
+}
+.furn-card[hidden] { display: none; }
+body.building .furn-card { bottom: calc(var(--buildbar-h, 0px) + 8px); }
+.furn-card .head { display: flex; align-items: flex-start; gap: 8px; }
+.furn-card .head > div { flex: 1; display: grid; gap: 2px; }
+.furn-card .head strong { font-size: 16px; }
+.furn-card .head span { font-size: 13px; color: var(--sheet-muted); }
+.furn-card .close { border: 0; background: none; font-size: 16px; color: var(--sheet-muted); min-width: 32px; min-height: 32px; cursor: pointer; }
+.furn-card p { margin: 6px 0 10px; font-size: 13px; color: var(--sheet-muted); }
+.furn-card .actions { display: flex; gap: 6px; }
+.furn-card .actions button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: #ece5d8; color: var(--sheet-ink); font-weight: 600; cursor: pointer; }
+.furn-card .actions .primary { background: var(--accent); }
+.furn-card .actions .danger { background: var(--bad); color: #fff; }

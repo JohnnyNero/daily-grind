@@ -1,20 +1,17 @@
 // Build mode: draw plans for the building. Plans are free and change nothing until you sign
 // them off; then the builders come and do the work over the next few days, a piece at a
-// time. Pick a group, then a tool or a piece. Tap to place, drag to build along a line or
-// mark out a room, and drag near a piece of furniture to slide it about. The chips at the
-// top zoom straight to a flat. Every change to the plans can be undone.
+// time. Furniture is different: it goes in, moves and sells straight away. Pick a group,
+// then a tool or a piece. Tap to place, drag to build along a line or mark out a room. Tap
+// a piece of furniture for its card (move, turn, sell). The chips at the top zoom straight
+// to a flat. Everything can be undone.
 
 import {
   buildRoom,
-  flipFurniture,
   furnitureAt,
   furnitureProblem,
-  moveFurniture,
-  placeFurniture,
   placeSegment,
   placeSlab,
   placeStair,
-  removeFurniture,
   removeSegment,
   removeSlab,
   removeStair,
@@ -33,10 +30,12 @@ import { floorKey, wallKey } from '../sim/environment';
 import { flatScore, occupants, scoreFor } from '../sim/impressiveness';
 import { Sim } from '../sim/sim';
 import { ROOM_ROWS, TILE, key, type Segment, type State } from '../sim/state';
+import { buyFurniture, sellFurniture, shiftFurniture, turnFurniture } from '../sim/furnish';
 import { BUILDERS, copyParts, howLong, jobPieces, partsOf, piecesBetween, plannedParts, quote, signOff, stopJob } from '../sim/works';
 import { drawFurniture } from '../render/art';
 import { floorY, type Cell, type Renderer } from '../render/renderer';
 import { el, h } from './dom';
+import type { FurnitureCard } from './furnitureCard';
 
 type Tool = 'room' | Segment | 'floor' | 'stairs' | 'insulate' | 'demolish';
 
@@ -80,7 +79,10 @@ export class BuildUi {
   private piece: string | null = null;
   private stairDir: 1 | -1 = 1;
   private flip = false;
-  private undo: string[] = [];
+  /** Undo steps: the plans as they were, or the furniture (and the money) as it was. */
+  private undo: { plan?: string; furniture?: string; money?: number; ledger?: number }[] = [];
+  /** A piece being moved: the next tap puts it there. */
+  private moving: number | null = null;
   private drag: { start: Cell; last: Cell; moved: boolean; furniture?: number } | null = null;
   /** The plans being drawn: a copy of the state with the planned building in it. */
   private draft!: State;
@@ -96,16 +98,10 @@ export class BuildUi {
   /** The part of the screen the building shows in, for zooming to a flat. */
   viewBox: () => Box = () => ({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight });
 
-  constructor(private readonly sim: Sim, private readonly renderer: Renderer) {
+  constructor(private readonly sim: Sim, private readonly renderer: Renderer, private readonly card: FurnitureCard) {
     el('build-done').addEventListener('click', () => this.stop());
     el('build-undo').addEventListener('click', () => this.doUndo());
     el('build-flip').addEventListener('click', () => this.turn());
-    el('build-remove').addEventListener('click', () => {
-      const id = this.renderer.build.selected;
-      if (id === null) return;
-      this.change(() => removeFurniture(this.draft, id));
-      this.select(null);
-    });
     el('build-sign').addEventListener('click', () => this.signOff());
     // A mouse shows where things would go before you click.
     const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -128,10 +124,34 @@ export class BuildUi {
     document.body.classList.add('building');
     this.renderer.build.active = true;
     this.undo = [];
+    this.moving = null;
     this.loadDraft();
     this.render();
-    document.body.style.setProperty('--buildbar-h', `${this.bar.offsetHeight}px`);
     this.onToggle();
+  }
+
+  /** Straight into moving a piece (from its card, outside build mode): zooms to its flat. */
+  startMoving(id: number): void {
+    const f = this.sim.state.furniture.find((o) => o.id === id);
+    if (!f) return;
+    if (!this.active) this.start();
+    const flat = this.sim.layout.flatAt(f.x, f.s);
+    if (flat) this.zoomTo(flat.id);
+    this.beginMove(id);
+  }
+
+  private beginMove(id: number): void {
+    const f = this.sim.state.furniture.find((o) => o.id === id);
+    if (!f) return;
+    this.group = GROUPS.find((g) => g.furniture?.includes(furnitureDef(f.def).group)) ?? this.group;
+    this.piece = null;
+    this.render();
+    this.card.hide();
+    this.moving = id;
+    this.renderer.build.selected = id;
+    this.bump();
+    this.setHint(null);
+    this.updateButtons();
   }
 
   stop(): void {
@@ -140,6 +160,8 @@ export class BuildUi {
     this.zoom.hidden = true;
     document.body.classList.remove('building');
     Object.assign(this.renderer.build, { active: false, marks: [], ghost: null, selected: null });
+    this.moving = null;
+    this.card.hide();
     this.bump();
     if (this.sim.state.works.plan) this.onNotify('Your plans are kept. Sign them off in build mode to get the builders in.');
     this.onToggle();
@@ -154,7 +176,7 @@ export class BuildUi {
   /** A copy of the state to draw plans on, starting from the plans so far (or the job, or the building). */
   private loadDraft(): void {
     const st = this.sim.state;
-    this.draft = { ...st, ...copyParts(plannedParts(st)) };
+    this.draft = { ...st, ...copyParts(plannedParts(st)), furniture: st.furniture };
     this.draftSim = new Sim(this.draft);
   }
 
@@ -165,7 +187,34 @@ export class BuildUi {
   /** Brings the draft's copy of everything but the building up to date (people move in, ids get used). */
   private syncDraft(): void {
     const parts = this.draftParts();
-    Object.assign(this.draft, this.sim.state, parts);
+    Object.assign(this.draft, this.sim.state, parts, { furniture: this.sim.state.furniture });
+  }
+
+  /** The plans, without the furniture (which isn't planned), for undo. */
+  private planSnap(): string {
+    const d = this.draft;
+    return JSON.stringify({ walls: d.walls, slabs: d.slabs, stairs: d.stairs, insulated: d.insulated });
+  }
+
+  private furnitureSnap(): (typeof this.undo)[number] {
+    const st = this.sim.state;
+    return { furniture: JSON.stringify(st.furniture), money: st.money, ledger: st.ledger.length };
+  }
+
+  private pushUndo(step: (typeof this.undo)[number]): void {
+    this.undo.push(step);
+    if (this.undo.length > MAX_UNDO) this.undo.shift();
+    this.updateButtons();
+  }
+
+  /** Runs a change to the furniture (which happens straight away), keeping an undo step. */
+  private furnish(fn: () => unknown): void {
+    const before = this.furnitureSnap();
+    fn();
+    if (JSON.stringify(this.sim.state.furniture) !== before.furniture) this.pushUndo(before);
+    this.draftSim.changed();
+    this.bump();
+    this.updateFooter();
   }
 
   /** Stores the draft as the plans (or no plans, if it's no different from what's already happening). */
@@ -179,12 +228,11 @@ export class BuildUi {
   /** Runs a change to the plans, keeping an undo step if anything changed. */
   private change(fn: () => unknown): void {
     this.syncDraft();
-    const before = JSON.stringify(this.draftParts());
+    const before = this.planSnap();
     fn();
     this.sim.state.nextId = Math.max(this.sim.state.nextId, this.draft.nextId);
-    if (JSON.stringify(this.draftParts()) === before) return;
-    this.undo.push(before);
-    if (this.undo.length > MAX_UNDO) this.undo.shift();
+    if (this.planSnap() === before) return;
+    this.pushUndo({ plan: before });
     this.planChanged();
   }
 
@@ -198,9 +246,25 @@ export class BuildUi {
   private doUndo(): void {
     const prev = this.undo.pop();
     if (!prev) return;
-    Object.assign(this.draft, JSON.parse(prev) as BuildParts);
+    this.restoreStep(prev);
     this.select(null);
-    this.planChanged();
+  }
+
+  private restoreStep(step: (typeof this.undo)[number]): void {
+    const st = this.sim.state;
+    if (step.plan) {
+      Object.assign(this.draft, JSON.parse(step.plan) as Partial<BuildParts>);
+      this.planChanged();
+    }
+    if (step.furniture) {
+      st.furniture.splice(0, st.furniture.length, ...(JSON.parse(step.furniture) as State['furniture']));
+      st.money = step.money!;
+      st.ledger.length = Math.min(st.ledger.length, step.ledger!);
+      this.sim.changed();
+      this.draftSim.changed();
+      this.bump();
+      this.updateFooter();
+    }
   }
 
   private signOff(): void {
@@ -218,7 +282,7 @@ export class BuildUi {
 
   private turn(): void {
     const id = this.renderer.build.selected;
-    if (id !== null) this.change(() => flipFurniture(this.draft, id));
+    if (id !== null) this.furnish(() => turnFurniture(this.sim, id));
     else if (this.isFurniture()) this.flip = !this.flip;
     else this.stairDir = this.stairDir === 1 ? -1 : 1;
     this.setHint(!this.isFurniture() && this.tool === 'stairs' ? `Stairs climb to the ${this.stairDir === 1 ? 'right' : 'left'}.` : null);
@@ -229,6 +293,10 @@ export class BuildUi {
   }
 
   private select(id: number | null): void {
+    if (id === null) {
+      this.moving = null;
+      this.card.hide();
+    }
     this.renderer.build.selected = id;
     this.bump();
     this.setHint(null);
@@ -269,6 +337,7 @@ export class BuildUi {
     this.setHint(null);
     this.updateButtons();
     this.updateFooter();
+    document.body.style.setProperty('--buildbar-h', `${this.bar.offsetHeight}px`);
   }
 
   private pickGroup(g: (typeof GROUPS)[number]): void {
@@ -293,7 +362,6 @@ export class BuildUi {
   private updateButtons(): void {
     const selected = this.renderer.build.selected !== null;
     (el('build-undo') as HTMLButtonElement).disabled = this.undo.length === 0;
-    el('build-remove').hidden = !selected;
     el('build-flip').hidden = this.isFurniture() ? !selected && this.piece === null : this.tool !== 'stairs';
   }
 
@@ -386,9 +454,10 @@ export class BuildUi {
   private setHint(text: string | null, bad = false): void {
     let base: string;
     if (!this.isFurniture()) base = TOOLS[this.tool].hint;
-    else if (this.renderer.build.selected !== null) base = 'Drag near it to slide it about, or turn it round.';
+    else if (this.moving !== null) base = `Tap where the ${furnitureDef(this.movingDef()!).name.toLowerCase()} should go, or drag near it to slide it.`;
+    else if (this.renderer.build.selected !== null) base = 'Drag near it to slide it about.';
     else if (this.piece) base = `Tap where the ${furnitureDef(this.piece).name.toLowerCase()} should go.`;
-    else base = 'Pick something to place, or tap furniture to move it.';
+    else base = 'Pick something to buy, or tap a piece in the building to move or sell it.';
     this.hint.textContent = text ?? base;
     this.hint.classList.toggle('bad', bad);
   }
@@ -411,14 +480,13 @@ export class BuildUi {
       // you can see it); anywhere else moves the view.
       const sel = this.renderer.build.selected;
       if (sel === null || !this.nearSelected(sx, sy)) return false;
-      this.syncDraft();
       this.drag = { start: cell, last: cell, moved: false, furniture: sel };
-      this.undo.push(JSON.stringify(this.draftParts()));
+      this.pushUndo(this.furnitureSnap());
       return true;
     }
     this.syncDraft();
     this.drag = { start: cell, last: cell, moved: false };
-    if (this.tool !== 'room') this.undo.push(JSON.stringify(this.draftParts()));
+    if (this.tool !== 'room') this.pushUndo({ plan: this.planSnap() });
     this.preview(cell);
     return true;
   }
@@ -442,14 +510,16 @@ export class BuildUi {
     if (!d || !cell || (cell.x === d.last.x && cell.s === d.last.s && cell.r === d.last.r)) return;
     d.moved = true;
     if (d.furniture !== undefined) {
-      const f = this.draft.furniture.find((o) => o.id === d.furniture)!;
+      const f = this.sim.state.furniture.find((o) => o.id === d.furniture)!;
       const dx = cell.x - d.last.x;
       const ds = cell.s - d.last.s;
       const r = furnitureDef(f.def).wall ? Math.max(1, f.r + (ds === 0 ? cell.r - d.last.r : 0)) : 0;
       // If it doesn't fit there, it stays put until the finger reaches somewhere it does.
-      if (!moveFurniture(this.draft, f.id, f.x + dx, f.s + ds, r)) {
+      this.syncDraft();
+      if (!shiftFurniture(this.sim, f.id, f.x + dx, f.s + ds, r, this.draft)) {
         d.last = cell;
-        this.planChanged();
+        this.draftSim.changed();
+        this.bump();
       }
       return;
     }
@@ -468,8 +538,12 @@ export class BuildUi {
     this.drag = null;
     if (!d) return;
     if (d.furniture !== undefined) {
-      if (!d.moved || this.undo[this.undo.length - 1] === JSON.stringify(this.draftParts())) this.undo.pop();
+      if (!d.moved || this.undo[this.undo.length - 1]?.furniture === JSON.stringify(this.sim.state.furniture)) this.undo.pop();
+      else this.moving = null;
+      // A press near the piece that didn't move is a tap, not a slide.
+      if (!d.moved) this.tapFurniture(d.start);
       this.updateButtons();
+      this.setHint(null);
       return;
     }
     if (this.tool === 'room') {
@@ -478,7 +552,7 @@ export class BuildUi {
     } else if (!d.moved) {
       this.undo.pop();
       this.apply(d.start, d.start, true);
-    } else if (this.undo.length > 0 && this.undo[this.undo.length - 1] === JSON.stringify(this.draftParts())) {
+    } else if (this.undo[this.undo.length - 1]?.plan === this.planSnap()) {
       this.undo.pop();
     }
     this.renderer.build.marks = [];
@@ -491,10 +565,7 @@ export class BuildUi {
     this.drag = null;
     if (d && (d.furniture !== undefined || this.tool !== 'room')) {
       const prev = this.undo.pop();
-      if (prev) {
-        Object.assign(this.draft, JSON.parse(prev) as BuildParts);
-        this.planChanged();
-      }
+      if (prev) this.restoreStep(prev);
     }
     this.renderer.build.marks = [];
     this.bump();
@@ -536,9 +607,14 @@ export class BuildUi {
       case 'stairs':
         if (single) run(() => placeStair(st, cell.x, s, this.stairDir));
         break;
-      case 'demolish':
-        run(() => this.demolish(cell.x, s, r));
+      case 'demolish': {
+        // Knocking down furniture sells it, there and then (only with a tap, not a drag).
+        const f = r < ROOM_ROWS ? furnitureAt(this.sim.state, cell.x, s, r) : undefined;
+        if (f) {
+          if (single) this.furnish(() => sellFurniture(this.sim, f.id));
+        } else run(() => this.demolish(cell.x, s, r));
         break;
+      }
       case 'insulate': {
         const part = this.insulatePart(cell.x, s, r);
         if (!part) problem = 'Tap a wall, or a floor between storeys';
@@ -561,8 +637,6 @@ export class BuildUi {
   private demolish(x: number, s: number, r: number): string | null {
     const st = this.draft;
     if (r === ROOM_ROWS) return removeSlab(st, x, s + 1);
-    const f = furnitureAt(st, x, s, r);
-    if (f) return removeFurniture(st, f.id) ? null : 'Nothing there';
     if (removeSegment(st, x, s)) return null;
     const t = stairIn(st, x, s);
     if (t) return removeStair(st, t.id) ? null : 'Nothing there';
@@ -570,32 +644,80 @@ export class BuildUi {
     return 'Nothing to knock down there';
   }
 
-  /**
-   * With a piece in hand, a tap places it (and selects it, ready to slide or turn); tapping
-   * furniture that's already there picks that up instead. With nothing in hand, a tap
-   * selects furniture.
-   */
-  private tapFurniture(cell: Cell): void {
-    const st = this.draft;
-    const under = furnitureAt(st, cell.x, cell.s, cell.r);
-    if (!this.piece || (under && furnitureProblem(st, this.piece, ...spotXSR(this.spotFor(this.piece, cell))) !== null)) {
-      this.select(under && this.renderer.build.selected !== under.id ? under.id : null);
-      return;
-    }
-    const spot = this.spotFor(this.piece, cell);
-    const out: { result: ReturnType<typeof placeFurniture> } = { result: 'Nothing placed' };
-    this.change(() => {
-      out.result = placeFurniture(st, this.piece!, spot.x, spot.s, spot.r, this.flip);
-    });
-    if (typeof out.result === 'string') this.setHint(out.result, true);
-    else this.select(out.result.id);
+  get isMoving(): boolean {
+    return this.moving !== null;
   }
 
-  /** Where a piece goes for a tapped cell: on the floor, or on the wall at the height tapped. */
+  private movingDef(): string | null {
+    return this.sim.state.furniture.find((o) => o.id === this.moving)?.def ?? null;
+  }
+
+  /**
+   * Moving a piece: a tap puts it there. With a piece in hand, a tap buys one and puts it in
+   * (tapping furniture that's already there brings up its card instead). With nothing in
+   * hand, a tap brings up a piece's card.
+   */
+  private tapFurniture(cell: Cell): void {
+    const st = this.sim.state;
+    this.syncDraft();
+    const movingDef = this.movingDef();
+    if (this.moving !== null && movingDef) {
+      const id = this.moving;
+      const spot = this.spotFor(movingDef, cell);
+      const out = { problem: null as string | null };
+      this.furnish(() => {
+        out.problem = shiftFurniture(this.sim, id, spot.x, spot.s, spot.r, this.draft);
+      });
+      if (out.problem) {
+        this.setHint(out.problem, true);
+        return;
+      }
+      this.moving = null;
+      this.showCard(id);
+      return;
+    }
+    const under = furnitureAt(st, cell.x, cell.s, cell.r);
+    const spot = this.piece ? this.spotFor(this.piece, cell) : null;
+    if (!this.piece || !spot || (under && furnitureProblem(st, this.piece, spot.x, spot.s, spot.r) !== null)) {
+      if (under && this.card.showing !== under.id) this.showCard(under.id);
+      else this.select(null);
+      return;
+    }
+    const out = { result: 'Nothing placed' as ReturnType<typeof buyFurniture> };
+    this.furnish(() => {
+      out.result = buyFurniture(this.sim, this.piece!, spot.x, spot.s, spot.r, this.flip, this.draft);
+    });
+    if (typeof out.result === 'string') this.setHint(out.result, true);
+    else {
+      // Selected, so a drag near it slides it into place.
+      this.renderer.build.selected = out.result.id;
+      this.bump();
+      this.setHint(null);
+      this.updateButtons();
+    }
+  }
+
+  private showCard(id: number): void {
+    this.renderer.build.selected = id;
+    this.card.show(id);
+    this.bump();
+    this.setHint(null);
+    this.updateButtons();
+  }
+
+  /** The piece's card says Move (in build mode). */
+  moveFromCard(id: number): void {
+    this.beginMove(id);
+  }
+
+  /**
+   * Where a piece goes for a tapped cell: centred on it, on the floor or on the wall at the
+   * height tapped.
+   */
   private spotFor(def: string, cell: Cell): Cell {
     const d = furnitureDef(def);
     const r = d.wall ? Math.min(ROOM_ROWS - d.h, Math.max(1, cell.r)) : 0;
-    return { x: cell.x, s: cell.s, r };
+    return { x: cell.x - Math.floor((d.w - 1) / 2), s: cell.s, r };
   }
 
   private markRoom(a: Cell, b: Cell): void {
@@ -618,9 +740,12 @@ export class BuildUi {
     }
     const st = this.draft;
     if (this.isFurniture()) {
-      if (this.piece) {
-        const spot = this.spotFor(this.piece, cell);
-        b.ghost = { def: this.piece, ...spot, flip: this.flip, ok: furnitureProblem(st, this.piece, spot.x, spot.s, spot.r) === null };
+      const moving = this.sim.state.furniture.find((o) => o.id === this.moving);
+      const def = moving?.def ?? this.piece;
+      if (def) {
+        const spot = this.spotFor(def, cell);
+        const ok = furnitureProblem(this.sim.state, def, spot.x, spot.s, spot.r, moving?.id) === null && furnitureProblem(st, def, spot.x, spot.s, spot.r, moving?.id) === null;
+        b.ghost = { def, ...spot, flip: moving ? !!moving.flip : this.flip, ok };
       }
     } else if (this.tool === 'stairs') {
       b.marks.push({ x: cell.x, s: cell.s, r: 0, w: 3, h: ROOM_ROWS, ok: stairProblem(st, cell.x, cell.s, this.stairDir) === null });
@@ -642,7 +767,6 @@ export class BuildUi {
   }
 }
 
-const spotXSR = (c: Cell): [number, number, number] => [c.x, c.s, c.r];
 
 // ------------------------------------------------------------------ icons
 

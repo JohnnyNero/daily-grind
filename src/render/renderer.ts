@@ -188,6 +188,7 @@ export class Renderer {
     if (this.overlay !== 'none') this.drawOverlay(ctx);
     this.drawWorks(ctx);
     if (this.build.active) this.drawBuild();
+    this.drawSelected(ctx);
     // Text at screen resolution.
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawLabels();
@@ -636,13 +637,16 @@ export class Renderer {
       ctx.fillStyle = g.ok ? '#6fd08c55' : '#e0605066';
       ctx.fillRect(g.x * TILE, floorY(g.s) - (g.r + d.h) * TILE, d.w * TILE, d.h * TILE);
     }
-    const sel = (st.works.plan ?? st.works.job ?? st).furniture.find((f) => f.id === this.build.selected);
-    if (sel) {
-      const d = furnitureDef(sel.def);
-      ctx.strokeStyle = '#f2c46d';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(sel.x * TILE + 0.5, floorY(sel.s) - (sel.r + d.h) * TILE + 0.5, d.w * TILE - 1, d.h * TILE - 1);
-    }
+  }
+
+  /** An outline round the piece of furniture that's selected (its card is up, or it's being moved). */
+  private drawSelected(ctx: CanvasRenderingContext2D): void {
+    const sel = this.sim.state.furniture.find((f) => f.id === this.build.selected);
+    if (!sel) return;
+    const d = furnitureDef(sel.def);
+    ctx.strokeStyle = '#f2c46d';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sel.x * TILE + 0.5, floorY(sel.s) - (sel.r + d.h) * TILE + 0.5, d.w * TILE - 1, d.h * TILE - 1);
   }
 
   // ------------------------------------------------------------------ building work
@@ -737,27 +741,6 @@ export class Renderer {
           const sx = t.dir === 1 ? X + i * run : X + 3 * TILE - (i + 1) * run;
           ctx.fillRect(sx, floorY(t.s) - (i + 1) * rise, run, (i + 1) * rise);
         }
-        break;
-      }
-      case 'furniture': {
-        const f = part.f;
-        const d = furnitureDef(f.def);
-        const x = f.x * TILE;
-        const y = floorY(f.s) - (f.r + d.h) * TILE;
-        if (p.removes) {
-          cross(x, y, d.w * TILE, d.h * TILE);
-          break;
-        }
-        if (part.from) {
-          const o = part.from;
-          cross(o.x * TILE, floorY(o.s) - (o.r + d.h) * TILE, d.w * TILE, d.h * TILE);
-        }
-        ctx.globalAlpha = 0.55;
-        drawFurniture(ctx, f.def, x, y, f.flip);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = `${BLUE}40`;
-        ctx.fillRect(x, y, d.w * TILE, d.h * TILE);
-        outline(x, y, d.w * TILE, d.h * TILE);
         break;
       }
       case 'insulate': {
