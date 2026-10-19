@@ -7,6 +7,7 @@ import { post } from './chat';
 import { COUNCIL_FINE, COUNCIL_FINE_CAP, POUND, book, furniturePrice, letter, spend } from './economy';
 import { SHARED, dirtOf, tempOf } from './environment';
 import { furnitureDef } from './defs';
+import { gradeOf, wearFactor } from './grades';
 import { scoreFor } from './impressiveness';
 import { household } from './leases';
 import { pick, random } from './rng';
@@ -27,7 +28,7 @@ export const WEAR_PER_USE = UPKEEP.wearPerUse;
 export function useUp(sim: Sim, f: Furniture, p: Pawn): void {
   if (f.broken) return;
   const life = p.life!;
-  const rate = stat(WEAR_PER_USE, [], [has(life, 'clumsy') ? UPKEEP.clumsy : 1, has(life, 'handy') ? UPKEEP.handy : 1]);
+  const rate = stat(WEAR_PER_USE, [], [has(life, 'clumsy') ? UPKEEP.clumsy : 1, has(life, 'handy') ? UPKEEP.handy : 1, wearFactor(f)]);
   f.wear = Math.min(1, (f.wear ?? 0) + rate);
   if (f.wear >= 1) {
     breakIt(sim, f);
@@ -64,7 +65,7 @@ export function breakDown(sim: Sim): boolean {
 }
 
 export function repairCost(f: Furniture): number {
-  return Math.max(UPKEEP.repairLeast, Math.round((furniturePrice(f.def) * UPKEEP.repairShare) / (5 * POUND)) * 5 * POUND);
+  return Math.max(UPKEEP.repairLeast, Math.round((furniturePrice(f.def, gradeOf(f)) * UPKEEP.repairShare) / (5 * POUND)) * 5 * POUND);
 }
 
 export function condition(f: Furniture): string {

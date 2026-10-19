@@ -2,11 +2,11 @@
 // Monday. Miss four mortgage payments in a row and the bank takes the building; pay it off
 // and it's yours. All amounts are in pence. The numbers to tune are in tuning.ts.
 
-import { furnitureDef } from './defs';
+import { furnitureDef, isGraded } from './defs';
 import { flatScore, TIERS } from './impressiveness';
 import type { Sim } from './sim';
 import { gasBill } from './environment';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, type FlatInfo, type Letter, type CellKind } from './state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, type FlatInfo, type Grade, type Letter, type CellKind } from './state';
 import { tale } from './tales';
 import {
   ALARM_WEEKLY,
@@ -15,6 +15,7 @@ import {
   CLEANER_WEEKLY,
   FURNITURE_LEAST_POUNDS,
   FURNITURE_POUNDS_PER_VALUE,
+  GRADES,
   LETTING,
   MISSES_ALLOWED,
   OVERDRAFT_CHARGE,
@@ -51,8 +52,10 @@ export {
 /** What each cell costs to put in. */
 export const CELL_PRICE: Record<CellKind, number> = CELL_PRICES;
 
-export function furniturePrice(def: string): number {
-  return Math.max(FURNITURE_LEAST_POUNDS, furnitureDef(def).value * FURNITURE_POUNDS_PER_VALUE) * POUND;
+/** What a piece costs new, at a grade (to the nearest pound). Pieces that don't come in grades ignore it. */
+export function furniturePrice(def: string, grade: Grade = 'standard'): number {
+  const base = Math.max(FURNITURE_LEAST_POUNDS, furnitureDef(def).value * FURNITURE_POUNDS_PER_VALUE);
+  return Math.round(base * GRADES.price[isGraded(def) ? grade : 'standard']) * POUND;
 }
 
 // ------------------------------------------------------------------ money in and out

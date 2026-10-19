@@ -1,11 +1,12 @@
 // The little card that comes up when you tap a piece of furniture: what it is, what it's
 // for, who's using it, and buttons to move it, turn it round or sell it.
 
-import { furnitureDef } from '../sim/defs';
+import { furnitureDef, isGraded } from '../sim/defs';
 import { pounds } from '../sim/economy';
 import { resaleOf, sellFurniture, turnFurniture } from '../sim/furnish';
+import { GRADE_NAMES, furnitureValue, gradeOf, gradedName, poshLockedWhy, poshUnlocked, upgradeCost, upgradeFurniture, upgradesFor } from '../sim/grades';
 import type { Sim } from '../sim/sim';
-import type { NeedId } from '../sim/state';
+import type { Furniture, Grade, NeedId } from '../sim/state';
 import { el, h } from './dom';
 import { condition, mend, repairCost } from '../sim/upkeep';
 
@@ -77,16 +78,18 @@ export class FurnitureCard {
     const d = furnitureDef(f.def);
     const flat = this.sim.layout.flatAt(f.x, f.s)?.name ?? 'Shared space';
     const user = this.sim.state.pawns.find((p) => p.life?.using?.furniture === f.id && p.life.using.until > 0);
-    const resale = resaleOf(f.def);
+    const grade = gradeOf(f);
+    const resale = resaleOf(f.def, grade);
     this.card.replaceChildren(
       h(
         'div',
         { class: 'head' },
-        h('div', {}, h('strong', {}, d.name), h('span', {}, `${flat} · ${user ? `${user.name.split(' ')[0]} is using it` : 'nobody using it'}`)),
+        h('div', {}, h('strong', {}, gradedName(f)), h('span', {}, `${flat} · ${user ? `${user.name.split(' ')[0]} is using it` : 'nobody using it'}`)),
         h('button', { type: 'button', class: 'close', 'aria-label': 'Close', onclick: () => this.hide() }, '✕'),
       ),
-      h('p', {}, `${useOf(f.def)}. Adds ${d.value} to how furnished the flat is.`),
+      h('p', {}, `${useOf(f.def)}. Adds ${Math.round(furnitureValue(f))} to how furnished the flat is.${isGraded(f.def) ? ` ${GRADE_WORDS[grade]}` : ''}`),
       d.offers ? h('p', { class: f.broken !== undefined ? 'cond bad' : 'cond' }, f.broken !== undefined ? `Broken since day ${f.broken}: nobody can use it.` : `Condition: ${condition(f)}.`) : '',
+      this.upgrades(f),
       h(
         'div',
         { class: 'actions' },
@@ -115,4 +118,40 @@ export class FurnitureCard {
       ),
     );
   }
+
+  /** Upgrade buttons: pay the difference and it's swapped for a new one where it stands. Posh says what it takes while it's locked. */
+  private upgrades(f: Furniture): HTMLElement | string {
+    const ups = upgradesFor(f);
+    if (ups.length === 0) return '';
+    const open = poshUnlocked(this.sim);
+    return h(
+      'div',
+      { class: 'actions upgrades' },
+      ...ups.map((g) => {
+        const locked = g === 'posh' && !open;
+        const cost = upgradeCost(f, g);
+        return h('button', {
+          type: 'button',
+          class: g === 'posh' ? 'posh' : '',
+          disabled: locked || this.sim.state.money < cost,
+          title: locked ? poshLockedWhy() : undefined,
+          onclick: () => {
+            const problem = upgradeFurniture(this.sim, f.id, g);
+            if (problem) this.onNotify(problem, true);
+            else this.onNotify(`Swapped for a ${GRADE_NAMES[g].toLowerCase()} ${furnitureDef(f.def).name.toLowerCase()}.`);
+            this.render();
+            this.onChange();
+          },
+        }, locked ? `Posh: locked` : `Upgrade to ${GRADE_NAMES[g].toLowerCase()} (${pounds(cost)})`);
+      }),
+      ...(ups.includes('posh') && !open ? [h('small', { class: 'why' }, `${poshLockedWhy()}.`)] : []),
+    );
+  }
 }
+
+/** What a grade means, for the card. */
+const GRADE_WORDS: Record<Grade, string> = {
+  cheap: 'Cheap: wears out quickly and looks it.',
+  standard: 'Standard: does the job.',
+  posh: 'Posh: lasts, and impresses. Burglars like it too.',
+};

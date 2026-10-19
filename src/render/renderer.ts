@@ -7,7 +7,7 @@
 import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
-import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, type CellKind, type Pawn } from '../sim/state';
+import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, type CellKind, type Grade, type Pawn } from '../sim/state';
 import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, edge, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
 import { flightOf, unsupportedCells, type BuildParts } from '../sim/build';
@@ -44,7 +44,7 @@ export interface BuildView {
   /** Cells the current tool would change, and whether it can. */
   marks: { x: number; s: number; w: number; h: number; ok: boolean }[];
   /** Furniture being placed, where it would go. */
-  ghost: { def: string; x: number; s: number; flip: boolean; ok: boolean } | null;
+  ghost: { def: string; x: number; s: number; flip: boolean; ok: boolean; grade?: Grade } | null;
   selected: number | null;
   version: number;
 }
@@ -268,7 +268,7 @@ export class Renderer {
     for (const f of st.furniture) {
       const d = furnitureDef(f.def);
       const top = floorY(f.s) - d.h * TILE;
-      drawFurniture(ctx, f.def, f.x * TILE, top, f.flip);
+      drawFurniture(ctx, f.def, f.x * TILE, top, f.flip, f.grade);
       // Broken: a red tag with a "!" on its top corner.
       if (f.broken !== undefined) {
         const tx = (f.x + d.w) * TILE - 7;
@@ -666,7 +666,7 @@ export class Renderer {
     if (g) {
       const d = furnitureDef(g.def);
       ctx.globalAlpha = 0.75;
-      drawFurniture(ctx, g.def, g.x * TILE, floorY(g.s) - d.h * TILE, g.flip);
+      drawFurniture(ctx, g.def, g.x * TILE, floorY(g.s) - d.h * TILE, g.flip, g.grade);
       ctx.globalAlpha = 1;
       ctx.fillStyle = g.ok ? '#6fd08c55' : '#e0605066';
       ctx.fillRect(g.x * TILE, floorY(g.s) - d.h * TILE, d.w * TILE, d.h * TILE);

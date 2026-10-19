@@ -7,8 +7,8 @@
 // two-cell one (or replace the wall that's there). Stairs face away from you, up a single
 // column: a flight is FLIGHT cells tall, from one floor up through the floor above.
 
-import { furnitureDef } from './defs';
-import { DOOR_ROWS, MAX_ROWS, isDoor, isSolid, key, type BuildPartsData, type CellKind, type Furniture, type State } from './state';
+import { furnitureDef, isGraded } from './defs';
+import { DOOR_ROWS, MAX_ROWS, isDoor, isSolid, key, type BuildPartsData, type CellKind, type Furniture, type Grade, type State } from './state';
 
 export type BuildParts = BuildPartsData;
 
@@ -309,10 +309,12 @@ export function furnitureProblem(st: State, def: string, x: number, s: number, i
   return null;
 }
 
-export function placeFurniture(st: State, def: string, x: number, s: number, flip = false): Furniture | string {
+export function placeFurniture(st: State, def: string, x: number, s: number, flip = false, grade: Grade = 'standard'): Furniture | string {
   const problem = furnitureProblem(st, def, x, s);
   if (problem) return problem;
-  const f: Furniture = { id: st.nextId++, def, x, s, ...(flip ? { flip: true } : {}) };
+  // Standard isn't written down (old saves have no grades, and that's what they were).
+  const graded = grade !== 'standard' && isGraded(def);
+  const f: Furniture = { id: st.nextId++, def, x, s, ...(flip ? { flip: true } : {}), ...(graded ? { grade } : {}) };
   st.furniture.push(f);
   return f;
 }

@@ -7,6 +7,7 @@
 import { useUp } from './upkeep';
 import { furnitureDef, spotColumns, type Offer } from './defs';
 import { flatScore } from './impressiveness';
+import { gradeOf } from './grades';
 import type { Flat } from './layout';
 import { findPath } from './layout';
 import { keysOf, setGoal } from './pawns';
@@ -425,7 +426,9 @@ function stopUsing(sim: Sim, p: Pawn, finished: boolean): void {
   if (o.pose === 'sleep') {
     if (life.sleptOn === 'floor') remember(sim, life, 'sleptFloor');
     else if (life.sleptOn === 'sofa') remember(sim, life, 'sleptSofa');
-    else if (life.needs.sleep > 0.8) remember(sim, life, 'sleptWell');
+    // A cheap mattress is lumpy however long you lie on it; a posh one is the best night going.
+    else if (used && gradeOf(used) === 'cheap') remember(sim, life, 'lumpyMattress');
+    else if (life.needs.sleep > 0.8) remember(sim, life, used && gradeOf(used) === 'posh' ? 'sleptPosh' : 'sleptWell');
   }
 }
 

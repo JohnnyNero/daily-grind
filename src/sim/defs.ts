@@ -40,6 +40,8 @@ export interface FurnitureDef {
   /** Columns people use it from, counted from the left. */
   spots?: number[];
   offers?: Offer[];
+  /** Comes cheap, standard or posh. Left out, it does if it's a floor piece you use (see isGraded). */
+  graded?: boolean;
 }
 
 export const FURNITURE: readonly FurnitureDef[] = [
@@ -88,4 +90,10 @@ export function spotColumns(def: FurnitureDef, x: number, flip?: boolean): numbe
 
 export function isFurniture(id: string): boolean {
   return byId.has(id);
+}
+
+/** Pieces that come cheap, standard or posh: beds, seats, kitchen and bathroom things. Not ornaments, storage or wall pieces. */
+export function isGraded(id: string): boolean {
+  const d = furnitureDef(id);
+  return d.graded ?? (['sleep', 'sit', 'kitchen', 'bathroom'].includes(d.group) && !d.wall && !d.decor);
 }

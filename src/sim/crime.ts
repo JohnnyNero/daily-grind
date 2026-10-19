@@ -15,19 +15,27 @@ import { household } from './leases';
 import { addPawn, atNode, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_MINUTE, type Furniture, type Pawn } from './state';
+import { TICKS_PER_MINUTE, type Furniture, type Grade, type Pawn } from './state';
 import { remember } from './thoughts';
 import type { Flat } from './layout';
 import { stat } from './stat';
-import { BURGLARY as B, RISK_WORDS } from './tuning';
+import { gradeOf } from './grades';
+import { BURGLARY as B, GRADES, RISK_WORDS } from './tuning';
 
 const first = (p: Pawn) => p.name.split(' ')[0];
+/** What a thing would cost new, at its grade: what it's worth to a burglar. */
+const priceOf = (f: Furniture) => furniturePrice(f.def, gradeOf(f));
 
 /** Things worth stealing in a flat. */
 function valuables(sim: Sim, flat: Flat): Furniture[] {
   const lay = sim.layout;
   const cells = new Set(lay.flatCells(flat));
   return sim.state.furniture.filter((f) => furnitureDef(f.def).valuable && cells.has(lay.node(f.x, f.s)));
+}
+
+/** What a burglar would take from a flat, in the order they'd take it: the dearest first, so posh things go before anything else. */
+export function pickings(sim: Sim, flat: Flat): Furniture[] {
+  return valuables(sim, flat).sort((a, b) => priceOf(b) - priceOf(a));
 }
 
 /** Ways in from the street: the street door, and windows low enough to climb through. */
@@ -84,7 +92,8 @@ export function burglaryRisk(sim: Sim): number {
   const st = sim.state;
   const lay = sim.layout;
   let worth = 0;
-  for (const f of lay.flats) worth += valuables(sim, f).length * B.perValuable + (household(sim, f.id).length > 0 ? B.occupied : 0);
+  // A posh telly is more of a draw than a cheap one.
+  for (const f of lay.flats) worth += valuables(sim, f).reduce((n, v) => n + GRADES.burglar[gradeOf(v)], 0) * B.perValuable + (household(sim, f.id).length > 0 ? B.occupied : 0);
   const ways = waysIn(sim);
   const windows = ways.filter((w) => w.entry === 'window').length;
   const easy = (ways.some((w) => w.entry === 'door') ? B.door : 0) + Math.min(B.mostWindows, windows * B.window);
@@ -103,7 +112,7 @@ export function startBurglary(sim: Sim): boolean {
   const lay = sim.layout;
   if (!canStart(sim, ['crime'])) return false;
   // The flat with the most worth taking (anywhere with people in has something).
-  const scored = lay.flats.map((f) => ({ f, worth: valuables(sim, f).reduce((n, v) => n + furniturePrice(v.def), 0) + household(sim, f.id).length * B.household }));
+  const scored = lay.flats.map((f) => ({ f, worth: valuables(sim, f).reduce((n, v) => n + priceOf(v), 0) + household(sim, f.id).length * B.household }));
   const best = scored.filter((x) => x.worth > 0).sort((a, b) => b.worth - a.worth)[0];
   if (!best) return false;
   const ways = waysIn(sim).filter((w) => w.entry === 'door' || w.flat === best.f.id);
@@ -275,7 +284,7 @@ function flee(sim: Sim, p: Pawn, why: 'spotted' | 'passerby' | 'alarm' | 'gaveUp
 function steal(sim: Sim, p: Pawn, flat: Flat): boolean {
   const st = sim.state;
   const b = p.burgle!;
-  const things = valuables(sim, flat).sort((a, b) => furniturePrice(b.def) - furniturePrice(a.def)).slice(0, b.take ?? 1);
+  const things = pickings(sim, flat).slice(0, b.take ?? 1);
   const people = household(sim, flat.id);
   st.furniture = st.furniture.filter((f) => !things.includes(f));
   const thing = things[0];
@@ -295,8 +304,10 @@ function steal(sim: Sim, p: Pawn, flat: Flat): boolean {
       ]);
     } else {
       const name = furnitureDef(thing.def).name.toLowerCase();
+      // Like for like: a posh one for a posh one.
+      const grade = gradeOf(thing);
       post(sim, lead, `We've been burgled. They took ${took}! Are you replacing ${things.length > 1 ? `the ${name} at least` : 'it'}?`, [
-        { label: `Replace the ${name} (£${furniturePrice(thing.def) / POUND})`, note: 'They\'ll appreciate it', act: `replace:${thing.def}:${thing.x}:${thing.s}:${thing.flip ? 1 : 0}` },
+        { label: `Replace the ${name} (£${priceOf(thing) / POUND})`, note: 'They\'ll appreciate it', act: `replace:${thing.def}:${thing.x}:${thing.s}:${thing.flip ? 1 : 0}${grade === 'standard' ? '' : `:${grade}`}` },
         { label: 'That\'s what contents insurance is for', note: 'They won\'t forget it', act: 'notMine' },
       ]);
     }
@@ -324,10 +335,11 @@ export function crimeAct(sim: Sim, kind: string, args: string[], from: Pawn | un
       if (fitLocks(sim)) for (const t of tenants(sim)) remember(sim, t.life!, 'landlordListened');
       return true;
     case 'replace': {
-      const [def, x, s, flip] = args;
-      const price = furniturePrice(def);
+      const [def, x, s, flip, g] = args;
+      const grade: Grade = g === 'cheap' || g === 'posh' ? g : 'standard';
+      const price = furniturePrice(def, grade);
       if (st.money < price) return true;
-      if (typeof placeFurniture(st, def, Number(x), Number(s), flip === '1') !== 'string') {
+      if (typeof placeFurniture(st, def, Number(x), Number(s), flip === '1', grade) !== 'string') {
         book(sim, `Replaced the stolen ${furnitureDef(def).name.toLowerCase()}`, -price);
         if (from?.life) for (const t of household(sim, from.life.flat)) remember(sim, t.life!, 'landlordListened');
       }

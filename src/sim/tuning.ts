@@ -313,6 +313,8 @@ export const MEMORIES: Record<string, MemoryDef> = {
   freshPaint: { label: 'Lobby smells of fresh paint', value: 3, hours: 3 * 24, stack: 1 },
   mendedForMe: { label: 'A neighbour mended my things', value: 5, hours: 4 * 24, stack: 1, gossip: true },
   stairsDone: { label: 'Someone did the stairs', value: 2, hours: 2 * 24, stack: 1 },
+  sleptPosh: { label: 'Slept in a posh bed', value: 5, hours: 10, stack: 1 },
+  lumpyMattress: { label: 'Lumpy mattress', value: -1, hours: 10, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -835,3 +837,24 @@ export const INTEREST = {
   grant: 2,
   broken: 1,
 };
+
+// ================================================================== furniture grades
+
+/**
+ * Pieces you use come cheap, standard or posh. Each grade's share of the standard price,
+ * of its worth (how furnished a flat looks), and of how fast it wears out. Repairs and
+ * resale go by the price, so they follow along.
+ */
+export const GRADES = {
+  price: { cheap: 0.6, standard: 1, posh: 2.2 },
+  value: { cheap: 0.6, standard: 1, posh: 1.8 },
+  wear: { cheap: 1.6, standard: 1, posh: 0.6 },
+  /** A valuable (a telly, a laptop) counts this much towards a burglar's interest. */
+  burglar: { cheap: 0.5, standard: 1, posh: 2 },
+};
+
+/** Posh opens up at this rating, once any flat is this tier (or better), or on this day regardless. */
+export const POSH_UNLOCK = { stars: 3.5, tier: 'Smart', day: 30 };
+
+/** House-proud tenants like having posh things in the kitchen and the bathroom. */
+export const POSH_PROUD = { kitchen: 2, bathroom: 2 };

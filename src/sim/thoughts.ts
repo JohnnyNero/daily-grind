@@ -16,7 +16,8 @@ import { TICKS_PER_HOUR, type Life, type NeedId, type Pawn } from './state';
 import { has } from './traits';
 import { brokenIn } from './upkeep';
 import { furnitureDef } from './defs';
-import { BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
+import { poshGroups } from './grades';
+import { BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, POSH_PROUD, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
 
 // The memories, need bands and what each thought is worth are in tuning.ts.
 export { BASELINE, MEMORIES, type MemoryDef } from './tuning';
@@ -72,6 +73,12 @@ function placeThoughts(sim: Sim, life: Life, flatId: string): Thought[] {
   if (binsOverflowing(sim)) out.push({ label: 'Bins overflowing', value: LIVE.binsOverflowing });
   if (life.pet && life.pet !== 'asked') out.push({ label: `Has ${life.pet}`, value: LIVE.hasPet });
   for (const f of brokenIn(sim, flatId).slice(0, LIVE.broken.most)) out.push({ label: `Broken ${furnitureDef(f.def).name.toLowerCase()}`, value: LIVE.broken.value });
+  if (proud) {
+    // House-proud people like something nice in the kitchen and the bathroom (working, mind).
+    const posh = poshGroups(sim, flatId);
+    if (posh.has('kitchen')) out.push({ label: 'Posh kitchen (house-proud)', value: POSH_PROUD.kitchen });
+    if (posh.has('bathroom')) out.push({ label: 'Posh bathroom (house-proud)', value: POSH_PROUD.bathroom });
+  }
   return out;
 }
 

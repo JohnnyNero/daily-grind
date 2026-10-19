@@ -1,7 +1,7 @@
 // Turning the game into text and back. Old saves are brought up to date here, and
 // anything missing or broken is filled in or dropped rather than refusing to load.
 
-import { isFurniture } from './defs';
+import { isFurniture, isGraded } from './defs';
 import { MORTGAGE, START_MONEY } from './economy';
 import { EXPECT_START } from './expectations';
 import { Sim } from './sim';
@@ -28,6 +28,8 @@ function normalize(raw: Partial<State>): State {
   st.version = SAVE_VERSION;
   st.cells ??= {};
   st.furniture = (st.furniture ?? []).filter((f) => isFurniture(f.def));
+  // Grades came later: no grade (or one that makes no sense) is standard.
+  for (const f of st.furniture) if ((f.grade !== 'cheap' && f.grade !== 'posh') || !isGraded(f.def)) delete f.grade;
   st.pawns ??= [];
   st.timers ??= { passerby: st.tick, agent: st.tick };
   // Version 2 added money, leases, letters and traits.

@@ -155,6 +155,8 @@ body.building .recentre { bottom: calc(var(--tab-h) + 12px + var(--buildbar-h, 0
 .chip.ok { background: #f6e6bd; color: #6a4a07; }
 .chip.low { background: #f8dcc2; color: #7a3b0b; }
 .chip.bad { background: #f6d2ca; color: #7d2414; }
+.chip.posh { box-shadow: inset 0 0 0 1px #d2a73a; color: #7a5a0c; }
+.chip.cheap { color: var(--sheet-muted); font-weight: 600; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .note { margin-top: 8px !important; color: #9a5a2a !important; }
 .pos { color: #3c7a2c; font-weight: 700; }
@@ -318,6 +320,15 @@ table.people { width: 100%; border-collapse: collapse; font-size: 12px; min-widt
 .palette button small { color: var(--sheet-muted); font-size: 10px; }
 .palette button canvas { image-rendering: pixelated; }
 .palette button[aria-pressed="true"] { border-color: var(--bar); background: #f6edd9; }
+/* the grade toggle above the furniture: cheap, standard, posh */
+.palette .grades { grid-column: 1 / -1; display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: #e7dccb; }
+.palette .grades button { flex: 1; min-height: 44px; padding: 2px 4px; border: 0; border-radius: 9px; background: transparent; flex-direction: row; flex-wrap: wrap; column-gap: 4px; row-gap: 0; }
+.palette .grades button b { font-size: 12px; }
+.palette .grades button small { flex-basis: 100%; text-align: center; }
+.palette .grades button[aria-checked="true"] { background: #fff; box-shadow: 0 1px 0 #cdbfa8; }
+.palette .grades .grade-posh b { color: #9a7414; }
+.palette .grades .locked { opacity: 0.6; cursor: help; }
+.palette .grades .padlock { width: 12px; height: 14px; }
 .build-actions { display: flex; gap: 6px; margin-top: 4px; }
 .build-actions button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: #ece5d8; color: var(--sheet-ink); font-weight: 600; cursor: pointer; }
 .build-actions button:disabled { opacity: 0.4; cursor: default; }
@@ -374,6 +385,11 @@ body.building .furn-card { bottom: calc(var(--tab-h) + var(--buildbar-h, 0px) + 
 .furn-card .actions button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: #ece5d8; color: var(--sheet-ink); font-weight: 600; cursor: pointer; }
 .furn-card .actions .primary { background: var(--accent); }
 .furn-card .actions .danger { background: var(--bad); color: #fff; }
+.furn-card .upgrades { flex-wrap: wrap; margin-bottom: 6px; }
+.furn-card .upgrades button { font-size: 13px; }
+.furn-card .upgrades .posh { background: #f1dfa4; }
+.furn-card .upgrades button:disabled { opacity: 0.5; cursor: default; }
+.furn-card .upgrades .why { flex-basis: 100%; font-size: 11px; color: var(--sheet-muted); }
 
 /* placing a piece of furniture: the build bar goes, this small bar comes up */
 .place-bar {
