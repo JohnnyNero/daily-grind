@@ -315,6 +315,11 @@ export const MEMORIES: Record<string, MemoryDef> = {
   stairsDone: { label: 'Someone did the stairs', value: 2, hours: 2 * 24, stack: 1 },
   sleptPosh: { label: 'Slept in a posh bed', value: 5, hours: 10, stack: 1 },
   lumpyMattress: { label: 'Lumpy mattress', value: -1, hours: 10, stack: 1 },
+  // Shared spaces
+  didWashing: { label: 'Did the washing', value: 3, hours: 24, stack: 1 },
+  cycledToWork: { label: 'Cycled to work', value: 2, hours: 6, stack: 1 },
+  satOut: { label: 'Sat out in the sun', value: 2, hours: 10, stack: 1 },
+  firedUpBbq: { label: 'Fired up the barbecue', value: 4, hours: 36, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -858,3 +863,44 @@ export const POSH_UNLOCK = { stars: 3.5, tier: 'Smart', day: 30 };
 
 /** House-proud tenants like having posh things in the kitchen and the bathroom. */
 export const POSH_PROUD = { kitchen: 2, bathroom: 2 };
+
+// ================================================================== shared spaces
+
+/** Laundry rooms, bike stores and gardens: when tenants use them, and what they're worth to the building. */
+export const SHARED_USE = {
+  /** Outdoors only in daylight (minutes of the day) and when it's decent out (degrees). */
+  outdoorFrom: 8 * 60,
+  outdoorTo: 19 * 60 + 30,
+  mildest: 12,
+  hottest: 30,
+  /** The barbecue wants proper weather, and the afternoon or evening. */
+  bbqTemp: 15,
+  bbqFrom: 12 * 60,
+  bbqTo: 19 * 60,
+  /** Each time they're idle at home: the chance of going down to the garden; of firing up the grill; of joining a barbecue already going. */
+  leisureChance: 0.12,
+  bbqChance: 0.04,
+  /** Sociable types fire it up this much sooner. */
+  sociableBbq: 3,
+  joinChance: 0.6,
+  /** Only those with a need this low go out for the garden (it's for fun and comfort). */
+  leisureUnder: 0.8,
+  /** The washing is due every so many days, done between these times. */
+  washEveryDays: 3,
+  washFrom: 9 * 60,
+  washTo: 21 * 60,
+  /** Chance on a working day that a tenant with a bike rack to hand cycles (asked once a day). */
+  cycleChance: 0.35,
+};
+
+/** What the building's amenities do to how tenants feel (thoughts) and to how impressive a flat is (points on its score). */
+export const AMENITIES = {
+  garden: 2,
+  laundry: 2,
+  /** Only for tenants with a job. */
+  bikes: 2,
+  /** No washing machine in the flat or the building. */
+  noWashing: -1,
+  /** Added to the score of every flat in a building that has one. */
+  score: { garden: 1, laundry: 1, bikes: 1 },
+};

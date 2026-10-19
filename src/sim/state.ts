@@ -136,6 +136,13 @@ export interface Life {
   lastTalk?: number;
   /** A pet, if you said yes. */
   pet?: string;
+  /** The day they last did the washing, last went out to the garden, and last thought about cycling. */
+  washedDay?: number;
+  gardenDay?: number;
+  cycleDay?: number;
+  /** Bike out of the rack, about to set off; and off to work on it. */
+  cycling?: boolean;
+  cycled?: boolean;
   /** The day they last stopped for the post on the way in. */
   postDay?: number;
   /** Seeing someone behind their partner's back (a pawn id). */

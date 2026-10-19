@@ -10,6 +10,8 @@ import type { ListingStyle } from '../sim/state';
 import { portrait } from '../render/art';
 import { furnitureDef } from '../sim/defs';
 import { gradedName } from '../sim/grades';
+import { AMENITIES } from '../sim/tuning';
+import { spaceAt, type Space } from '../sim/shared';
 import { POUND, billsDue, flatInfo, goingRate, overpay, pounds, MISSES_ALLOWED, MORTGAGE, LOCKS_PRICE, ALARM_PRICE, ALARM_WEEKLY } from '../sim/economy';
 import { CLEANER_WEEKLY, flatClimate, gasBill, outdoorTemp, seasonName } from '../sim/environment';
 import { answer } from '../sim/chat';
@@ -34,6 +36,7 @@ export type Showing =
   | { kind: 'money' }
   | { kind: 'post'; letter?: number }
   | { kind: 'applicants'; flat: string }
+  | { kind: 'space'; x: number; s: number }
   | { kind: 'chat' };
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -117,6 +120,8 @@ export class Panels {
         return this.renderPost(s.letter);
       case 'applicants':
         return this.renderApplicants(s.flat);
+      case 'space':
+        return this.renderSpace(s.x, s.s);
       case 'chat':
         return this.renderChat();
     }
@@ -637,6 +642,31 @@ export class Panels {
     });
   }
 
+  // ------------------------------------------------------------------ a shared space
+
+  private renderSpace(x: number, s: number): void {
+    const sim = this.sim;
+    const space = spaceAt(sim, x, s);
+    if (!space) {
+      this.close();
+      return;
+    }
+    const pieces = sim.state.furniture.filter((f) => space.furniture.includes(f.id));
+    const users = pieces.flatMap((f) => sim.state.pawns.filter((p) => p.life?.using?.furniture === f.id && p.life.using.until > 0));
+    this.head(space.name, `Shared · ${pieces.length} thing${pieces.length === 1 ? '' : 's'} in it`);
+    this.fill([space.name, pieces.map((f) => [f.id, f.broken]), users.map((p) => p.id), space.working], () => [
+      h('p', {}, spaceBlurb(space)),
+      h(
+        'div',
+        { className: 'lines sec' },
+        ...pieces.map((f) => {
+          const user = users.find((p) => p.life!.using!.furniture === f.id);
+          return h('div', { className: `line${f.broken !== undefined ? ' warnline' : ''}` }, h('span', {}, furnitureDef(f.def).name, h('small', {}, f.broken !== undefined ? `Broken since day ${f.broken}` : user ? `${user.name.split(' ')[0]}: ${user.doing.toLowerCase()}` : 'Free')));
+        }),
+      ),
+    ]);
+  }
+
   // ------------------------------------------------------------------ applicants
 
   private renderApplicants(flatId: string): void {
@@ -698,6 +728,19 @@ function meter(label: string, value: number, note?: string): HTMLElement {
   const v = Math.round(value);
   const c = v >= 60 ? 'var(--good)' : v >= 40 ? 'var(--ok)' : v >= 25 ? 'var(--low)' : 'var(--bad)';
   return h('div', { className: `meter ${note ? 'weakest' : ''}` }, h('span', {}, label, note ? h('small', {}, ` ${note}`) : ''), h('div', { className: 'track' }, h('div', { className: 'fill', style: `width:${v}%;--c:${c}` })), h('b', {}, String(v)));
+}
+
+/** What a shared space does for the building. */
+function spaceBlurb(space: Space): string {
+  if (!space.working) return `Not much use yet: ${space.kind === 'garden' ? 'it needs a bench or a table to sit at, and a way up there.' : 'nothing in it works, or nobody can get to it from the street.'}`;
+  switch (space.kind) {
+    case 'laundry':
+      return `Tenants without a machine of their own do the washing here, and think better of the building (+${AMENITIES.laundry}). Every flat scores a little higher.`;
+    case 'bikes':
+      return `Tenants with jobs sometimes cycle, and like having somewhere to keep the bike (+${AMENITIES.bikes}). Every flat scores a little higher.`;
+    case 'garden':
+      return `Tenants sit out here on fine days, daylight only, and think better of the building (+${AMENITIES.garden}). A barbecue brings the neighbours together.`;
+  }
 }
 
 function fixHint(score: FlatScore): string {

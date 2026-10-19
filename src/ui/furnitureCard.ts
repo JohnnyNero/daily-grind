@@ -27,6 +27,9 @@ function useOf(def: string): string {
   if (def === 'radiator') return 'Heats the flat (with the boiler on)';
   if (def === 'lamp') return 'Lights the flat in the evening';
   if (def === 'bins') return 'Where the rubbish goes';
+  if (def === 'washer') return 'For doing the washing, in the flat or the laundry room';
+  if (def === 'bikeRack') return 'Somewhere to keep the bike; working tenants sometimes cycle';
+  if (def === 'bbq') return 'For barbecues: whoever fires it up, the neighbours come';
   if (def === 'doormat') return 'Keeps the muck off the floors';
   if (d.offers?.length) {
     const uses = d.offers.map((o) => (o.needsNearby ? `${FOR[o.need]} (with a ${furnitureDef(o.needsNearby).name.toLowerCase()})` : FOR[o.need]));

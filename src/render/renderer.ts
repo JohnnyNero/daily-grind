@@ -10,6 +10,7 @@ import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, type CellKind, type Grade, type Pawn } from '../sim/state';
 import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, edge, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
+import { spacesOf } from '../sim/shared';
 import { flightOf, unsupportedCells, type BuildParts } from '../sim/build';
 import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
 
@@ -810,6 +811,20 @@ export class Renderer {
       ctx.fillRect(sx - w / 2, sy, w, size + 4);
       ctx.fillStyle = '#f3efe6';
       ctx.fillText(f.name, sx, sy + 2);
+    }
+    // Laundry rooms, bike stores and gardens, named the same way (a little greener).
+    const named = new Set<number>();
+    for (const sp of spacesOf(this.sim)) {
+      if ((!sp.working && sp.outdoor) || (!sp.outdoor && named.has(sp.room))) continue;
+      named.add(sp.room);
+      const mid = (sp.x0 + sp.x1 + 1) / 2;
+      const top = sp.outdoor ? sp.s + 1 : Math.max(...lay.rooms[sp.room].nodes.map((n) => lay.xs(n)[1]));
+      const [sx, sy] = toScreen(mid * TILE, floorY(top) - (sp.outdoor ? 3 : 2) * TILE - 2);
+      const w = ctx.measureText(sp.name).width + 8;
+      ctx.fillStyle = '#3a4a3ab0';
+      ctx.fillRect(sx - w / 2, sy, w, size + 4);
+      ctx.fillStyle = '#f3efe6';
+      ctx.fillText(sp.name, sx, sy + 2);
     }
     // Speech bubbles over anyone talking.
     const tick = this.sim.state.tick;

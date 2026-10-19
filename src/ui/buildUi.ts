@@ -61,6 +61,7 @@ const GROUPS: { id: string; name: string; tools?: Tool[]; furniture?: FurnitureG
   { id: 'bathroom', name: 'Bathroom', furniture: ['bathroom'] },
   { id: 'storage', name: 'Storage', furniture: ['storage'] },
   { id: 'decor', name: 'Decor & heat', furniture: ['decor'] },
+  { id: 'shared', name: 'Shared & garden', furniture: ['shared'] },
 ];
 
 /** Tools you paint with: drag across cells and each one gets done. */
