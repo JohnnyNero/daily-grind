@@ -370,3 +370,19 @@ body.building .furn-card { bottom: calc(var(--buildbar-h, 0px) + 8px); }
 .furn-card .actions button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: #ece5d8; color: var(--sheet-ink); font-weight: 600; cursor: pointer; }
 .furn-card .actions .primary { background: var(--accent); }
 .furn-card .actions .danger { background: var(--bad); color: #fff; }
+
+/* placing a piece of furniture: the build bar goes, this small bar comes up */
+.place-bar {
+  position: fixed; left: 8px; right: 8px; bottom: calc(env(safe-area-inset-bottom) + 8px); max-width: 520px; margin: 0 auto; z-index: 7;
+  padding: 10px 12px; border-radius: 14px; background: var(--sheet); color: var(--sheet-ink); box-shadow: 0 6px 20px #00000055;
+}
+.place-bar[hidden] { display: none; }
+.place-info { display: grid; gap: 2px; margin-bottom: 8px; }
+.place-info strong { font-size: 15px; }
+.place-info span { font-size: 13px; color: var(--sheet-muted); }
+.place-info span.bad { color: var(--bad); }
+.place-bar .actions { display: flex; gap: 6px; }
+.place-bar .actions button { flex: 1; min-height: 48px; border: 0; border-radius: 10px; background: #ece5d8; color: var(--sheet-ink); font-weight: 600; font-size: 15px; cursor: pointer; }
+.place-bar .actions .primary { flex: 1.6; background: var(--accent); }
+.place-bar .actions button:disabled { opacity: 0.45; cursor: default; }
+body.placing .build-zoom { display: none; }

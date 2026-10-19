@@ -72,13 +72,20 @@
     <div class="quote" id="build-quote"></div>
     <div class="build-actions">
       <button type="button" id="build-undo">Undo</button>
-      <button type="button" id="build-flip">Turn</button>
       <button type="button" class="primary" id="build-sign">Sign off</button>
       <button type="button" id="build-done">Done</button>
     </div>
   </section>
   <div class="build-zoom" id="build-zoom" hidden aria-label="Zoom to a flat"></div>
   <section class="furn-card" id="furn-card" hidden aria-label="Furniture"></section>
+  <section class="place-bar" id="place-bar" hidden aria-label="Placing furniture">
+    <div class="place-info"><strong id="place-name"></strong><span id="place-why"></span></div>
+    <div class="actions">
+      <button type="button" id="place-cancel">Cancel</button>
+      <button type="button" id="place-flip">Flip</button>
+      <button type="button" class="primary" id="place-ok">Place</button>
+    </div>
+  </section>
 
   <section class="sheet" id="info" hidden aria-live="polite">
     <div class="sheet-head">
