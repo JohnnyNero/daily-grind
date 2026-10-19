@@ -16,7 +16,7 @@ export const TICKS_PER_MINUTE = 60;
 export const TICKS_PER_HOUR = 60 * TICKS_PER_MINUTE;
 export const TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /**
  * What fills one storey-high slot in a column. Doors: an inside door, a flat's front door
@@ -219,6 +219,33 @@ export interface State {
   noiseAvg: Record<string, number>;
   /** The building group chat. */
   chat: ChatMessage[];
+  /** Building work: your plans, and the job the builders are on. */
+  works: Works;
+}
+
+/**
+ * Plans and jobs are the building as it will be (its parts); what's left to do is the
+ * difference from the building as it is.
+ */
+export interface Works {
+  /** Drawn in build mode, not yet signed off. */
+  plan: BuildPartsData | null;
+  /** Signed off: what the builders are working towards. */
+  job: BuildPartsData | null;
+  /** Minutes into the piece they're on. */
+  progress: number;
+  /** Stopped until you can pay for the next piece. */
+  waiting: boolean;
+  /** Flats they've worked in on this job (the tenants get a nice surprise at the end). */
+  flats: string[];
+}
+
+export interface BuildPartsData {
+  walls: Record<string, Segment>;
+  slabs: Record<string, true>;
+  stairs: Stair[];
+  furniture: Furniture[];
+  insulated: Record<string, true>;
 }
 
 export interface ChatMessage {

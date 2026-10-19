@@ -61,11 +61,18 @@ function play(sim: Sim): void {
     renderer.overlay = mode;
   };
 
-  function fitView(): void {
-    const top = topbar.getBoundingClientRect().bottom;
+  /** The part of the screen between the top bar and whatever's along the bottom. */
+  function viewBox(): { x: number; y: number; w: number; h: number } {
+    const top = topbar.getBoundingClientRect().bottom + (build.active ? el('build-zoom').offsetHeight + 8 : 0);
     const bottom = build.active ? el('buildbar').offsetHeight : el('tabbar').offsetHeight;
-    renderer.fit(8, top + 8, window.innerWidth - 16, window.innerHeight - top - bottom - 16);
+    return { x: 8, y: top + 8, w: window.innerWidth - 16, h: window.innerHeight - top - bottom - 16 };
   }
+  function fitView(): void {
+    const b = viewBox();
+    renderer.fit(b.x, b.y, b.w, b.h);
+  }
+  build.viewBox = viewBox;
+  build.onNotify = (text, bad) => hud.notify(text, bad);
   function onResize(): void {
     renderer.resize(window.innerWidth, window.innerHeight);
     fitView();

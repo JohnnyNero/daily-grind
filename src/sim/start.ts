@@ -44,6 +44,7 @@ export function newState(seed: number): State {
     temps: {},
     noiseAvg: {},
     chat: [],
+    works: { plan: null, job: null, progress: 0, waiting: false, flats: [] },
   };
   buildShell(st);
   return st;

@@ -2,15 +2,9 @@
 // (each check returns a reason in words, or null if it's fine) and can be undone.
 
 import { furnitureDef } from './defs';
-import { MAX_STOREYS, ROOM_ROWS, key, type Furniture, type Segment, type Stair, type State } from './state';
+import { MAX_STOREYS, ROOM_ROWS, key, type BuildPartsData, type Furniture, type Segment, type Stair, type State } from './state';
 
-export interface BuildParts {
-  walls: State['walls'];
-  slabs: State['slabs'];
-  stairs: Stair[];
-  furniture: Furniture[];
-  insulated: State['insulated'];
-}
+export type BuildParts = BuildPartsData;
 
 /** The parts that can change in build mode, as a copy (for undo). */
 export function snapshot(s: State): string {

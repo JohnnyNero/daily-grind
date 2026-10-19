@@ -5,6 +5,7 @@ import { isFurniture } from './defs';
 import { MORTGAGE, START_MONEY } from './economy';
 import { Sim } from './sim';
 import { SAVE_VERSION, type State } from './state';
+import { noWorks } from './works';
 
 export function serialize(sim: Sim): string {
   return JSON.stringify(sim.state);
@@ -44,6 +45,9 @@ function normalize(raw: Partial<State>): State {
   st.temps ??= {};
   st.noiseAvg ??= {};
   st.chat ??= [];
+  // Version 4 added the builders.
+  st.works ??= noWorks();
+  st.works.flats ??= [];
   for (const p of st.pawns) {
     if (!p.life) continue;
     p.life.social ??= [];
@@ -55,6 +59,7 @@ function normalize(raw: Partial<State>): State {
     p.life.calmUntil ??= 0;
     p.life.since ??= 1;
   }
-  st.nextId = Math.max(st.nextId ?? 1, ...st.furniture.map((f) => f.id + 1), ...st.stairs.map((t) => t.id + 1), ...st.pawns.map((p) => p.id + 1));
+  const planned = [st.works.plan, st.works.job].flatMap((p) => (p ? [...p.furniture, ...p.stairs] : []));
+  st.nextId = Math.max(st.nextId ?? 1, ...st.furniture.map((f) => f.id + 1), ...st.stairs.map((t) => t.id + 1), ...st.pawns.map((p) => p.id + 1), ...planned.map((o) => o.id + 1));
   return st;
 }

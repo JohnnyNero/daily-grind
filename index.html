@@ -66,19 +66,19 @@
   </nav>
 
   <section class="buildbar" id="buildbar" hidden aria-label="Build mode">
-    <div class="tabs" role="tablist" aria-label="What to build">
-      <button type="button" role="tab" data-tab="structure">Building</button>
-      <button type="button" role="tab" data-tab="furniture">Furniture</button>
-    </div>
+    <div class="groups" id="build-groups" role="tablist" aria-label="What to build"></div>
     <p id="build-hint" class="hint"></p>
     <div class="palette" id="build-tools"></div>
+    <div class="quote" id="build-quote"></div>
     <div class="build-actions">
-      <button type="button" id="build-flip">Turn round</button>
-      <button type="button" id="build-remove">Remove</button>
       <button type="button" id="build-undo">Undo</button>
-      <button type="button" class="primary" id="build-done">Done</button>
+      <button type="button" id="build-flip">Turn</button>
+      <button type="button" id="build-remove">Remove</button>
+      <button type="button" class="primary" id="build-sign">Sign off</button>
+      <button type="button" id="build-done">Done</button>
     </div>
   </section>
+  <div class="build-zoom" id="build-zoom" hidden aria-label="Zoom to a flat"></div>
 
   <section class="sheet" id="info" hidden aria-live="polite">
     <div class="sheet-head">

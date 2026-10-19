@@ -14,6 +14,7 @@ import type { Flat, Layout } from './layout';
 import type { Sim } from './sim';
 import { TICKS_PER_DAY, isDoor, key, type Pawn } from './state';
 import { has } from './traits';
+import { BUILDER_NOISE, currentPiece, whereIs } from './works';
 
 /** Where heat and noise get through: a wall tile or a floor tile. */
 export const wallKey = (x: number, s: number) => `w:${key(x, s)}`;
@@ -196,6 +197,11 @@ export function noiseMade(sim: Sim): Map<string, number> {
     if (!n) continue;
     const where = ownerOf(sim.layout, Math.round(p.x), Math.round(p.s));
     if (where) made.set(where, (made.get(where) ?? 0) + n);
+  }
+  const work = currentPiece(sim);
+  if (work) {
+    const where = whereIs(sim, work);
+    made.set(where, (made.get(where) ?? 0) + BUILDER_NOISE);
   }
   return made;
 }

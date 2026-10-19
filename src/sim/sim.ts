@@ -11,6 +11,7 @@ import { chatMorning } from './chat';
 import { environmentHour, noiseMade } from './environment';
 import { forgetSocial, romanceHour, requestsHour, socialMinute } from './social';
 import { startingTenants } from './start';
+import { worksHour, worksMinute } from './works';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
 
 export class Sim {
@@ -72,7 +73,10 @@ export class Sim {
     st.tick++;
     if (st.repossessed !== undefined) return;
     if (st.tick % TICKS_PER_HOUR === 0) this.hour();
-    if (st.tick % TICKS_PER_MINUTE === 0) socialMinute(this);
+    if (st.tick % TICKS_PER_MINUTE === 0) {
+      socialMinute(this);
+      worksMinute(this);
+    }
     stepPawns(this);
   }
 
@@ -86,6 +90,7 @@ export class Sim {
       chatMorning(this);
     }
     environmentHour(this);
+    worksHour(this);
     romanceHour(this);
     requestsHour(this);
     if (hour === 4) for (const p of st.pawns) if (p.life) forgetSocial(this, p);

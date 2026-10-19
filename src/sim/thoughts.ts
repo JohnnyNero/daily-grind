@@ -61,6 +61,8 @@ export const MEMORIES: Record<string, MemoryDef> = {
   friendLeft: { label: 'A friend moved out', value: -6, hours: 7 * 24, stack: 2 },
   brokeUp: { label: 'Broke up', value: -12, hours: 7 * 24, stack: 1 },
   paysMore: { label: 'Pays more than next door', value: -6, hours: 7 * 24, stack: 1 },
+  buildersIn: { label: 'Builders in the flat', value: -3, hours: 12, stack: 2 },
+  doneUp: { label: 'Flat got done up', value: 6, hours: 5 * 24, stack: 1, gossip: true },
 };
 
 export interface Thought {

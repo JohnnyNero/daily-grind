@@ -10,6 +10,8 @@ import type { Sim } from '../sim/sim';
 import { MAX_STOREYS, ROOM_ROWS, STOREY_ROWS, TILE, TICKS_PER_MINUTE, isDoor, type Pawn, type Segment } from '../sim/state';
 import { SHARED, floorKey, noiseReaching, tempOf, wallKey, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
+import type { BuildParts } from '../sim/build';
+import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
 
 const SKY_ROWS = 4;
 const GROUND_ROWS = 3;
@@ -46,6 +48,9 @@ export interface BuildView {
 
 /** Doors are 30 pixels tall: a person and a bit. */
 const DOOR_H = 30;
+
+/** The builder, for drawing (not a person in the sim). */
+const BUILDER = { look: { skin: 1, hair: 2, top: 3, legs: 1 }, facing: 1, kind: 'passerby' } as Pawn;
 
 export class Renderer {
   readonly camera: Camera = { scale: 2, ox: 0, oy: 0 };
@@ -94,14 +99,20 @@ export class Renderer {
     const st = this.sim.state;
     let top = 1;
     for (const k of Object.keys(st.slabs)) top = Math.max(top, Number(k.split(',')[1]));
-    const wx0 = (st.plot.x0 - 3) * TILE;
-    const wx1 = (st.plot.x1 + 4) * TILE;
-    const wy0 = floorY(top) - 2 * TILE;
-    const wy1 = GROUND_Y + 2 * TILE;
-    const scale = Math.min(w / (wx1 - wx0), h / (wy1 - wy0));
+    this.frame((st.plot.x0 - 3) * TILE, (st.plot.x1 + 4) * TILE, floorY(top) - 2 * TILE, GROUND_Y + 2 * TILE, { x, y, w, h });
+  }
+
+  /** Frames columns x0 to x1 and storeys s0 to s1 (with a tile round them) inside the screen box. */
+  focus(x0: number, x1: number, s0: number, s1: number, box: { x: number; y: number; w: number; h: number }): void {
+    this.frame((x0 - 1) * TILE, (x1 + 2) * TILE, floorY(s1 + 1) - TILE, floorY(s0) + TILE, box, 8);
+  }
+
+  /** Fits a box of the world inside a box of the screen, centred. */
+  private frame(wx0: number, wx1: number, wy0: number, wy1: number, box: { x: number; y: number; w: number; h: number }, most = 6): void {
+    const scale = Math.min(most, box.w / (wx1 - wx0), box.h / (wy1 - wy0));
     this.camera.scale = Math.max(0.5, Math.floor(scale * 4) / 4 || scale);
-    this.camera.ox = x + (w - (wx1 - wx0) * this.camera.scale) / 2 - wx0 * this.camera.scale;
-    this.camera.oy = y + (h - (wy1 - wy0) * this.camera.scale) / 2 - wy0 * this.camera.scale;
+    this.camera.ox = box.x + (box.w - (wx1 - wx0) * this.camera.scale) / 2 - wx0 * this.camera.scale;
+    this.camera.oy = box.y + (box.h - (wy1 - wy0) * this.camera.scale) / 2 - wy0 * this.camera.scale;
   }
 
   toWorld(sx: number, sy: number): { wx: number; wy: number } {
@@ -175,6 +186,7 @@ export class Renderer {
     }
     this.drawLight(ctx);
     if (this.overlay !== 'none') this.drawOverlay(ctx);
+    this.drawWorks(ctx);
     if (this.build.active) this.drawBuild();
     // Text at screen resolution.
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -615,13 +627,157 @@ export class Renderer {
       ctx.fillStyle = g.ok ? '#6fd08c55' : '#e0605066';
       ctx.fillRect(g.x * TILE, floorY(g.s) - (g.r + d.h) * TILE, d.w * TILE, d.h * TILE);
     }
-    const sel = st.furniture.find((f) => f.id === this.build.selected);
+    const sel = (st.works.plan ?? st.works.job ?? st).furniture.find((f) => f.id === this.build.selected);
     if (sel) {
       const d = furnitureDef(sel.def);
       ctx.strokeStyle = '#f2c46d';
       ctx.lineWidth = 1;
       ctx.strokeRect(sel.x * TILE + 0.5, floorY(sel.s) - (sel.r + d.h) * TILE + 0.5, d.w * TILE - 1, d.h * TILE - 1);
     }
+  }
+
+  // ------------------------------------------------------------------ building work
+
+  private worksCache: { version: number; target: BuildParts; pieces: Piece[] } | null = null;
+
+  /**
+   * Blueprints: what's planned (in build mode) or what the builders have still to do, drawn
+   * in blue over the building, with things coming out crossed in red. And the builder.
+   */
+  private drawWorks(ctx: CanvasRenderingContext2D): void {
+    const st = this.sim.state;
+    const target = this.build.active ? (st.works.plan ?? st.works.job) : st.works.job;
+    if (!target) return;
+    let c = this.worksCache;
+    if (!c || c.version !== this.sim.version || c.target !== target) {
+      c = { version: this.sim.version, target, pieces: piecesBetween(partsOf(st), target) };
+      this.worksCache = c;
+    }
+    for (const p of c.pieces) this.drawPiece(ctx, p);
+    const now = currentPiece(this.sim);
+    if (now) this.drawBuilder(ctx, now);
+  }
+
+  private drawPiece(ctx: CanvasRenderingContext2D, p: Piece): void {
+    const BLUE = '#5fb2ff';
+    const H = ROOM_ROWS * TILE;
+    const cross = (x: number, y: number, w: number, h: number) => {
+      ctx.strokeStyle = '#ff6a55';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(x + 2, y + 2);
+      ctx.lineTo(x + w - 2, y + h - 2);
+      ctx.moveTo(x + w - 2, y + 2);
+      ctx.lineTo(x + 2, y + h - 2);
+      ctx.stroke();
+      ctx.fillStyle = '#ff6a5526';
+      ctx.fillRect(x, y, w, h);
+    };
+    const outline = (x: number, y: number, w: number, h: number, colour = BLUE) => {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+      ctx.setLineDash([]);
+    };
+    const part = p.part;
+    switch (part.kind) {
+      case 'segment': {
+        const X = p.x * TILE;
+        const top = floorY(p.s) - H;
+        if (part.seg === null) {
+          cross(X + 2, top, TILE - 4, H);
+          break;
+        }
+        ctx.fillStyle = `${BLUE}cc`;
+        if (part.seg === 'window') {
+          ctx.fillRect(X + 6, top, 4, H);
+          ctx.fillStyle = '#d8f0ffcc';
+          ctx.fillRect(X + 7, top + 10, 2, 18);
+        } else if (isDoor(part.seg)) {
+          ctx.fillRect(X + 6, top, 4, H - DOOR_H);
+          outline(X + 3, floorY(p.s) - DOOR_H, 10, DOOR_H);
+        } else ctx.fillRect(X + 6, top, 4, H);
+        break;
+      }
+      case 'slab': {
+        const y = floorY(part.level);
+        if (p.removes) cross(p.x * TILE, y, TILE, TILE);
+        else {
+          ctx.fillStyle = `${BLUE}88`;
+          ctx.fillRect(p.x * TILE, y, TILE, TILE);
+          outline(p.x * TILE, y, TILE, TILE);
+        }
+        break;
+      }
+      case 'stair': {
+        const t = part.stair;
+        const X = t.x * TILE;
+        if (p.removes) {
+          cross(X, floorY(t.s + 1), 3 * TILE, floorY(t.s) - floorY(t.s + 1));
+          break;
+        }
+        const steps = 8;
+        const rise = (floorY(t.s) - floorY(t.s + 1)) / steps;
+        const run = (3 * TILE) / steps;
+        ctx.fillStyle = `${BLUE}88`;
+        for (let i = 0; i < steps; i++) {
+          const sx = t.dir === 1 ? X + i * run : X + 3 * TILE - (i + 1) * run;
+          ctx.fillRect(sx, floorY(t.s) - (i + 1) * rise, run, (i + 1) * rise);
+        }
+        break;
+      }
+      case 'furniture': {
+        const f = part.f;
+        const d = furnitureDef(f.def);
+        const x = f.x * TILE;
+        const y = floorY(f.s) - (f.r + d.h) * TILE;
+        if (p.removes) {
+          cross(x, y, d.w * TILE, d.h * TILE);
+          break;
+        }
+        if (part.from) {
+          const o = part.from;
+          cross(o.x * TILE, floorY(o.s) - (o.r + d.h) * TILE, d.w * TILE, d.h * TILE);
+        }
+        ctx.globalAlpha = 0.55;
+        drawFurniture(ctx, f.def, x, y, f.flip);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = `${BLUE}40`;
+        ctx.fillRect(x, y, d.w * TILE, d.h * TILE);
+        outline(x, y, d.w * TILE, d.h * TILE);
+        break;
+      }
+      case 'insulate': {
+        const [kind, rest] = part.key.split(':');
+        const [x, n] = rest.split(',').map(Number);
+        const [y, h] = kind === 'w' ? [floorY(n) - H, H] : [floorY(n), TILE];
+        const [X, w] = kind === 'w' ? [x * TILE + 5, 6] : [x * TILE, TILE];
+        if (p.removes) {
+          cross(X, y, w, h);
+          break;
+        }
+        for (let yy = y; yy < y + h; yy += 4) {
+          ctx.fillStyle = (yy - y) % 8 ? `${BLUE}aa` : '#e8c84aaa';
+          ctx.fillRect(X, yy, w, Math.min(4, y + h - yy));
+        }
+        break;
+      }
+    }
+  }
+
+  /** A builder in a hard hat, hammering away at the piece they're on. */
+  private drawBuilder(ctx: CanvasRenderingContext2D, p: Piece): void {
+    const x = Math.round((p.x + 0.5) * TILE + (p.part.kind === 'segment' ? -TILE : 0));
+    const y = floorY(p.part.kind === 'slab' ? p.part.level - 1 : p.s);
+    const bob = Math.floor(this.sim.state.tick / 40) % 2;
+    drawPerson(ctx, BUILDER, x, y, 0, false);
+    // The hat, and a hammer going up and down.
+    rect(ctx, x - 5, y - PERSON_H - 1, 10, 3, PAL.outline);
+    rect(ctx, x - 4, y - PERSON_H, 8, 2, '#f2c43a');
+    rect(ctx, x + 4, y - 14 - bob * 3, 1, 6, '#6b4a32');
+    rect(ctx, x + 3, y - 15 - bob * 3, 3, 2, '#56606d');
   }
 
   // ------------------------------------------------------------------ labels
