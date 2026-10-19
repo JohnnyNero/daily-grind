@@ -74,7 +74,9 @@ function removePawn(sim: Sim, p: Pawn): void {
   if (p.kind === 'agent') st.timers.agent = st.tick + randInt(st, 2, 5) * TICKS_PER_HOUR;
 }
 
-const atNode = (p: Pawn) => Math.abs(p.x - Math.round(p.x)) < EPS && Math.abs(p.s - Math.round(p.s)) < EPS;
+/** Standing on a node, not part way along a step. (The pavement step crosses whole columns, so passing one doesn't count.) */
+const atNode = (p: Pawn) =>
+  Math.abs(p.x - Math.round(p.x)) < EPS && Math.abs(p.s - Math.round(p.s)) < EPS && !(p.front && Math.abs(p.x - (p.frontTo ?? p.x)) > EPS);
 
 function step(sim: Sim, p: Pawn): void {
   const st = sim.state;
@@ -131,8 +133,13 @@ function walk(p: Pawn): void {
   if (Math.abs(dx) > EPS) p.facing = dx > 0 ? 1 : -1;
   // A step longer than one tile along the ground is the pavement past the front of the building.
   if (atNode(p)) {
-    if (Math.abs(ds) < EPS && Math.abs(dx) > 1.5) p.front = true;
-    else delete p.front;
+    if (Math.abs(ds) < EPS && Math.abs(dx) > 1.5) {
+      p.front = true;
+      p.frontTo = tx;
+    } else {
+      delete p.front;
+      delete p.frontTo;
+    }
   }
   const speed = Math.abs(ds) > EPS ? CLIMB : WALK;
   const dist = Math.abs(dx) > EPS ? Math.abs(dx) : Math.abs(ds);

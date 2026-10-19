@@ -7,8 +7,8 @@
 import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
-import { MAX_STOREYS, ROOM_ROWS, STOREY_ROWS, TILE, TICKS_PER_MINUTE, isDoor, type Pawn } from '../sim/state';
-import { drawFurniture, drawPerson, rect } from './art';
+import { MAX_STOREYS, ROOM_ROWS, STOREY_ROWS, TILE, TICKS_PER_MINUTE, isDoor, type Pawn, type Segment } from '../sim/state';
+import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, drawFurniture, drawPerson, light, mix, rect } from './art';
 
 const SKY_ROWS = 4;
 const GROUND_ROWS = 3;
@@ -43,14 +43,18 @@ export interface BuildView {
   version: number;
 }
 
-const FLAT_WALLS = ['#d9b98f', '#b9c8a8', '#c9b8d0', '#a9c0cf', '#e0c2a2', '#c2c9a0', '#d4a9a0', '#b0bfb8'];
-const SHARED_WALL = '#a8a296';
+/** Doors are 30 pixels tall: a person and a bit. */
+const DOOR_H = 30;
 
 export class Renderer {
   readonly camera: Camera = { scale: 2, ox: 0, oy: 0 };
   private ctx: CanvasRenderingContext2D;
   private layer: HTMLCanvasElement;
   private layerVersion = -1;
+  private lightMap: HTMLCanvasElement = document.createElement('canvas');
+  private lightKey = '';
+  /** How far open each door is, and which way it swings. */
+  private doors = new Map<string, { open: number; dir: 1 | -1 }>();
   private dpr = 1;
   private viewW = 0;
   private viewH = 0;
@@ -116,7 +120,7 @@ export class Renderer {
     let bestD = Infinity;
     for (const p of this.sim.state.pawns) {
       const { px, py } = this.feet(p);
-      if (wx < px - 7 || wx > px + 7 || wy < py - 32 || wy > py + 4) continue;
+      if (wx < px - 7 || wx > px + 7 || wy < py - PERSON_H - 2 || wy > py + 4) continue;
       const d = Math.abs(wx - px);
       if (d < bestD) {
         bestD = d;
@@ -133,6 +137,12 @@ export class Renderer {
 
   // ------------------------------------------------------------------ the frame
 
+  /** 0 in full daylight, 1 at night, in between at dawn and dusk. */
+  private get darkness(): number {
+    const hour = (Math.floor(this.sim.state.tick / TICKS_PER_MINUTE) % (24 * 60)) / 60;
+    return 1 - Math.max(0, Math.min(1, Math.min((hour - 5.5) / 2, (20.5 - hour) / 2)));
+  }
+
   draw(): void {
     const ctx = this.ctx;
     const c = this.camera;
@@ -142,6 +152,7 @@ export class Renderer {
     this.drawSky();
     ctx.setTransform(this.dpr * c.scale, 0, 0, this.dpr * c.scale, this.dpr * c.ox, this.dpr * c.oy);
     ctx.drawImage(this.layer, 0, 0);
+    this.drawDoors(ctx);
     const pawns = [...this.sim.state.pawns].sort((a, b) => Number(!!a.front) - Number(!!b.front));
     for (const p of pawns) {
       const { px, py } = this.feet(p);
@@ -151,9 +162,10 @@ export class Renderer {
       if (p.id === this.selectedPawn) {
         ctx.strokeStyle = '#f2c46d';
         ctx.lineWidth = 1;
-        ctx.strokeRect(Math.round(px) - 7.5, Math.round(py) - 31.5, 15, 33);
+        ctx.strokeRect(Math.round(px) - 7.5, Math.round(py) - PERSON_H - 2.5, 15, PERSON_H + 4);
       }
     }
+    this.drawLight(ctx);
     if (this.build.active) this.drawBuild();
     // Text at screen resolution.
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -162,19 +174,26 @@ export class Renderer {
 
   private drawSky(): void {
     const ctx = this.ctx;
-    const minute = Math.floor(this.sim.state.tick / TICKS_PER_MINUTE) % (24 * 60);
-    const hour = minute / 60;
-    // Daylight from 0 (night) to 1 (midday), with dawn and dusk between.
-    const light = Math.max(0, Math.min(1, Math.min((hour - 5.5) / 2, (21 - hour) / 2)));
-    const mix = (a: number[], b: number[]) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * light)).join(',')})`;
     const g = ctx.createLinearGradient(0, 0, 0, this.viewH);
-    g.addColorStop(0, mix([18, 22, 44], [126, 178, 214]));
-    g.addColorStop(1, mix([46, 40, 70], [214, 226, 228]));
+    const d = this.darkness;
+    g.addColorStop(0, mix(PAL.sky, PAL.skyNight, d));
+    g.addColorStop(1, mix('#e4d8c4', '#2e2846', d));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, this.viewW, this.viewH);
   }
 
   // ------------------------------------------------------------------ the building
+
+  /** The back-wall colour of each room, or null where there's no wall to see (the street, the open roof). */
+  private roomColours(lay: Layout): (string | null)[] {
+    const flatIndex = new Map(lay.flats.map((f, i) => [f.id, i]));
+    return lay.rooms.map((room) => {
+      if (room.outdoor) return null;
+      if (room.flat !== null) return FLAT_WALLS[(flatIndex.get(room.flat) ?? 0) % FLAT_WALLS.length];
+      if (room.shared) return PAL.shared;
+      return room.enclosed ? '#5a4a40' : null;
+    });
+  }
 
   private drawLayer(): void {
     const lay = this.sim.layout;
@@ -184,140 +203,170 @@ export class Renderer {
     const ctx = this.layer.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, this.worldW, this.worldH);
+    const colours = this.roomColours(lay);
     this.drawStreet(ctx);
-    this.drawRooms(ctx, lay);
-    // Floors.
+    this.drawRooms(ctx, lay, colours);
     for (const k of Object.keys(st.slabs)) {
       const [x, level] = k.split(',').map(Number);
       this.drawSlab(ctx, x, level);
     }
-    for (let x = st.plot.x0; x <= st.plot.x1; x++) this.drawFloorTop(ctx, x, floorY(0), lay.roomOf[lay.node(x, 0)] !== -1);
-    // Stairs, then walls, doors and windows over them.
+    for (let x = st.plot.x0; x <= st.plot.x1; x++) {
+      if (lay.roomOf[lay.node(x, 0)] !== -1 && !lay.rooms[lay.roomOf[lay.node(x, 0)]].outdoor) this.drawFloorTop(ctx, x, floorY(0));
+    }
     for (const t of st.stairs) this.drawStairs(ctx, t.x, t.s, t.dir);
     for (const [k, seg] of Object.entries(st.walls)) {
       const [x, s] = k.split(',').map(Number);
-      const outer = x === st.plot.x0 || x === st.plot.x1;
-      const y = floorY(s) - ROOM_ROWS * TILE;
-      const X = x * TILE;
-      const brick = outer ? '#9c5b45' : '#d6c9b2';
-      const mortar = outer ? '#86493a' : '#c2b49b';
-      rect(ctx, X, y, TILE, ROOM_ROWS * TILE, brick);
-      for (let row = 0; row < ROOM_ROWS * 4; row++) {
-        rect(ctx, X, y + row * 4 + 3, TILE, 1, mortar);
-        if (outer) rect(ctx, X + (row % 2 ? 4 : 11), y + row * 4, 1, 3, mortar);
-      }
-      rect(ctx, X, y, 1, ROOM_ROWS * TILE, '#00000022');
-      rect(ctx, X + TILE - 1, y, 1, ROOM_ROWS * TILE, '#00000033');
-      if (seg === 'window') this.drawWindow(ctx, X, y);
-      else if (isDoor(seg)) this.drawDoor(ctx, X, y, seg);
+      this.drawWall(ctx, lay, colours, x, s, seg);
     }
     for (const f of st.furniture) {
       const d = furnitureDef(f.def);
       drawFurniture(ctx, f.def, f.x * TILE, floorY(f.s) - (f.r + d.h) * TILE, f.flip);
     }
     this.layerVersion = this.sim.version;
+    this.lightKey = '';
   }
 
   private drawStreet(ctx: CanvasRenderingContext2D): void {
     const W = this.worldW;
     const y = GROUND_Y;
-    // Neighbouring terraces, just their outlines, either side of the plot.
+    // Neighbouring terraces either side of the plot.
     const { x0, x1 } = this.sim.state.plot;
     for (const [from, to] of [[0, x0 - 2], [x1 + 3, this.sim.state.w]] as const) {
       for (let x = from; x < to; x += 7) {
         const h = 2 + ((x * 7) % 3);
         const top = floorY(h) - 2 * TILE;
-        rect(ctx, x * TILE, top, 6 * TILE, y - top, '#6d6a74');
-        rect(ctx, x * TILE - 2, top - 3, 6 * TILE + 4, 3, '#57545e');
+        const X = x * TILE;
+        rect(ctx, X, top, 6 * TILE, y - top, '#7a5a4c');
+        for (let row = top + 3; row < y; row += 4) rect(ctx, X, row, 6 * TILE, 1, '#6d4f42');
+        rect(ctx, X - 2, top - 4, 6 * TILE + 4, 4, PAL.outline);
+        rect(ctx, X - 1, top - 3, 6 * TILE + 2, 2, '#4a3a34');
         for (let s = 0; s < h; s++) {
-          for (const wx of [1, 4]) rect(ctx, (x + wx) * TILE, floorY(s) - 3 * TILE + 6, TILE, TILE + 6, '#4e5a6a');
+          for (const wx of [1, 4]) {
+            rect(ctx, (x + wx) * TILE - 1, floorY(s) - 3 * TILE + 5, TILE + 2, TILE + 8, PAL.outline);
+            rect(ctx, (x + wx) * TILE, floorY(s) - 3 * TILE + 6, TILE, TILE + 6, '#3e4a5c');
+            rect(ctx, (x + wx) * TILE, floorY(s) - 2 * TILE + 12, TILE, 2, PAL.white);
+          }
         }
       }
     }
-    rect(ctx, 0, y, W, TILE, '#b3ada3');
-    for (let x = 0; x < W; x += TILE) rect(ctx, x, y, 1, TILE, '#9d978d');
-    rect(ctx, 0, y, W, 2, '#c9c3b8');
-    rect(ctx, 0, y + TILE, W, 3, '#8b867e');
-    rect(ctx, 0, y + TILE + 3, W, TILE - 3, '#3d3f44');
-    for (let x = 4; x < W; x += 3 * TILE) rect(ctx, x, y + TILE + 9, TILE, 2, '#d8d4c8');
-    rect(ctx, 0, y + 2 * TILE, W, TILE, '#2e2420');
+    rect(ctx, 0, y, W, TILE, PAL.pave);
+    for (let x = 0; x < W; x += TILE) rect(ctx, x, y, 1, TILE - 4, dark(PAL.pave, 0.1));
+    rect(ctx, 0, y, W, 1, light(PAL.pave, 0.2));
+    rect(ctx, 0, y + TILE - 4, W, 2, dark(PAL.pave, 0.25));
+    rect(ctx, 0, y + TILE - 2, W, TILE + 2, PAL.road);
+    for (let x = 4; x < W; x += 3 * TILE) rect(ctx, x, y + TILE + 8, TILE, 2, '#d8d4c8');
+    rect(ctx, 0, y + 2 * TILE, W, TILE, '#2a1e1a');
     // Street lamps.
-    for (const x of [x0 - 5, x1 + 5]) {
+    for (const x of this.streetLamps()) {
       rect(ctx, x * TILE + 7, floorY(1) - 8, 2, 4 * TILE + 8, '#2f3338');
-      rect(ctx, x * TILE + 4, floorY(1) - 10, 8, 3, '#2f3338');
+      box(ctx, x * TILE + 3, floorY(1) - 11, 10, 4, '#2f3338');
       rect(ctx, x * TILE + 5, floorY(1) - 7, 6, 2, '#f3d98a');
     }
   }
 
-  /** Back walls: each flat in its own colour, shared space plain, the gutted and sealed darker. */
-  private drawRooms(ctx: CanvasRenderingContext2D, lay: Layout): void {
-    const flatIndex = new Map(lay.flats.map((f, i) => [f.id, i]));
+  private streetLamps(): number[] {
+    const { x0, x1 } = this.sim.state.plot;
+    return [x0 - 5, x1 + 5];
+  }
+
+  /** Back walls: each flat in its own colour, shared space plain, a flat with nothing in it stripped to the brick. */
+  private drawRooms(ctx: CanvasRenderingContext2D, lay: Layout, colours: (string | null)[]): void {
     for (const room of lay.rooms) {
-      if (room.outdoor) continue;
-      let colour = SHARED_WALL;
-      if (room.flat !== null) colour = FLAT_WALLS[(flatIndex.get(room.flat) ?? 0) % FLAT_WALLS.length];
-      else if (!room.shared) colour = room.enclosed ? '#5a5048' : '';
+      const colour = colours[room.id];
       if (!colour) continue;
       const bare = room.flat !== null && !this.sim.state.furniture.some((f) => lay.flatAt(f.x, f.s)?.id === room.flat);
       for (const n of room.nodes) {
         const [x, s] = lay.xs(n);
         if (!room.enclosed && !lay.slab(x, s + 1)) continue;
-        const X = x * TILE;
-        const y = floorY(s) - ROOM_ROWS * TILE;
-        if (bare) {
-          // Stripped to the brick.
-          rect(ctx, X, y, TILE, ROOM_ROWS * TILE, '#a8826a');
-          for (let row = 0; row < ROOM_ROWS * 4; row++) {
-            rect(ctx, X, y + row * 4 + 3, TILE, 1, '#957260');
-            rect(ctx, X + (row % 2 ? 3 : 11), y + row * 4, 1, 3, '#957260');
-          }
-          continue;
-        }
-        rect(ctx, X, y, TILE, ROOM_ROWS * TILE, colour);
-        rect(ctx, X + 7, y, 2, ROOM_ROWS * TILE, '#ffffff14');
-        rect(ctx, X, y, TILE, 2, '#00000022');
-        rect(ctx, X, floorY(s) - 3, TILE, 3, room.shared ? '#6e675d' : '#7d5a3e');
+        this.backWall(ctx, x * TILE, s, TILE, bare ? null : colour);
       }
     }
+  }
+
+  /** A strip of back wall in a storey: wallpaper with a skirting board, or bare brick. */
+  private backWall(ctx: CanvasRenderingContext2D, X: number, s: number, w: number, colour: string | null): void {
+    const y = floorY(s) - ROOM_ROWS * TILE;
+    const H = ROOM_ROWS * TILE;
+    if (!colour) {
+      rect(ctx, X, y, w, H, '#a8826a');
+      for (let row = 0; row < ROOM_ROWS * 4; row++) {
+        rect(ctx, X, y + row * 4 + 3, w, 1, '#957260');
+        for (let bx = X + (row % 2 ? 3 : 11); bx < X + w; bx += TILE) rect(ctx, bx, y + row * 4, 1, 3, '#957260');
+      }
+      return;
+    }
+    rect(ctx, X, y, w, H, colour);
+    for (let sx = X + 6 - (X % 10); sx < X + w; sx += 10) if (sx >= X) rect(ctx, sx, y, 1, H, light(colour, 0.08));
+    rect(ctx, X, y, w, 2, dark(colour, 0.12));
+    rect(ctx, X, floorY(s) - 3, w, 3, PAL.skirting);
   }
 
   private drawSlab(ctx: CanvasRenderingContext2D, x: number, level: number): void {
     const y = floorY(level);
     const X = x * TILE;
-    rect(ctx, X, y, TILE, TILE, '#77706a');
-    rect(ctx, X, y + TILE - 3, TILE, 3, '#5b5550');
-    rect(ctx, X, y + 6, TILE, 1, '#6a645e');
-    this.drawFloorTop(ctx, X / TILE, y, true);
+    rect(ctx, X, y, TILE, TILE, PAL.slab);
+    for (let xx = X + (level % 2); xx < X + TILE; xx += 2) rect(ctx, xx, y + TILE - 2, 1, 1, dark(PAL.slab, 0.25));
+    rect(ctx, X, y + TILE - 1, TILE, 1, PAL.outline);
+    this.drawFloorTop(ctx, x, y);
   }
 
-  private drawFloorTop(ctx: CanvasRenderingContext2D, x: number, y: number, boards: boolean): void {
+  private drawFloorTop(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     const X = x * TILE;
-    rect(ctx, X, y, TILE, 3, boards ? '#9a6a45' : '#8b867e');
-    if (boards) rect(ctx, X + ((x * 5) % 13), y, 1, 3, '#7d5236');
+    rect(ctx, X, y, TILE, 3, PAL.floor);
+    rect(ctx, X, y, TILE, 1, light(PAL.floor, 0.15));
+    rect(ctx, X + ((x * 5) % 13), y, 1, 3, PAL.floorLine);
   }
 
-  private drawWindow(ctx: CanvasRenderingContext2D, X: number, y: number): void {
-    rect(ctx, X + 1, y + 6, TILE - 2, 30, '#efe9df');
-    rect(ctx, X + 3, y + 8, TILE - 6, 26, '#8fbcd3');
-    rect(ctx, X + 3, y + 20, TILE - 6, 1, '#efe9df');
-    rect(ctx, X + 4, y + 9, 2, 6, '#c4e1ee');
-    rect(ctx, X, y + 36, TILE, 2, '#d8d0c2');
+  /** The colour of the back wall beside a wall segment, on one side. */
+  private sideColour(lay: Layout, colours: (string | null)[], x: number, s: number): string | null {
+    if (x < 0 || x >= lay.w) return null;
+    const room = lay.roomOf[lay.node(x, s)];
+    if (room === -1) return null;
+    const bare = lay.rooms[room].flat !== null && !this.sim.state.furniture.some((f) => lay.flatAt(f.x, f.s)?.id === lay.rooms[room].flat);
+    return bare ? 'bare' : colours[room];
   }
 
-  private drawDoor(ctx: CanvasRenderingContext2D, X: number, y: number, seg: 'door' | 'flatDoor' | 'entrance'): void {
-    const top = y + TILE - 2;
-    const h = ROOM_ROWS * TILE - (TILE - 2);
-    rect(ctx, X, top - 1, TILE, h + 1, '#efe9df');
-    const leaf = seg === 'flatDoor' ? '#2f6b5a' : seg === 'entrance' ? '#23395b' : '#b07a4a';
-    rect(ctx, X + 2, top + 1, TILE - 4, h - 1, leaf);
-    rect(ctx, X + 3, top + 3, TILE - 6, 8, '#ffffff18');
-    rect(ctx, X + 3, top + 14, TILE - 6, 14, '#00000014');
-    if (seg === 'entrance') {
-      rect(ctx, X + 4, top + 3, TILE - 8, 10, '#8fbcd3');
-      rect(ctx, X + 1, top - TILE + 4, TILE - 2, TILE - 6, '#8fbcd3');
+  /**
+   * A wall segment: a thin wall (brick on the outside of the building) with the rooms either
+   * side showing behind it. Windows and doors are gaps; a window is a line of glass, and doors
+   * are drawn every frame so they can swing.
+   */
+  private drawWall(ctx: CanvasRenderingContext2D, lay: Layout, colours: (string | null)[], x: number, s: number, seg: Segment): void {
+    const X = x * TILE;
+    const H = ROOM_ROWS * TILE;
+    const y = floorY(s) - H;
+    for (const [side, ox] of [[-1, 0], [1, TILE / 2]] as const) {
+      const c = this.sideColour(lay, colours, x + side, s);
+      if (c) this.backWall(ctx, X + ox, s, TILE / 2, c === 'bare' ? null : c);
     }
-    rect(ctx, X + TILE - 6, top + 16, 2, 2, '#d8b25a');
-    if (seg === 'flatDoor') rect(ctx, X + 6, top + 5, 4, 3, '#d8b25a');
+    const outer = x === this.sim.state.plot.x0 || x === this.sim.state.plot.x1;
+    const bw = outer ? 8 : 4;
+    const bx = X + (TILE - bw) / 2;
+    const body = (top: number, h: number) => {
+      if (h <= 0) return;
+      if (outer) {
+        rect(ctx, bx, top, bw, h, PAL.brick);
+        for (let row = top; row < top + h; row += 4) {
+          rect(ctx, bx, row + 3, bw, 1, PAL.mortar);
+          rect(ctx, bx + ((row / 4) % 2 ? 2 : 5), row, 1, 3, PAL.mortar);
+        }
+      } else {
+        rect(ctx, bx, top, bw, h, '#8a7262');
+        rect(ctx, bx + 1, top, 2, h, '#a08878');
+      }
+      rect(ctx, bx - 1, top, 1, h, PAL.outline);
+      rect(ctx, bx + bw, top, 1, h, PAL.outline);
+    };
+    if (seg === 'window') {
+      body(y, 8);
+      body(y + 38, H - 38);
+      rect(ctx, X + 7, y + 8, 2, 30, PAL.glass);
+      rect(ctx, X + 7, y + 20, 2, 1, light(PAL.glass, 0.6));
+      box(ctx, X + 2, y + 37, 12, 3, PAL.white);
+    } else if (isDoor(seg)) {
+      body(y, H - DOOR_H - 1);
+      box(ctx, X + 1, y + H - DOOR_H - 2, TILE - 2, 3, PAL.woodDark);
+    } else body(y, H);
   }
 
   private drawStairs(ctx: CanvasRenderingContext2D, x: number, s: number, dir: 1 | -1): void {
@@ -329,17 +378,120 @@ export class Renderer {
     for (let i = 0; i < steps; i++) {
       const sx = dir === 1 ? X + (i * run) / steps : X + run - ((i + 1) * run) / steps;
       const sy = base - ((i + 1) * rise) / steps;
-      rect(ctx, sx, sy, run / steps + 1, base - sy, i % 2 ? '#7a5236' : '#835a3c');
-      rect(ctx, sx, sy, run / steps + 1, 2, '#a3754f');
+      box(ctx, sx, sy, run / steps + 1, base - sy, i % 2 ? PAL.wood : dark(PAL.wood, 0.08));
     }
-    // Handrail.
-    ctx.strokeStyle = '#3f2a1c';
+    ctx.strokeStyle = PAL.outline;
     ctx.lineWidth = 1;
     ctx.beginPath();
     const [ax, bx] = dir === 1 ? [X, X + run] : [X + run, X];
-    ctx.moveTo(ax, base - 12);
-    ctx.lineTo(bx, base - rise - 12);
+    ctx.moveTo(ax, base - 14);
+    ctx.lineTo(bx, base - rise - 14);
     ctx.stroke();
+  }
+
+  // ------------------------------------------------------------------ doors
+
+  /**
+   * Doors seen side on: a line when shut, a panel swinging out into the room as someone
+   * passes through, towards the way they're going.
+   */
+  private drawDoors(ctx: CanvasRenderingContext2D): void {
+    const st = this.sim.state;
+    for (const [k, seg] of Object.entries(st.walls)) {
+      if (!isDoor(seg)) continue;
+      const [x, s] = k.split(',').map(Number);
+      const state = this.doors.get(k) ?? { open: 0, dir: 1 as 1 | -1 };
+      const near = st.pawns.find((p) => Math.abs(p.s - s) < 0.2 && Math.abs(p.x - x) < 1 && !p.front);
+      if (near) state.dir = near.facing;
+      state.open = Math.max(0, Math.min(1, state.open + (near ? 0.12 : -0.06)));
+      this.doors.set(k, state);
+      const leaf = seg === 'flatDoor' ? '#2f6b5a' : seg === 'entrance' ? '#2b3a5a' : PAL.door;
+      const F = floorY(s);
+      const hinge = x * TILE + 8;
+      const w = Math.round(12 * Math.sin((state.open * Math.PI) / 2));
+      if (w <= 1) {
+        rect(ctx, hinge - 1, F - DOOR_H, 2, DOOR_H, leaf);
+        continue;
+      }
+      const left = state.dir === 1 ? hinge : hinge - w;
+      box(ctx, left, F - DOOR_H, w, DOOR_H, leaf);
+      if (w > 4) rect(ctx, state.dir === 1 ? left + w - 3 : left + 2, F - 15, 1, 2, PAL.poster);
+    }
+  }
+
+  // ------------------------------------------------------------------ evening light
+
+  /**
+   * At dusk the whole scene is multiplied by a light map: dark blue outside, a softer dim
+   * indoors, and warm pools around lamps, tellies, screens, ceiling lights and street lamps.
+   * Redrawn when the hour moves on or the building changes.
+   */
+  private drawLight(ctx: CanvasRenderingContext2D): void {
+    const d = this.darkness;
+    if (d <= 0) return;
+    const key = `${Math.round(d * 40)}|${this.sim.version}`;
+    if (key !== this.lightKey) this.drawLightMap(d);
+    this.lightKey = key;
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.drawImage(this.lightMap, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  private drawLightMap(d: number): void {
+    const lay = this.sim.layout;
+    const st = this.sim.state;
+    const m = this.lightMap;
+    m.width = this.worldW;
+    m.height = this.worldH;
+    const c = m.getContext('2d')!;
+    c.fillStyle = mix('#ffffff', '#5a5a8a', d);
+    c.fillRect(0, 0, m.width, m.height);
+    c.fillStyle = mix('#ffffff', '#c4b0b4', d);
+    for (const room of lay.rooms) {
+      if (room.outdoor) continue;
+      for (const n of room.nodes) {
+        const [x, s] = lay.xs(n);
+        if (!room.enclosed && !lay.slab(x, s + 1)) continue;
+        c.fillRect(x * TILE - 8, floorY(s) - ROOM_ROWS * TILE, TILE + 16, ROOM_ROWS * TILE + 3);
+      }
+    }
+    c.globalCompositeOperation = 'lighter';
+    const glow = (x: number, y: number, r: number, colour: string, k: number) => {
+      const g = c.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, colour);
+      g.addColorStop(1, '#00000000');
+      c.globalAlpha = k * d;
+      c.fillStyle = g;
+      c.fillRect(x - r, y - r, r * 2, r * 2);
+    };
+    for (const f of st.furniture) {
+      const colour = LIGHTS[f.def];
+      if (!colour) continue;
+      const def = furnitureDef(f.def);
+      const cx = (f.x + def.w / 2) * TILE;
+      const cy = floorY(f.s) - (f.r + def.h) * TILE + (f.def === 'lamp' ? 4 : 10);
+      glow(cx, cy, f.def === 'lamp' ? 46 : f.def === 'tv' ? 26 : 18, colour, f.def === 'lamp' ? 0.75 : 0.5);
+    }
+    // A ceiling light in every lived-in room and on the landings.
+    for (const room of lay.rooms) {
+      if (room.outdoor || !room.enclosed) continue;
+      const lit = room.shared || this.sim.state.furniture.some((f) => lay.roomOf[lay.node(f.x, f.s)] === room.id);
+      if (!lit) continue;
+      for (const s of new Set(room.nodes.map((n) => lay.xs(n)[1]))) {
+        const xs = room.nodes.filter((n) => lay.xs(n)[1] === s).map((n) => lay.xs(n)[0]);
+        const cx = ((Math.min(...xs) + Math.max(...xs) + 1) / 2) * TILE;
+        glow(cx, floorY(s) - ROOM_ROWS * TILE + 8, Math.min(70, (Math.max(...xs) - Math.min(...xs) + 2) * 7), '#ffd08a', 0.6);
+      }
+    }
+    // Lit windows glow a little into the street.
+    for (const [k, seg] of Object.entries(st.walls)) {
+      if (seg !== 'window') continue;
+      const [x, s] = k.split(',').map(Number);
+      glow(x * TILE + 8, floorY(s) - 26, 14, '#ffd890', 0.5);
+    }
+    for (const x of this.streetLamps()) glow(x * TILE + 8, floorY(1) - 6, 40, '#ffd88a', 0.6);
+    c.globalAlpha = 1;
+    c.globalCompositeOperation = 'source-over';
   }
 
   // ------------------------------------------------------------------ build mode

@@ -32,6 +32,8 @@ describe('the simulation', () => {
         if (p.kind === 'agent' && p.task === 'look' && p.flat) seen.add(p.flat);
         if (p.kind === 'passerby' && !lastIds.has(p.id)) passers++;
         expect(p.doing).not.toMatch(/Stuck|Can't/);
+        // Passers-by stay on the pavement in front of the building, never inside it.
+        if (p.kind === 'passerby' && p.x > sim.state.plot.x0 && p.x < sim.state.plot.x1) expect(p.front, `${p.name} at ${p.x}`).toBe(true);
       }
       lastIds = new Set(sim.state.pawns.map((p) => p.id));
     }

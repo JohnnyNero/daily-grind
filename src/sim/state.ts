@@ -82,6 +82,8 @@ export interface Pawn {
   facing: 1 | -1;
   /** Walking along the pavement in front of the building. */
   front?: boolean;
+  /** The column at the far end of the pavement walk. */
+  frontTo?: number;
 }
 
 export interface State {

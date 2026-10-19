@@ -1,5 +1,5 @@
-// Placeholder pixel art, drawn in world pixels (16 to a tile) and scaled up without
-// smoothing. Everything here is plain rectangles so it stays crisp at any zoom.
+// The art, in the "Lamplight" style: warm colours, dark brown outlines and dithered
+// shading, drawn in world pixels (16 to a tile) and scaled up without smoothing.
 
 import { furnitureDef } from '../sim/defs';
 import type { Pawn } from '../sim/state';
@@ -7,263 +7,341 @@ import { TILE } from '../sim/state';
 
 type Ctx = CanvasRenderingContext2D;
 
+// ------------------------------------------------------------------ palette
+
+export const PAL = {
+  sky: '#9cc6d8',
+  skyNight: '#1c2140',
+  brick: '#a2553d',
+  mortar: '#8a4532',
+  slab: '#5d4a40',
+  floor: '#8a5532',
+  floorLine: '#6e4126',
+  shared: '#b9a58a',
+  skirting: '#6b4a32',
+  wood: '#9b6a42',
+  woodDark: '#6b4a32',
+  fabricA: '#4f7aa8',
+  fabricB: '#5f8a5a',
+  fabricC: '#c9583f',
+  white: '#efe7da',
+  metal: '#9aa0a6',
+  screen: '#2b3a5a',
+  plant: '#4f944a',
+  pot: '#b5653f',
+  door: '#6b4a32',
+  glass: '#bfe3f0',
+  pave: '#a59d92',
+  road: '#3b3a3f',
+  outline: '#2e1d16',
+  poster: '#e0b24a',
+  damp: '#8e8a5a',
+};
+
+/** Back-wall colours for flats, in turn. */
+export const FLAT_WALLS = ['#e8c48e', '#c7a6c9', '#b9c8a0', '#e3b49a', '#a9c0cf', '#d9c27a', '#c9b49a', '#b8a8d0'];
+
+const SKIN = ['#f1c9a5', '#e0ac85', '#c68a62', '#a86b47', '#7d4d31', '#5a3825'];
+const HAIR = ['#3a2418', '#5a3a28', '#7a4b2a', '#c48a3a', '#d8b36a', '#8a8a8a', '#1a1a1a', '#a2412e'];
+const TOPS = ['#c9583f', '#4f7aa8', '#5f8a5a', '#d9a03a', '#7a4b9a', '#3a3a44', '#e7dccb', '#3a9090', '#b5543f', '#56606d'];
+const LEGS = ['#2d3a55', '#2f2f35', '#5b4a3a', '#56606d', '#3a5530', '#7a6a55'];
+
+// ------------------------------------------------------------------ colour and blocks
+
+function hex(c: string): [number, number, number] {
+  const n = parseInt(c.slice(1, 7), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+export function mix(a: string, b: string, t: number): string {
+  const A = hex(a);
+  const B = hex(b);
+  return `#${A.map((v, i) => Math.max(0, Math.min(255, Math.round(v + (B[i] - v) * t))).toString(16).padStart(2, '0')).join('')}`;
+}
+export const light = (c: string, t: number) => mix(c, '#ffffff', t);
+export const dark = (c: string, t: number) => mix(c, '#000000', t);
+
 export function rect(ctx: Ctx, x: number, y: number, w: number, h: number, colour: string): void {
   ctx.fillStyle = colour;
   ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 }
 
+/** A block with a dark outline, a highlight along the top and dithered shade at the bottom. */
+export function box(ctx: Ctx, x: number, y: number, w: number, h: number, c: string): void {
+  if (w <= 2 || h <= 2) {
+    rect(ctx, x, y, w, h, c);
+    return;
+  }
+  rect(ctx, x, y, w, h, PAL.outline);
+  const ix = x + 1;
+  const iy = y + 1;
+  const iw = w - 2;
+  const ih = h - 2;
+  rect(ctx, ix, iy, iw, ih, c);
+  if (iw < 2 || ih < 2) return;
+  rect(ctx, ix, iy, iw, 1, light(c, 0.22));
+  const d = dark(c, 0.2);
+  for (let yy = iy + ih - 2; yy < iy + ih; yy++) {
+    for (let xx = ix + ((yy - iy) % 2); xx < ix + iw; xx += 2) rect(ctx, xx, yy, 1, 1, d);
+  }
+  rect(ctx, ix + iw - 1, iy + 1, 1, ih - 1, dark(c, 0.12));
+}
+
 // ------------------------------------------------------------------ furniture
 
-/**
- * Draws a piece of furniture whose footprint's top-left is (x, y) in world pixels.
- * Each drawing works in a box W x H with the floor at the bottom.
- */
+type Draw = (ctx: Ctx, W: number) => void;
+
+/** Each piece draws with the floor (or the bottom of its wall spot) at y = 0, from x = 0 to W. */
+const PIECES: Record<string, Draw> = {
+  bed: (c, W) => bed(c, W, PAL.fabricA),
+  doubleBed: (c, W) => bed(c, W, PAL.fabricC),
+  wardrobe(c) {
+    box(c, 2, -31, 28, 30, PAL.wood);
+    rect(c, 16, -29, 1, 27, dark(PAL.wood, 0.3));
+    rect(c, 13, -18, 1, 4, PAL.poster);
+    rect(c, 18, -18, 1, 4, PAL.poster);
+    rect(c, 4, -2, 3, 2, PAL.woodDark);
+    rect(c, 25, -2, 3, 2, PAL.woodDark);
+  },
+  drawers(c) {
+    box(c, 1, -13, 14, 12, PAL.wood);
+    for (let i = 0; i < 3; i++) {
+      rect(c, 2, -11 + i * 3.5, 12, 1, dark(PAL.wood, 0.3));
+      rect(c, 7, -10 + i * 3.5, 2, 1, PAL.poster);
+    }
+    rect(c, 2, -1, 2, 1, PAL.woodDark);
+    rect(c, 12, -1, 2, 1, PAL.woodDark);
+  },
+  sofa(c, W) {
+    box(c, 1, -14, W - 2, 7, PAL.fabricB);
+    box(c, 0, -10, 5, 8, dark(PAL.fabricB, 0.12));
+    box(c, W - 5, -10, 5, 8, dark(PAL.fabricB, 0.12));
+    const seat = (W - 10) / 2;
+    box(c, 5, -8, seat, 5, light(PAL.fabricB, 0.08));
+    box(c, 5 + seat, -8, seat, 5, light(PAL.fabricB, 0.08));
+    box(c, 7, -13, 6, 5, PAL.fabricC);
+    rect(c, 3, -2, 2, 2, PAL.woodDark);
+    rect(c, W - 5, -2, 2, 2, PAL.woodDark);
+  },
+  armchair(c) {
+    box(c, 2, -14, 12, 7, PAL.fabricC);
+    box(c, 0, -10, 4, 8, dark(PAL.fabricC, 0.12));
+    box(c, 12, -10, 4, 8, dark(PAL.fabricC, 0.12));
+    box(c, 4, -8, 8, 5, light(PAL.fabricC, 0.08));
+    rect(c, 2, -2, 2, 2, PAL.woodDark);
+    rect(c, 12, -2, 2, 2, PAL.woodDark);
+  },
+  table(c, W) {
+    box(c, 1, -12, W - 2, 3, PAL.wood);
+    box(c, 3, -9, 3, 9, PAL.woodDark);
+    box(c, W - 6, -9, 3, 9, PAL.woodDark);
+    box(c, 11, -16, 4, 4, PAL.white);
+  },
+  chair(c) {
+    box(c, 3, -18, 3, 18, PAL.woodDark);
+    box(c, 3, -9, 10, 3, PAL.wood);
+    rect(c, 11, -6, 2, 6, PAL.woodDark);
+  },
+  desk(c, W) {
+    box(c, 1, -12, W - 2, 3, PAL.wood);
+    box(c, 2, -9, 3, 9, PAL.woodDark);
+    box(c, W - 12, -9, 10, 9, PAL.wood);
+    rect(c, W - 8, -6, 3, 1, PAL.poster);
+    box(c, 7, -19, 10, 7, '#2e3138');
+    rect(c, 8, -18, 8, 5, PAL.screen);
+    rect(c, 5, -13, 14, 1, PAL.metal);
+    box(c, 21, -16, 4, 4, PAL.white);
+  },
+  tv(c, W) {
+    box(c, 2, -7, W - 4, 7, PAL.woodDark);
+    box(c, 5, -21, W - 10, 13, '#25262b');
+    rect(c, 6, -20, W - 12, 11, PAL.screen);
+    rect(c, 7, -19, 5, 2, light(PAL.screen, 0.3));
+  },
+  counter(c) {
+    box(c, 0, -16, 16, 16, PAL.wood);
+    rect(c, 1, -16, 14, 2, light(PAL.wood, 0.3));
+    rect(c, 7, -9, 1, 2, PAL.metal);
+    box(c, 3, -21, 5, 5, PAL.white); // bread bin
+  },
+  sink(c) {
+    box(c, 0, -16, 16, 16, PAL.wood);
+    rect(c, 1, -16, 14, 2, light(PAL.wood, 0.3));
+    rect(c, 7, -9, 1, 2, PAL.metal);
+    box(c, 6, -22, 2, 6, PAL.metal);
+    rect(c, 6, -22, 5, 2, PAL.metal);
+    box(c, 10, -21, 5, 5, PAL.fabricC); // kettle
+  },
+  cooker(c) {
+    box(c, 0, -16, 16, 16, PAL.white);
+    box(c, 0, -17, 16, 3, '#2e2e2e');
+    box(c, 2, -12, 12, 9, '#3a3330');
+    rect(c, 3, -11, 10, 2, '#5a4a3a');
+  },
+  fridge(c) {
+    box(c, 1, -31, 14, 31, PAL.white);
+    rect(c, 2, -19, 12, 1, dark(PAL.white, 0.2));
+    rect(c, 12, -28, 1, 6, PAL.metal);
+    rect(c, 12, -16, 1, 7, PAL.metal);
+    rect(c, 4, -27, 3, 3, PAL.fabricC);
+    rect(c, 4, -15, 4, 5, PAL.poster);
+  },
+  toilet(c) {
+    box(c, 8, -16, 6, 9, PAL.white);
+    box(c, 2, -9, 12, 4, PAL.white);
+    box(c, 4, -6, 7, 6, PAL.white);
+  },
+  basin(c) {
+    box(c, 2, -14, 12, 4, PAL.white);
+    box(c, 6, -11, 4, 11, PAL.white);
+    box(c, 7, -17, 2, 3, PAL.metal);
+  },
+  shower(c) {
+    rect(c, 0, -32, 16, 32, `${PAL.glass}66`);
+    box(c, 0, -3, 16, 3, PAL.white);
+    rect(c, 0, -32, 1, 32, PAL.metal);
+    rect(c, 15, -32, 1, 32, PAL.metal);
+    box(c, 3, -31, 6, 2, PAL.metal);
+    for (let i = 0; i < 3; i++) rect(c, 4 + i * 2, -26 + i * 3, 1, 3, light(PAL.fabricA, 0.3));
+  },
+  bath(c, W) {
+    box(c, 1, -11, W - 2, 9, PAL.white);
+    rect(c, 3, -10, W - 6, 2, light(PAL.glass, 0.2));
+    box(c, 3, -2, 3, 2, PAL.metal);
+    box(c, W - 6, -2, 3, 2, PAL.metal);
+    box(c, W - 6, -16, 2, 5, PAL.metal);
+  },
+  radiator(c) {
+    box(c, 0, -13, 16, 9, PAL.white);
+    for (let i = 0; i < 4; i++) rect(c, 3 + i * 3, -12, 1, 7, dark(PAL.white, 0.18));
+    rect(c, 2, -4, 2, 4, PAL.metal);
+    rect(c, 12, -4, 2, 4, PAL.metal);
+  },
+  lamp(c) {
+    rect(c, 7, -22, 2, 21, '#3a3330');
+    box(c, 4, -2, 8, 2, '#3a3330');
+    box(c, 3, -30, 10, 8, light(PAL.poster, 0.35));
+  },
+  plant(c) {
+    box(c, 3, -7, 9, 7, PAL.pot);
+    rect(c, 7, -13, 1, 6, dark(PAL.plant, 0.3));
+    box(c, 2, -15, 6, 4, PAL.plant);
+    box(c, 7, -17, 6, 5, light(PAL.plant, 0.1));
+  },
+  bins(c) {
+    box(c, 2, -15, 12, 15, '#2f4b3a');
+    box(c, 1, -17, 14, 3, '#253b2e');
+    box(c, 17, -15, 12, 15, '#3a3f4b');
+    box(c, 16, -17, 14, 3, '#2e323c');
+    box(c, 18, -20, 6, 4, '#e8e0d0');
+  },
+  shelf(c, W) {
+    box(c, 1, -5, W - 2, 3, PAL.wood);
+    box(c, 3, -13, 3, 8, PAL.fabricC);
+    box(c, 6, -12, 3, 7, PAL.fabricA);
+    box(c, 9, -11, 2, 6, PAL.poster);
+    box(c, W - 10, -10, 7, 5, PAL.plant);
+  },
+  cupboard(c) {
+    box(c, 1, -15, 14, 13, PAL.wood);
+    rect(c, 8, -14, 1, 11, dark(PAL.wood, 0.3));
+    rect(c, 6, -7, 1, 2, PAL.poster);
+    rect(c, 10, -7, 1, 2, PAL.poster);
+  },
+  picture(c) {
+    box(c, 2, -13, 12, 10, PAL.woodDark);
+    rect(c, 3, -12, 10, 8, light(PAL.fabricA, 0.4));
+    rect(c, 3, -8, 10, 4, PAL.plant);
+    rect(c, 9, -11, 2, 2, PAL.poster);
+  },
+  mirror(c) {
+    box(c, 4, -15, 8, 13, PAL.metal);
+    rect(c, 5, -14, 6, 11, light(PAL.glass, 0.3));
+    rect(c, 6, -13, 1, 4, '#ffffff');
+  },
+  clock(c) {
+    box(c, 3, -13, 10, 10, PAL.woodDark);
+    rect(c, 4, -12, 8, 8, '#f4efe4');
+    rect(c, 8, -11, 1, 4, '#222');
+    rect(c, 8, -8, 3, 1, '#222');
+  },
+};
+
+function bed(c: Ctx, W: number, duvet: string): void {
+  box(c, 0, -14, 3, 14, PAL.woodDark);
+  box(c, 3, -6, W - 6, 4, PAL.wood);
+  rect(c, 4, -2, 2, 2, PAL.woodDark);
+  rect(c, W - 6, -2, 2, 2, PAL.woodDark);
+  box(c, 3, -9, W - 6, 4, PAL.white);
+  box(c, 4, -12, 7, 4, light(PAL.white, 0.3));
+  box(c, 12, -11, W - 15, 6, duvet);
+  box(c, W - 3, -9, 3, 9, PAL.woodDark);
+}
+
+/** Draws a piece of furniture whose footprint's top-left is (x, y) in world pixels. */
 export function drawFurniture(ctx: Ctx, def: string, x: number, y: number, flip = false): void {
   const d = furnitureDef(def);
   const W = d.w * TILE;
   const H = d.h * TILE;
   ctx.save();
-  ctx.translate(x, y);
+  ctx.translate(x, y + H);
   if (flip) {
     ctx.translate(W, 0);
     ctx.scale(-1, 1);
   }
-  const r = (rx: number, ry: number, rw: number, rh: number, c: string) => rect(ctx, rx, ry, rw, rh, c);
-  // Coordinates below are from the bottom (B) so pieces sit on the floor.
-  const B = H;
-  switch (def) {
-    case 'bed':
-    case 'doubleBed': {
-      r(0, B - 12, 3, 12, '#6b4a32'); // headboard
-      r(1, B - 13, 2, 1, '#7d5a3e');
-      r(3, B - 6, W - 4, 4, '#7d5a3e'); // frame
-      r(3, B - 9, W - 4, 3, '#e9e2d4'); // mattress
-      r(4, B - 11, 6, 3, '#f6f2ea'); // pillow
-      r(11, B - 10, W - 12, 4, def === 'bed' ? '#5d7fa6' : '#a65d5d'); // duvet
-      r(11, B - 10, W - 12, 1, def === 'bed' ? '#7598c0' : '#c07575');
-      r(W - 2, B - 8, 2, 8, '#6b4a32'); // footboard
-      r(3, B - 2, 2, 2, '#4b3424');
-      r(W - 6, B - 2, 2, 2, '#4b3424');
-      break;
-    }
-    case 'wardrobe':
-      r(1, B - H + 1, W - 2, H - 2, '#8a6242');
-      r(2, B - H + 2, W / 2 - 3, H - 5, '#9b7150');
-      r(W / 2 + 1, B - H + 2, W / 2 - 3, H - 5, '#9b7150');
-      r(W / 2 - 2, B - H / 2 - 2, 1, 4, '#d8b25a');
-      r(W / 2 + 1, B - H / 2 - 2, 1, 4, '#d8b25a');
-      r(2, B - 2, 2, 2, '#4b3424');
-      r(W - 4, B - 2, 2, 2, '#4b3424');
-      break;
-    case 'drawers':
-      r(2, B - 12, 12, 11, '#8a6242');
-      for (let i = 0; i < 3; i++) {
-        r(3, B - 11 + i * 3.5, 10, 3, '#9b7150');
-        r(7, B - 10 + i * 3.5, 2, 1, '#d8b25a');
-      }
-      r(3, B - 1, 2, 1, '#4b3424');
-      r(11, B - 1, 2, 1, '#4b3424');
-      break;
-    case 'sofa':
-      r(1, B - 11, W - 2, 6, '#5b7a63'); // back
-      r(0, B - 8, 4, 6, '#4e6a55'); // arms
-      r(W - 4, B - 8, 4, 6, '#4e6a55');
-      r(3, B - 6, W - 6, 3, '#6b8c73'); // seat
-      for (let i = 1; i < 3; i++) r((W * i) / 3, B - 10, 1, 4, '#4e6a55');
-      r(2, B - 2, 2, 2, '#3a2a1e');
-      r(W - 4, B - 2, 2, 2, '#3a2a1e');
-      break;
-    case 'armchair':
-      r(2, B - 12, 12, 6, '#a0705a');
-      r(1, B - 8, 3, 6, '#8c604c');
-      r(12, B - 8, 3, 6, '#8c604c');
-      r(4, B - 6, 8, 3, '#b07e66');
-      r(2, B - 2, 2, 2, '#3a2a1e');
-      r(12, B - 2, 2, 2, '#3a2a1e');
-      break;
-    case 'table':
-      r(1, B - 9, W - 2, 2, '#9b7150');
-      r(3, B - 7, 2, 7, '#7d5a3e');
-      r(W - 5, B - 7, 2, 7, '#7d5a3e');
-      r(8, B - 11, 3, 2, '#e8e0d0'); // a mug
-      break;
-    case 'chair':
-      r(3, B - 14, 2, 14, '#7d5a3e');
-      r(3, B - 7, 10, 2, '#9b7150');
-      r(11, B - 5, 2, 5, '#7d5a3e');
-      break;
-    case 'desk':
-      r(1, B - 9, W - 2, 2, '#8a6242');
-      r(2, B - 7, 2, 7, '#6b4a32');
-      r(W - 12, B - 7, 10, 7, '#7d5a3e');
-      r(W - 8, B - 5, 2, 1, '#d8b25a');
-      r(6, B - 16, 9, 6, '#2c2f36'); // laptop
-      r(7, B - 15, 7, 4, '#6fa3c7');
-      r(5, B - 10, 11, 1, '#4a4e57');
-      break;
-    case 'tv':
-      r(2, B - 6, W - 4, 6, '#6b4a32');
-      r(4, B - 5, W - 8, 2, '#7d5a3e');
-      r(5, B - 16, W - 10, 10, '#1e2026');
-      r(6, B - 15, W - 12, 8, '#36507a');
-      r(7, B - 14, 4, 2, '#5d7fb0');
-      break;
-    case 'counter':
-    case 'sink':
-    case 'cooker': {
-      const body = def === 'cooker' ? '#d9d6cf' : '#c8b394';
-      r(0, B - 12, 16, 12, body);
-      r(0, B - 13, 16, 2, def === 'cooker' ? '#3a3a3a' : '#8a7a62');
-      if (def === 'cooker') {
-        r(2, B - 10, 12, 8, '#3a3a3a');
-        r(3, B - 9, 10, 6, '#5a4a3a');
-        r(2, B - 14, 4, 1, '#222');
-        r(10, B - 14, 4, 1, '#222');
-      } else {
-        r(2, B - 10, 5, 8, '#b39d7d');
-        r(9, B - 10, 5, 8, '#b39d7d');
-        r(6, B - 7, 1, 2, '#e0d4bf');
-        r(9, B - 7, 1, 2, '#e0d4bf');
-      }
-      if (def === 'sink') {
-        r(3, B - 13, 10, 2, '#9aa3ab');
-        r(7, B - 17, 2, 4, '#b8c0c6');
-        r(7, B - 17, 4, 1, '#b8c0c6');
-      }
-      break;
-    }
-    case 'fridge':
-      r(1, B - H + 2, 14, H - 2, '#e6e8e8');
-      r(1, B - H + 13, 14, 1, '#b9bfc2');
-      r(12, B - H + 5, 1, 5, '#9aa3ab');
-      r(12, B - H + 16, 1, 6, '#9aa3ab');
-      r(4, B - H + 4, 3, 3, '#e86a5a'); // a magnet
-      break;
-    case 'toilet':
-      r(8, B - 15, 6, 8, '#eef0f0');
-      r(3, B - 8, 11, 3, '#e3e6e6');
-      r(5, B - 5, 7, 5, '#eef0f0');
-      r(3, B - 9, 9, 1, '#c9cfd1');
-      break;
-    case 'basin':
-      r(2, B - 12, 12, 3, '#eef0f0');
-      r(6, B - 9, 4, 9, '#e3e6e6');
-      r(7, B - 15, 2, 3, '#b8c0c6');
-      break;
-    case 'shower':
-      r(1, B - H + 2, 14, H - 2, '#bcd6df55');
-      r(1, B - H + 2, 1, H - 2, '#c6ccd0');
-      r(14, B - H + 2, 1, H - 2, '#c6ccd0');
-      r(1, B - 2, 14, 2, '#d7dcdf');
-      r(4, B - H + 3, 6, 2, '#9aa3ab');
-      r(9, B - H + 2, 1, 4, '#9aa3ab');
-      for (let i = 0; i < 3; i++) r(5 + i * 2, B - H + 7 + i * 3, 1, 3, '#8fc2dd');
-      break;
-    case 'bath':
-      r(1, B - 10, W - 2, 8, '#eef0f0');
-      r(2, B - 9, W - 4, 2, '#bfe0ec');
-      r(3, B - 2, 2, 2, '#b8c0c6');
-      r(W - 5, B - 2, 2, 2, '#b8c0c6');
-      r(W - 5, B - 14, 2, 4, '#b8c0c6');
-      break;
-    case 'radiator':
-      r(1, B - 11, 14, 8, '#e3e6e6');
-      for (let i = 0; i < 5; i++) r(2 + i * 3, B - 11, 1, 8, '#c4c9cb');
-      r(2, B - 3, 2, 3, '#b8c0c6');
-      r(12, B - 3, 2, 3, '#b8c0c6');
-      break;
-    case 'lamp':
-      r(7, B - 22, 2, 21, '#3a3a3a');
-      r(4, B - 2, 8, 2, '#3a3a3a');
-      r(3, B - 29, 10, 7, '#f0d9a0');
-      r(4, B - 28, 8, 5, '#f7e6b8');
-      break;
-    case 'plant':
-      r(4, B - 6, 8, 6, '#b5653f');
-      r(4, B - 6, 8, 1, '#c97a52');
-      r(7, B - 12, 2, 6, '#3f7a3f');
-      r(3, B - 13, 5, 3, '#4f944a');
-      r(8, B - 15, 5, 4, '#5aa354');
-      r(6, B - 16, 3, 3, '#4f944a');
-      break;
-    case 'bins':
-      for (const bx of [1, 17]) {
-        r(bx, B - 14, 13, 13, bx === 1 ? '#2f4b3a' : '#3a3f4b');
-        r(bx - 1, B - 15, 15, 2, bx === 1 ? '#253b2e' : '#2e323c');
-        r(bx + 2, B - 2, 3, 2, '#222');
-        r(bx + 9, B - 2, 3, 2, '#222');
-      }
-      break;
-    case 'shelf':
-      r(1, B - 4, W - 2, 2, '#8a6242');
-      r(3, B - 12, 3, 8, '#b5543f');
-      r(6, B - 11, 3, 7, '#3f6fb5');
-      r(9, B - 10, 2, 6, '#d8b25a');
-      r(W - 9, B - 9, 6, 5, '#5aa354');
-      break;
-    case 'cupboard':
-      r(1, B - 15, 14, 13, '#c8b394');
-      r(2, B - 14, 6, 11, '#b39d7d');
-      r(9, B - 14, 5, 11, '#b39d7d');
-      r(7, B - 6, 1, 2, '#e0d4bf');
-      r(9, B - 6, 1, 2, '#e0d4bf');
-      break;
-    case 'picture':
-      r(2, B - 13, 12, 10, '#6b4a32');
-      r(3, B - 12, 10, 8, '#9fc4d6');
-      r(3, B - 7, 10, 3, '#6fa36a');
-      r(9, B - 11, 2, 2, '#f2d27a');
-      break;
-    case 'mirror':
-      r(4, B - 14, 8, 12, '#b8c0c6');
-      r(5, B - 13, 6, 10, '#d6eaf2');
-      r(6, B - 12, 1, 4, '#ffffff');
-      break;
-    case 'clock':
-      r(4, B - 13, 8, 8, '#3a3a3a');
-      r(5, B - 12, 6, 6, '#f4efe4');
-      r(7, B - 11, 1, 3, '#222');
-      r(7, B - 9, 3, 1, '#222');
-      break;
-    default:
-      r(1, 1, W - 2, H - 2, '#c040c0');
-  }
+  const draw = PIECES[def];
+  if (draw) draw(ctx, W);
+  else box(ctx, 1, -H + 1, W - 2, H - 2, '#c040c0');
   ctx.restore();
 }
 
+/** Furniture that gives off light in the evening, and its colour. */
+export const LIGHTS: Record<string, string> = { lamp: '#ffb85a', tv: '#6aa0ff', desk: '#8ab8ff' };
+
 // ------------------------------------------------------------------ people
 
-const SKIN = ['#f1c9a5', '#e0ac85', '#c68a62', '#a86b47', '#7d4d31', '#5a3825'];
-const HAIR = ['#2b1d16', '#4a3020', '#7a4b2a', '#b0793f', '#d8b36a', '#8a8a8a', '#1a1a1a', '#a2412e'];
-const TOP = ['#c8483a', '#3f6fb5', '#4f8a5b', '#d99a2b', '#7a4b9a', '#2f2f35', '#e7e1d4', '#3aa0a0', '#b5543f', '#56606d'];
-const LEGS = ['#2d3a55', '#2f2f35', '#5b4a3a', '#56606d', '#3a5530', '#7a6a55'];
-
-/** A person standing with their feet at (x, y), facing left or right, mid-stride at `phase` (0 to 1). */
+/**
+ * A chibi person with feet at (x, y). With outlines, the silhouette is drawn first, offset a
+ * pixel each way, in the outline colour.
+ */
 export function drawPerson(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, walking: boolean): void {
-  const r = (rx: number, ry: number, rw: number, rh: number, c: string) => rect(ctx, x + rx * p.facing - (p.facing < 0 ? rw : 0), y + ry, rw, rh, c);
+  for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) personShape(ctx, p, x + ox, y + oy, phase, walking, PAL.outline);
+  personShape(ctx, p, x, y, phase, walking, null);
+}
+
+function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, walking: boolean, sil: string | null): void {
+  const f = p.facing;
+  const r = (rx: number, ry: number, rw: number, rh: number, c: string) => rect(ctx, f > 0 ? x + rx : x - rx - rw, y + ry, rw, rh, sil ?? c);
   const skin = SKIN[p.look.skin % SKIN.length];
   const hair = HAIR[p.look.hair % HAIR.length];
-  const top = p.kind === 'agent' ? '#1f2a44' : TOP[p.look.top % TOP.length];
+  const top = p.kind === 'agent' ? '#2b3a5a' : TOPS[p.look.top % TOPS.length];
   const legs = LEGS[p.look.legs % LEGS.length];
   const stride = walking ? (phase < 0.5 ? 1 : -1) : 0;
-  // Legs.
-  r(-3 + stride, -10, 3, 10, legs);
-  r(0 - stride, -10, 3, 10, legs);
-  r(-3 + stride, -1, 4, 1, '#1e1e1e');
-  r(0 - stride, -1, 4, 1, '#1e1e1e');
-  // Body and arms.
-  r(-4, -21, 8, 12, top);
-  r(-5, -20, 1, 8, top);
-  r(4, -20, 1, 8, top);
-  r(-5, -12, 1, 2, skin);
-  r(4, -12, 1, 2, skin);
+  const bob = walking && phase % 0.5 < 0.25 ? -1 : 0;
+  r(-3 + stride, -4, 2, 4, legs);
+  r(1 - stride, -4, 2, 4, legs);
+  const by = -11 + bob;
+  r(-4, by, 8, 7, top);
+  r(-5, by + 1, 1, 4, top);
+  r(4, by + 1, 1, 4, top);
+  r(-5, by + 5, 1, 1, skin);
+  r(4, by + 5, 1, 1, skin);
   if (p.kind === 'agent') {
-    r(-1, -21, 2, 6, '#e7e1d4');
-    r(3, -14, 3, 4, '#3a2a1e'); // clipboard hand
+    r(-1, by, 2, 4, '#efe7da');
+    r(4, by + 3, 3, 4, '#6b4a32'); // clipboard
   }
-  // Head.
-  r(-3, -28, 6, 7, skin);
-  r(1, -26, 1, 1, '#222');
-  r(-3, -29, 6, 2, hair);
-  r(-4, -28, 2, 4, hair);
+  const hy = by - 10;
+  r(-5, hy, 10, 10, skin);
+  r(-5, hy - 1, 10, 4, hair);
+  r(-6, hy, 2, 6, hair);
+  r(-5, hy + 3, 2, 3, hair);
+  if (!sil) {
+    r(1, hy + 4, 1, 2, '#2a2020');
+    r(3, hy + 4, 1, 2, '#2a2020');
+    r(2, hy + 7, 2, 1, mix(skin, '#c9583f', 0.35));
+    r(-1, hy + 6, 1, 1, mix(skin, '#e07a7a', 0.4));
+  }
 }
+
+/** How tall a person is drawn, in world pixels (for tapping and name tags). */
+export const PERSON_H = 23;
