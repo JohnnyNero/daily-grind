@@ -8,7 +8,8 @@
 // The chips at the top zoom straight to a flat. Everything can be undone.
 
 import { applyForPlanning, needsPlanning, topRow } from '../sim/planning';
-import { PLANNING_FEE } from '../sim/economy';
+import { PLANNING_FEE, flatInfo } from '../sim/economy';
+import { flatNeeds } from '../sim/impressiveness';
 import {
   FLIGHT,
   cellProblem,
@@ -90,6 +91,11 @@ export class BuildUi {
   private hint = el('build-hint');
   private tools = el('build-tools');
   private zoom = el('build-zoom');
+  /** The flat you've zoomed to, whose checklist shows (folded or not). */
+  private needsFlat: string | null = null;
+  private needsFolded = false;
+  private needsKey = '';
+  private needs = el('build-needs');
   /** Fits the whole building in view (the Whole building chip). */
   onFit: () => void = () => {};
   /** A message for the player. */
@@ -247,7 +253,50 @@ export class BuildUi {
     if (this.pending) this.endPlacing();
     Object.assign(this.renderer.build, { active: false, marks: [], ghost: null, selected: null });
     this.card.hide();
+    this.needsFlat = null;
     this.bump();
+  }
+
+  /** Into build mode on a flat, with its checklist showing: what it needs, ticked off as you go. */
+  guide(flatId: string): void {
+    if (!this.active) this.start();
+    this.needsFolded = false;
+    this.zoomTo(flatId);
+  }
+
+  /**
+   * Every frame: the checklist for the flat you've zoomed to. Tapping a line opens the part
+   * of the bar that has it; it doesn't place anything for you.
+   */
+  updateNeeds(): void {
+    const flat = this.needsFlat ? this.sim.layout.flat(this.needsFlat) : undefined;
+    const show = this.active && !this.pending && flat !== undefined;
+    const st = this.sim.state;
+    const key = show ? `${flat!.id}|${this.sim.version}|${st.furniture.length}|${this.renderer.build.version}|${Math.floor(st.tick / 3600)}|${this.needsFolded}` : '';
+    if (key === this.needsKey) return;
+    this.needsKey = key;
+    this.needs.hidden = !show;
+    if (!show) return;
+    const list = flatNeeds(this.sim, flat!.id);
+    const must = list.filter((n) => n.must);
+    const got = must.filter((n) => n.done).length;
+    const info = flatInfo(this.sim, flat!.id);
+    const ready = got === must.length;
+    const row = (n: (typeof list)[number]) =>
+      h('button', { type: 'button', class: `need ${n.done ? 'done' : ''}`, disabled: n.done, onclick: () => { const g = GROUPS.find((x) => x.id === n.group); this.needsFolded = true; if (g) this.pickGroup(g); this.updateNeeds(); } }, h('span', { class: 'tick' }, n.done ? '✓' : ''), n.label);
+    this.needs.replaceChildren(
+      h('button', { type: 'button', class: 'needs-head', 'aria-expanded': String(!this.needsFolded), onclick: () => { this.needsFolded = !this.needsFolded; this.updateNeeds(); } }, h('b', {}, `${flat!.name} needs`), h('span', {}, ready ? 'Liveable' : `${got} of ${must.length}`)),
+      ...(this.needsFolded
+        ? []
+        : [
+            ...must.map(row),
+            h('small', {}, 'Nice to have'),
+            ...list.filter((n) => !n.must).map(row),
+            ready && !info.lease && !info.listed
+              ? h('button', { type: 'button', class: 'list-it', onclick: () => { info.listed = true; this.onNotify(`${flat!.name} is listed. People will start applying.`); this.needsKey = ''; this.updateNeeds(); } }, 'List it: ready to let')
+              : '',
+          ]),
+    );
   }
 
   private bump(): void {
@@ -497,9 +546,9 @@ export class BuildUi {
   /** Chips to zoom straight to a flat, or back out to the whole building. */
   private renderZoom(): void {
     const lay = this.sim.layout;
-    const chips = [h('button', { type: 'button', onclick: () => this.onFit() }, 'Whole building')];
+    const chips = [h('button', { type: 'button', onclick: () => { this.needsFlat = null; this.onFit(); } }, 'Whole building')];
     for (const f of lay.flats) {
-      chips.push(h('button', { type: 'button', onclick: () => this.zoomTo(f.id) }, f.name || 'New flat'));
+      chips.push(h('button', { type: 'button', 'aria-pressed': String(f.id === this.needsFlat), onclick: () => { this.zoomTo(f.id); this.renderZoom(); } }, f.name || 'New flat'));
     }
     this.zoom.replaceChildren(...chips);
   }
@@ -512,6 +561,7 @@ export class BuildUi {
     const xs = cells.map(([x]) => x);
     const ss = cells.map(([, s]) => s);
     this.renderer.focus(Math.min(...xs), Math.max(...xs), Math.min(...ss), Math.max(...ss), this.viewBox());
+    this.needsFlat = flatId;
     this.bump();
   }
 

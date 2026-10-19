@@ -1,6 +1,8 @@
 // Scripted landlords for soak tests: a decent one and a ruthless one.
 
-import { flatInfo, goingRate, overpay, POUND } from '../src/sim/economy';
+import { flatInfo, furniturePrice, goingRate, overpay, POUND } from '../src/sim/economy';
+import { furnitureProblem } from '../src/sim/build';
+import { buyFurniture } from '../src/sim/furnish';
 import { accept, changeRent, giveNotice, likelyLiking, noticeProblem } from '../src/sim/leases';
 import { choose } from '../src/sim/post';
 import { answer } from '../src/sim/chat';
@@ -44,6 +46,21 @@ export function landlord(sim: Sim, policy: Policy): void {
   for (const l of st.post) {
     if (!l.choices || l.chosen !== undefined) continue;
     choose(sim, l.id, policy === 'decent' ? 0 : l.choices.length - 1);
+  }
+  // Both furnish a bare flat with the basics once they can afford it (cheapest first).
+  for (const f of sim.layout.flats) {
+    if (flatInfo(sim, f.id).lease) continue;
+    const has = scoreFor(sim, f.id, 1).has;
+    const want = [!has.bed && 'bed', !has.toilet && 'toilet', !has.wash && 'shower', !has.kitchen && 'cooker'].filter(Boolean) as string[];
+    const cells = sim.layout.flatCells(f).map((n) => sim.layout.xs(n));
+    for (const def of want) {
+      if (st.money < furniturePrice(def) + 600 * POUND) break;
+      for (const [x, s] of cells) {
+        if (typeof furnitureProblem(st, def, x, s) === 'string') continue;
+        buyFurniture(sim, def, x, s, false);
+        break;
+      }
+    }
   }
   // Even the ruthless one mends what the council has told them to.
   if (st.council.notice) for (const f of st.furniture) if (f.broken !== undefined) mend(sim, f.id);

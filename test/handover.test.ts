@@ -1,3 +1,4 @@
+import { flatNeeds } from '../src/sim/impressiveness';
 import { describe, expect, it } from 'vitest';
 import { placeFurniture } from '../src/sim/build';
 import { flatInfo } from '../src/sim/economy';
@@ -66,6 +67,20 @@ describe('the handover', () => {
     expect(new Set(flats.filter(Boolean)).size).toBeGreaterThanOrEqual(4);
   });
 
+  it('starts with one flat ready to let and two bare ones, unlisted', () => {
+    const sim = Sim.create(4);
+    const [, two, three, , five] = sim.layout.flats;
+    expect(sim.state.flats[two.id].listed).toBe(true);
+    for (const f of [three, five]) {
+      expect(sim.state.flats[f.id].listed, f.name).toBe(false);
+      const needs = flatNeeds(sim, f.id);
+      expect(needs.filter((n) => n.must && !n.done).map((n) => n.label)).toEqual(['A bed', 'A loo', 'A shower or a bath', 'A cooker or a fridge']);
+    }
+    // Furnishing ticks the checklist off.
+    furnish(sim, three.id, ['bed', 'toilet', 'shower', 'cooker']);
+    expect(flatNeeds(sim, three.id).filter((n) => n.must).every((n) => n.done)).toBe(true);
+  });
+
   it('ticks its list off from what you really do', () => {
     const sim = Sim.create(4);
     sim.run(3 * TICKS_PER_HOUR);
@@ -73,7 +88,7 @@ describe('the handover', () => {
     for (const id of h.cast) meet(sim, id);
     const a = sim.state.applicants.find((x) => x.flat === h.toLet)!;
     expect(accept(sim, a.id)).toBeNull();
-    furnish(sim, h.gutted!, ['bed', 'toilet', 'shower', 'cooker']);
+    furnish(sim, h.fit!, ['bed', 'toilet', 'shower', 'cooker']);
     expect(todo(sim).map((t) => t.done)).toEqual([true, true, true, false]);
     runTo(sim, 8, 11);
     expect(listDone(sim)).toBe(true);

@@ -1,11 +1,11 @@
 // The building you start with: a tired three-storey block on a 28-tile plot. A street door
 // into a lobby with the bins, a door through to the stairwell up the middle, a cramped
-// studio and a one-bed on each upper floor, a one-bed on the ground floor, and the top
-// one-bed stripped to the brick.
+// studio and a one-bed on each upper floor, a one-bed on the ground floor. The first-floor
+// one-bed is unfurnished and the top one stripped to the brick.
 
 import { placeFurniture } from './build';
 import { MORTGAGE, POUND, START_MONEY, TIER_RENT, flatInfo } from './economy';
-import { flatScore } from './impressiveness';
+import { flatScore, scoreFor } from './impressiveness';
 import { makePerson, sittingTenants } from './leases';
 import type { Sim } from './sim';
 import { furnitureDef } from './defs';
@@ -117,8 +117,10 @@ function buildShell(st: State): void {
     put('shower', 6, s);
     put('radiator', 2, s, 1);
   }
-  // One-beds on the ground and first floors.
-  for (const s of [0, 1]) {
+  // The ground-floor one-bed is furnished; the one above is bare boards and radiators.
+  put('radiator', 19, 1, 1);
+  put('radiator', 23, 1, 1);
+  for (const s of [0]) {
     put('fridge', 14, s);
     put('cooker', 15, s);
     put('cupboard', 15, s, 2);
@@ -152,11 +154,15 @@ export function startingTenants(sim: Sim): void {
   bill.note = 'Retired';
   if (flats[0]) sittingTenants(sim, flats[0].id, [first], 70 * POUND);
   if (flats[3]) sittingTenants(sim, flats[3].id, [bill], 55 * POUND);
-  // Going rates start from how the flats score with their tenants in.
+  // Going rates start from how the flats score with their tenants in. Only a flat with the
+  // basics in it goes on the market; the bare ones wait until you've furnished them.
   for (const f of flats) {
     const info = flatInfo(sim, f.id);
     info.tier = flatScore(sim, f.id).tier;
-    if (!info.lease) info.asking = TIER_RENT[info.tier];
+    if (info.lease) continue;
+    info.asking = TIER_RENT[info.tier];
+    const has = scoreFor(sim, f.id, 1).has;
+    info.listed = has.bed && has.toilet && has.wash && has.kitchen;
   }
   st.post.push({
     id: st.nextId++,

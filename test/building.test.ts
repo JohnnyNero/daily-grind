@@ -104,7 +104,7 @@ describe('building', () => {
     expect(furnitureProblem(st, 'picture', x0 + 21, 9)).toBeNull();
     expect(furnitureProblem(st, 'sofa', x0 + 21, 9)).toMatch(/floor/);
     expect(furnitureProblem(st, 'sofa', x0 + 26, 8)).toMatch(/wall|plot/i);
-    expect(furnitureProblem(st, 'sofa', x0 + 15, 4)).toMatch(/in the way/);
+    expect(furnitureProblem(st, 'sofa', x0 + 15, 0)).toMatch(/in the way/);
   });
 
   it('builds a room on the roof and turns it into a flat', () => {

@@ -136,3 +136,35 @@ function curve(x: number, points: [number, number][]): number {
   }
   return points[points.length - 1][1];
 }
+
+/** One line of what a flat needs: done or not, whether people won't live there without it, and the build group that has it. */
+export interface Need {
+  label: string;
+  done: boolean;
+  must: boolean;
+  group: string;
+}
+
+/**
+ * What a flat needs before anyone will live there (walls and a ceiling, a bed, a loo,
+ * somewhere to wash, a kitchen), then what makes it nicer (warmth, somewhere to sit, light).
+ */
+export function flatNeeds(sim: Sim, flatId: string): Need[] {
+  const lay = sim.layout;
+  const flat = lay.flat(flatId);
+  if (!flat) return [];
+  const s = scoreFor(sim, flatId, Math.max(1, occupants(sim, flatId)));
+  const inFlat = new Set(lay.flatCells(flat));
+  const defs = sim.state.furniture.filter((f) => f.broken === undefined && inFlat.has(lay.node(f.x, f.s))).map((f) => f.def);
+  const any = (...ids: string[]) => defs.some((d) => ids.includes(d));
+  return [
+    { label: 'Walls and a ceiling', done: flat.enclosed, must: true, group: 'walls' },
+    { label: 'A bed', done: s.has.bed, must: true, group: 'sleep' },
+    { label: 'A loo', done: s.has.toilet, must: true, group: 'bathroom' },
+    { label: 'A shower or a bath', done: s.has.wash, must: true, group: 'bathroom' },
+    { label: 'A cooker or a fridge', done: s.has.kitchen, must: true, group: 'kitchen' },
+    { label: 'A radiator', done: any('radiator'), must: false, group: 'decor' },
+    { label: 'Somewhere to sit', done: any('sofa', 'armchair', 'chair'), must: false, group: 'sit' },
+    { label: 'A window or a lamp', done: s.factors.light > 15, must: false, group: 'decor' },
+  ];
+}

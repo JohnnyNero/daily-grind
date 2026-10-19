@@ -285,9 +285,9 @@ export function tenantThink(sim: Sim, p: Pawn): void {
     }
   }
   if (needs.comfort < SEEK.comfort && tryUse(sim, p, flat, 'comfort')) return;
-  // Musicians practise in the evenings (night owls until nearly midnight).
-  const practiseUntil = has(life, 'nightOwl') ? 23 * 60 + 30 : 21 * 60 + 30;
-  if (has(life, 'musician') && m >= 18 * 60 && m < practiseUntil && needs.fun < 0.85 && random(st) < 0.3) {
+  // Musicians practise in the evenings (night owls until gone midnight).
+  const evening = has(life, 'nightOwl') ? m >= 18 * 60 || m < 30 : m >= 18 * 60 && m < 21 * 60 + 30;
+  if (has(life, 'musician') && evening && needs.fun < 0.85 && random(st) < 0.3) {
     p.doing = 'Practising';
     life.needs.fun = Math.min(1, needs.fun + 0.3);
     p.waitUntil = st.tick + randInt(st, 30, 60) * TICKS_PER_MINUTE;

@@ -16,8 +16,8 @@ import { remember } from './thoughts';
 import { has } from './traits';
 import { noticeTrait } from './outcomes';
 
-/** Wear from one go on something: about 170 goes from new to broken. */
-export const WEAR_PER_USE = 0.006;
+/** Wear from one go on something: about 250 goes from new to broken. */
+export const WEAR_PER_USE = 0.004;
 
 /** Wear from a go on a piece of furniture. Clumsy people are harder on things; handy ones gentler. */
 export function useUp(sim: Sim, f: Furniture, p: Pawn): void {
@@ -58,7 +58,7 @@ export function breakDown(sim: Sim): boolean {
 }
 
 export function repairCost(f: Furniture): number {
-  return Math.max(25 * POUND, Math.round((furniturePrice(f.def) * 0.3) / (5 * POUND)) * 5 * POUND);
+  return Math.max(20 * POUND, Math.round((furniturePrice(f.def) * 0.2) / (5 * POUND)) * 5 * POUND);
 }
 
 export function condition(f: Furniture): string {

@@ -246,8 +246,9 @@ export interface Handover {
   /** The tenants the building came with, and the ones you've looked at. */
   cast: number[];
   met: number[];
-  /** The flats her list is about: the one to let and the stripped one. */
+  /** The flats her list is about: the one to let, the bare one to furnish, and the stripped one (week two). */
   toLet?: string;
+  fit?: string;
   gutted?: string;
   /** Beats already played, by name. */
   done: string[];

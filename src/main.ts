@@ -108,7 +108,10 @@ function play(sim: Sim): void {
     const h = sim.state.handover;
     if (id === 'meet') panels.show({ kind: 'people' });
     else if (id === 'let' && h.toLet) panels.show(sim.state.applicants.some((a) => a.flat === h.toLet) ? { kind: 'applicants', flat: h.toLet } : { kind: 'flat', id: h.toLet });
-    else if (id === 'fit' && h.gutted) panels.show({ kind: 'flat', id: h.gutted });
+    else if (id === 'fit' && h.fit) {
+      panels.close();
+      build.guide(h.fit);
+    }
     else if (id === 'pay') panels.show({ kind: 'money' });
   };
   handover.update();
@@ -230,6 +233,7 @@ function play(sim: Sim): void {
     lastView = view;
     hud.update(now);
     handover.update();
+    build.updateNeeds();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

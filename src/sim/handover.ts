@@ -37,9 +37,9 @@ export const TOUR: readonly Stop[] = [
   { flat: 'lobby', say: () => "Morning! Denise, from the letting agent. Welcome to Albert Terrace. This is the lobby: bins, post, and the smell. Let's have a look round." },
   { flat: 0, say: (sim) => `Flat 1. That's ${first(tenantOf(sim, 0))}. Pays on the dot, keeps to themselves. Long may it last.` },
   { flat: 1, say: () => "Flat 2. Empty, but there's a bed and a loo, so it's ready to let. I'd get someone in this week." },
-  { flat: 2, say: () => 'Flat 3. Also empty. Same again, only bigger.' },
+  { flat: 2, say: () => "Flat 3. Bare boards. Nobody will live in it without a bed, a loo, somewhere to wash and a kitchen. Do that and it'll let." },
   { flat: 3, say: (sim) => `Flat 4, that's ${first(tenantOf(sim, 3))}. Been here longer than the carpets. Feels the cold.` },
-  { flat: 4, say: () => 'Flat 5. Ah. The last owner had it stripped. Nobody will live in it without a bed, a loo, a shower and a cooker.' },
+  { flat: 4, say: () => "Flat 5. Ah. The last owner had it stripped, and then lost interest. One for later." },
   { flat: 'lobby', say: () => "That's the lot. Mr Pritchard left you some notes, and I've written you a list. It's all in the post. Good luck!" },
 ];
 
@@ -52,6 +52,7 @@ export function startHandover(sim: Sim): void {
   const flats = sim.layout.flats;
   h.cast = st.pawns.filter((p) => p.life).map((p) => p.id);
   h.toLet = flats[1]?.id;
+  h.fit = flats[2]?.id;
   h.gutted = flats[4]?.id;
   // Made by hand rather than rolled, so a seed plays out the same with or without her.
   const d: Pawn = {
@@ -88,7 +89,7 @@ function pritchard(sim: Sim, i: number): string {
     case 1:
       return 'Empty since March. Nothing wrong with it. Let it.';
     case 2:
-      return 'Empty. Bigger. Damp in the corner, paint over it.';
+      return 'Sold the furniture. Damp in the corner, paint over it.';
     case 3:
       return `${tenantOf(sim, 3)?.name ?? 'Empty'}. Here since 1987. Will ask about the heating. Will ask again.`;
     case 4:
@@ -221,11 +222,11 @@ function endWalk(sim: Sim): void {
   }
   if (h.skipped) return;
   const toLet = h.toLet ? sim.layout.flat(h.toLet) : undefined;
-  const gutted = h.gutted ? sim.layout.flat(h.gutted) : undefined;
+  const fit = h.fit ? sim.layout.flat(h.fit) : undefined;
   letter(sim, {
     from: AGENT,
     title: 'Your list',
-    body: `As promised. It ticks itself off.\n• Meet your tenants: tap them, or their faces at the bottom.\n• Let ${toLet?.name ?? 'an empty flat'}: it's listed, and people will apply. Look past the rent at what their last landlord says.\n• Make ${gutted?.name ?? 'the stripped flat'} liveable: a bed, a loo, a shower and a cooker (the Build tab).\n• Make Monday's payment: keep £${Math.round((st.mortgage.payment + billsDue(sim)) / POUND)} in the bank for day 8.\nD.`,
+    body: `As promised. It ticks itself off.\n• Meet your tenants: tap them, or their faces at the bottom.\n• Let ${toLet?.name ?? 'an empty flat'}: it's listed, and people will apply. Look past the rent at what their last landlord says.\n• Furnish ${fit?.name ?? 'the bare flat'}: Build shows you what it needs, and ticks it off as you go.\n• Make Monday's payment: keep £${Math.round((st.mortgage.payment + billsDue(sim)) / POUND)} in the bank for day 8.\nD.`,
   });
   // Someone's already keen on the flat, and a bit cheeky with it.
   if (toLet && !flatInfo(sim, toLet.id).lease) {
@@ -259,13 +260,13 @@ export function todo(sim: Sim): Todo[] {
   const h = st.handover;
   const lay = sim.layout;
   const toLet = h.toLet ? lay.flat(h.toLet) : undefined;
-  const gutted = h.gutted ? lay.flat(h.gutted) : undefined;
-  const basics = gutted ? scoreFor(sim, gutted.id, 1).has : null;
+  const fit = h.fit ? lay.flat(h.fit) : undefined;
+  const basics = fit ? scoreFor(sim, fit.id, 1).has : null;
   const cast = h.cast.filter((id) => st.pawns.some((p) => p.id === id && p.life && !p.life.leaving));
   return [
     { id: 'meet', label: 'Meet your tenants', done: cast.every((id) => h.met.includes(id)) },
     { id: 'let', label: `Let ${toLet?.name ?? 'an empty flat'}`, done: !toLet || flatInfo(sim, toLet.id).lease !== null },
-    { id: 'fit', label: `Make ${gutted?.name ?? 'the stripped flat'} liveable`, done: !basics || (basics.bed && basics.toilet && basics.wash && basics.kitchen) },
+    { id: 'fit', label: `Furnish ${fit?.name ?? 'the bare flat'}`, done: !basics || (basics.bed && basics.toilet && basics.wash && basics.kitchen) },
     { id: 'pay', label: "Make Monday's payment", done: st.ledger.some((e) => e.label === 'Mortgage') },
   ];
 }
