@@ -78,11 +78,11 @@ describe('tenants', () => {
     const st = sim.state;
     const { x0 } = st.plot;
     // Flat 1's living room is full, so swap the sink and cooker for a telly by the sofa.
-    const sink = st.furniture.find((f) => f.def === 'sink' && f.s === 0)!;
+    const sink = st.furniture.find((f) => f.def === 'sink' && f.s === 1)!;
     removeFurniture(st, sink.id);
-    const cooker = st.furniture.find((f) => f.def === 'cooker' && f.s === 0)!;
+    const cooker = st.furniture.find((f) => f.def === 'cooker' && f.s === 1)!;
     removeFurniture(st, cooker.id);
-    expect(typeof placeFurniture(st, 'tv', x0 + 15, 0)).not.toBe('string');
+    expect(typeof placeFurniture(st, 'tv', x0 + 15, 1)).not.toBe('string');
     sim.changed();
     let watched = false;
     for (let t = 0; t < 3 * TICKS_PER_DAY && !watched; t += TICKS_PER_HOUR / 4) {

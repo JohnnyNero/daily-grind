@@ -23,7 +23,7 @@ function insulateOverFlat1(sim: Sim, n: number): (d: State) => void {
   const lay = sim.layout;
   const cols = lay.rooms[lay.flats[0].rooms[0]].nodes.map((node) => lay.xs(node)[0]).slice(0, n);
   return (d) => {
-    for (const x of cols) d.insulated[key(x, 3)] = true;
+    for (const x of cols) d.insulated[key(x, 4)] = true;
   };
 }
 
@@ -108,10 +108,10 @@ describe('furniture', () => {
     const sim = Sim.create(8);
     const st = sim.state;
     const money = st.money;
-    const f = buyFurniture(sim, 'plant', st.plot.x0 + 12, 0, false);
+    const f = buyFurniture(sim, 'plant', st.plot.x0 + 12, 1, false);
     if (typeof f === 'string') throw new Error(f);
     expect(st.money).toBe(money - furniturePrice('plant'));
-    expect(shiftFurniture(sim, f.id, st.plot.x0 + 11, 0)).toBeNull();
+    expect(shiftFurniture(sim, f.id, st.plot.x0 + 11, 1)).toBeNull();
     expect(f.x).toBe(st.plot.x0 + 11);
     sellFurniture(sim, f.id);
     expect(st.furniture.some((o) => o.id === f.id)).toBe(false);

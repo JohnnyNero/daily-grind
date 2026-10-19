@@ -122,7 +122,7 @@ export class Layout {
     return isDoor(this.cell(x, s));
   }
 
-  /** Every node one step from n: along the floor, up or down the stairs, or along the pavement. */
+  /** Every node one step from n: along the floor, up or down the stairs, the doorstep, or along the pavement. */
   neighbours(n: number): number[] {
     const [x, s] = this.xs(n);
     const out: number[] = [];
@@ -134,6 +134,13 @@ export class Layout {
     // Up from a stair (to the next one, or off the top), or down onto one.
     if (this.stair(x, s) && s + 1 < this.rows && this.standable[n + this.w]) out.push(n + this.w);
     if (s > 0 && this.stair(x, s - 1) && this.standable[n - this.w]) out.push(n - this.w);
+    // The doorstep: up from the street onto the building's ground floor, a row higher, and back down.
+    for (const dx of [-1, 1]) {
+      const nx = x + dx;
+      if (nx < 0 || nx >= this.w) continue;
+      if (!this.inPlot(x) && s === 0 && this.inPlot(nx) && this.standable[this.node(nx, 1)]) out.push(this.node(nx, 1));
+      if (this.inPlot(x) && s === 1 && !this.inPlot(nx) && this.standable[this.node(nx, 0)]) out.push(this.node(nx, 0));
+    }
     if (this.pavement) {
       const [a, b] = this.pavement;
       if (n === a) out.push(b);

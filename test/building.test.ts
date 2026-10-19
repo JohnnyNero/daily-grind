@@ -17,12 +17,12 @@ describe('the starting building', () => {
   });
 
   it('shares the lobby and stairwell', () => {
-    const lobby = lay.rooms[lay.roomOf[lay.node(x0 + 2, 0)]];
+    const lobby = lay.rooms[lay.roomOf[lay.node(x0 + 2, 1)]];
     expect(lobby.shared).toBe(true);
     // Through a door, the stairwell links all three landings into one shared space.
-    const stairs = lay.rooms[lay.roomOf[lay.node(x0 + 9, 0)]];
+    const stairs = lay.rooms[lay.roomOf[lay.node(x0 + 9, 1)]];
     expect(stairs.shared).toBe(true);
-    expect(lay.roomOf[lay.node(x0 + 10, 8)]).toBe(stairs.id);
+    expect(lay.roomOf[lay.node(x0 + 10, 9)]).toBe(stairs.id);
   });
 
   it('lets the agent into every flat and back out', () => {
@@ -49,8 +49,8 @@ describe('building', () => {
   it("won't put a wall through furniture or stairs, or outside the plot", () => {
     const sim = Sim.create(1);
     const { x0 } = sim.state.plot;
-    expect(placeCell(sim.state, x0 + 1, 0, 'wall')).toBe('Furniture in the way');
-    expect(placeCell(sim.state, x0 + 9, 0, 'wall')).toBe('Stairs in the way');
+    expect(placeCell(sim.state, x0 + 1, 1, 'wall')).toBe('Furniture in the way');
+    expect(placeCell(sim.state, x0 + 9, 1, 'wall')).toBe('Stairs in the way');
     expect(placeCell(sim.state, x0 - 1, 0, 'wall')).toBe('Outside your plot');
   });
 
@@ -62,13 +62,13 @@ describe('building', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const { x0 } = st.plot;
-    // A post on the roof (row 11 is the roof), then a ledge off the top of it.
+    // A post on the roof (row 12 is the roof), then a ledge off the top of it.
     // The post stands over a wall (column 7), so it's held up all the way down.
-    for (let s = 12; s <= 14; s++) expect(placeCell(st, x0 + 7, s, 'wall')).toBeNull();
-    for (let i = 1; i <= 4; i++) expect(placeCell(st, x0 + 7 + i, 14, 'wall'), `cell ${i}`).toBeNull();
-    expect(placeCell(st, x0 + 12, 14, 'wall')).toMatch(/holding it up/);
+    for (let s = 13; s <= 15; s++) expect(placeCell(st, x0 + 7, s, 'wall')).toBeNull();
+    for (let i = 1; i <= 4; i++) expect(placeCell(st, x0 + 7 + i, 15, 'wall'), `cell ${i}`).toBeNull();
+    expect(placeCell(st, x0 + 12, 15, 'wall')).toMatch(/holding it up/);
     // And the post can't come out now: the ledge hangs off it.
-    expect(removeCell(st, x0 + 7, 13)).toMatch(/holding other bits up/);
+    expect(removeCell(st, x0 + 7, 14)).toMatch(/holding other bits up/);
   });
 
   it('counts a ledge from the post it comes off, wherever the post stands', () => {
@@ -76,10 +76,10 @@ describe('building', () => {
     const st = sim.state;
     const { x0 } = st.plot;
     // A post on the roof, part-way between the walls under it: standing on the roof, it's held.
-    for (let s = 12; s <= 14; s++) expect(placeCell(st, x0 + 16, s, 'wall')).toBeNull();
+    for (let s = 13; s <= 15; s++) expect(placeCell(st, x0 + 16, s, 'wall')).toBeNull();
     // Four along from it is fine; the fifth isn't.
-    for (let i = 1; i <= 4; i++) expect(placeCell(st, x0 + 16 + i, 14, 'wall'), `cell ${i}`).toBeNull();
-    expect(placeCell(st, x0 + 21, 14, 'wall')).toMatch(/holding it up/);
+    for (let i = 1; i <= 4; i++) expect(placeCell(st, x0 + 16 + i, 15, 'wall'), `cell ${i}`).toBeNull();
+    expect(placeCell(st, x0 + 21, 15, 'wall')).toMatch(/holding it up/);
   });
 
   it('puts doors and windows in gaps and walls, and a door needs a floor', () => {
@@ -87,71 +87,71 @@ describe('building', () => {
     const st = sim.state;
     const { x0 } = st.plot;
     // A two-cell gap on the top floor's landing: a door goes in it.
-    expect(placeCell(st, x0 + 10, 8, 'door')).toBeNull();
+    expect(placeCell(st, x0 + 10, 9, 'door')).toBeNull();
     // A window into the side of the lobby wall.
-    expect(placeCell(st, x0, 4, 'window')).toBeNull();
+    expect(placeCell(st, x0, 5, 'window')).toBeNull();
     // A door in mid air can't.
-    expect(placeCell(st, x0 + 10, 9, 'door')).toBe('A door is in the way: knock it out first');
-    expect(placeCell(st, x0 + 5, 1, 'door')).toBe('A door needs something to stand on');
+    expect(placeCell(st, x0 + 10, 10, 'door')).toBe('A door is in the way: knock it out first');
+    expect(placeCell(st, x0 + 5, 2, 'door')).toBe('A door needs something to stand on');
   });
 
   it('checks where furniture can go', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const { x0 } = st.plot;
-    // The top one-bed is empty: row 8 stands on the roof of the floor below.
-    expect(furnitureProblem(st, 'sofa', x0 + 21, 8)).toBeNull();
-    expect(furnitureProblem(st, 'picture', x0 + 21, 9)).toBeNull();
-    expect(furnitureProblem(st, 'sofa', x0 + 21, 9)).toMatch(/floor/);
-    expect(furnitureProblem(st, 'sofa', x0 + 26, 8)).toMatch(/wall|plot/i);
-    expect(furnitureProblem(st, 'sofa', x0 + 15, 0)).toMatch(/in the way/);
+    // The top one-bed is empty: row 9 stands on the floor below.
+    expect(furnitureProblem(st, 'sofa', x0 + 21, 9)).toBeNull();
+    expect(furnitureProblem(st, 'picture', x0 + 21, 10)).toBeNull();
+    expect(furnitureProblem(st, 'sofa', x0 + 21, 10)).toMatch(/floor/);
+    expect(furnitureProblem(st, 'sofa', x0 + 26, 9)).toMatch(/wall|plot/i);
+    expect(furnitureProblem(st, 'sofa', x0 + 15, 1)).toMatch(/in the way/);
   });
 
   it('builds a room on the roof and turns it into a flat', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const { x0 } = st.plot;
-    // A box on the roof (whose top row is 11), with stairs up to it from the top landing.
-    expect(buildRoom(st, x0 + 7, 11, x0 + 13, 15)).toBeGreaterThan(0);
+    // A box on the roof (whose top row is 12), with stairs up to it from the top landing.
+    expect(buildRoom(st, x0 + 7, 12, x0 + 13, 16)).toBeGreaterThan(0);
     sim.changed();
     let lay = sim.layout;
-    const inside = lay.roomOf[lay.node(x0 + 10, 12)];
+    const inside = lay.roomOf[lay.node(x0 + 10, 13)];
     expect(lay.rooms[inside].outdoor).toBe(false);
     // A flight up from the top landing, through the roof into the box.
-    expect(placeStairs(st, x0 + 10, 8)).toBeNull();
+    expect(placeStairs(st, x0 + 10, 9)).toBeNull();
     sim.changed();
     lay = sim.layout;
-    expect(findPath(lay, lay.node(x0 + 8, 8), lay.node(x0 + 10, 12), { all: true })).not.toBeNull();
+    expect(findPath(lay, lay.node(x0 + 8, 9), lay.node(x0 + 10, 13), { all: true })).not.toBeNull();
   });
 
   it('puts a flight of stairs up one column, from a floor through the floor above', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const { x0 } = st.plot;
-    // Up from the bottom of the stairwell (row 0) through the first floor (row 3).
-    expect(placeStairs(st, x0 + 12, 0)).toBeNull();
-    for (let r = 0; r < 4; r++) expect(st.cells[key(x0 + 12, r)]).toBe('stair');
+    // Up from the bottom of the stairwell (row 1) through the first floor (row 4).
+    expect(placeStairs(st, x0 + 12, 1)).toBeNull();
+    for (let r = 1; r <= 4; r++) expect(st.cells[key(x0 + 12, r)]).toBe('stair');
     // Not from mid-air, not through a wall, not twice.
-    expect(stairsProblem(st, x0 + 3, 1)).toMatch(/floor to start from/);
-    expect(stairsProblem(st, x0 + 7, 0)).toMatch(/door|wall/i);
-    expect(stairsProblem(st, x0 + 12, 0)).toMatch(/already/);
-    expect(stairsProblem(st, x0 + 2, 4)).toMatch(/furniture/i);
+    expect(stairsProblem(st, x0 + 3, 2)).toMatch(/floor to start from/);
+    expect(stairsProblem(st, x0 + 7, 1)).toMatch(/door|wall/i);
+    expect(stairsProblem(st, x0 + 12, 1)).toMatch(/already/);
+    expect(stairsProblem(st, x0 + 2, 5)).toMatch(/furniture/i);
     sim.changed();
     const lay = sim.layout;
     // Someone can climb it, up the column and off the top onto the landing.
-    expect(findPath(lay, lay.node(x0 + 10, 0), lay.node(x0 + 12, 2), { all: true })).not.toBeNull();
-    expect(lay.neighbours(lay.node(x0 + 12, 3))).toContain(lay.node(x0 + 12, 4));
+    expect(findPath(lay, lay.node(x0 + 10, 1), lay.node(x0 + 12, 3), { all: true })).not.toBeNull();
+    expect(lay.neighbours(lay.node(x0 + 12, 4))).toContain(lay.node(x0 + 12, 5));
     // Knocking down any of it takes the whole flight.
-    expect(removeCell(st, x0 + 12, 2)).toBeNull();
-    for (let r = 0; r < 4; r++) expect(st.cells[key(x0 + 12, r)]).toBeUndefined();
+    expect(removeCell(st, x0 + 12, 3)).toBeNull();
+    for (let r = 1; r <= 4; r++) expect(st.cells[key(x0 + 12, r)]).toBeUndefined();
   });
 
   it('undoes', () => {
     const sim = Sim.create(1);
     const st = sim.state;
     const before = snapshot(st);
-    removeCell(st, st.plot.x0 + 13, 2);
-    placeFurniture(st, 'plant', st.plot.x0 + 12, 0);
+    removeCell(st, st.plot.x0 + 13, 3);
+    placeFurniture(st, 'plant', st.plot.x0 + 12, 1);
     expect(snapshot(st)).not.toBe(before);
     restore(st, before);
     expect(snapshot(st)).toBe(before);

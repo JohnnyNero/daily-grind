@@ -380,6 +380,8 @@ export class Renderer {
 
   /** Does this cell face the outside (so it's brick)? */
   private facesOutside(lay: Layout, x: number, s: number): boolean {
+    // The plinth along the street is brick, like the outside walls.
+    if (s === 0) return true;
     for (const [dx, ds] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = x + dx;
       const ns = s + ds;

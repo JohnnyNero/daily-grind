@@ -62,6 +62,8 @@ export function newState(seed: number): State {
 
 /** Each storey is 4 rows: 3 of room and 1 of floor. */
 export const STOREY = 4;
+/** The building stands on a plinth one cell high, so the ground floor is a step up from the street. */
+export const BASE = 1;
 
 function buildShell(st: State): void {
   const { x0, x1 } = st.plot;
@@ -70,13 +72,14 @@ function buildShell(st: State): void {
     st.cells[key(at(dx), row)] = kind;
     if (isDoor(kind)) delete st.cells[key(at(dx), row + 1)];
   };
-  // The floors and the roof.
+  // The plinth, the floors and the roof.
+  for (let x = x0; x <= x1; x++) for (let r = 0; r < BASE; r++) st.cells[key(x, r)] = 'wall';
   for (let s = 1; s <= STOREYS; s++) {
-    for (let x = x0; x <= x1; x++) st.cells[key(x, s * STOREY - 1)] = 'wall';
+    for (let x = x0; x <= x1; x++) st.cells[key(x, BASE + s * STOREY - 1)] = 'wall';
   }
   // A wall up a column of one storey, with a window or a door in it.
   const column = (dx: number, s: number, kind: 'wall' | 'window' | 'door' | 'flatDoor' | 'entrance') => {
-    const row = s * STOREY;
+    const row = BASE + s * STOREY;
     for (let r = 0; r < STOREY - 1; r++) set(dx, row + r, 'wall');
     if (kind === 'window') set(dx, row + 1, 'window');
     else if (kind !== 'wall') set(dx, row, kind);
@@ -94,10 +97,10 @@ function buildShell(st: State): void {
     column(24, s, 'door');
   }
   // Up the stairwell: a flight from the lobby to the first floor, and another on to the second.
-  for (const [dx, from] of [[9, 0], [11, STOREY]]) for (let r = 0; r < STOREY; r++) set(dx, from + r, 'stair');
+  for (const [dx, from] of [[9, BASE], [11, BASE + STOREY]]) for (let r = 0; r < STOREY; r++) set(dx, from + r, 'stair');
 
   const put = (def: string, dx: number, s: number, r = 0, flip = false) => {
-    const f = placeFurniture(st, def, at(dx), s * STOREY + r, flip);
+    const f = placeFurniture(st, def, at(dx), BASE + s * STOREY + r, flip);
     if (typeof f === 'string') throw new Error(`Start building: ${def} ${f}`);
   };
   // Lobby.

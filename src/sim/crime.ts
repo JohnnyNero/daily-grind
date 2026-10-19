@@ -51,9 +51,13 @@ export function waysIn(sim: Sim): WayIn[] {
   for (const [k, kind] of Object.entries(st.cells)) {
     const [x, s] = k.split(',').map(Number);
     if (kind === 'entrance') {
-      for (const dx of [-1, 1]) if (outside(x + dx, s)) out.push({ entry: 'door', at: [x + dx, s] });
+      // Outside the door, or on the street below its doorstep.
+      for (const dx of [-1, 1]) {
+        const r = outside(x + dx, s) ? s : outside(x + dx, s - 1) ? s - 1 : -1;
+        if (r >= 0) out.push({ entry: 'door', at: [x + dx, r] });
+      }
     }
-    if (kind === 'window' && s <= 2) {
+    if (kind === 'window' && s <= 3) {
       for (const dx of [-1, 1]) {
         // Standing on the pavement (or whatever's outside) under the window.
         let ground = -1;
@@ -187,7 +191,7 @@ export function crimeMinute(sim: Sim): void {
   if (b.stage === 'case' || b.stage === 'try') {
     // From the lobby, or out on the street.
     for (const w of st.pawns) {
-      if (w === p || Math.abs(w.x - p.x) > 6 || w.s > 1.5) continue;
+      if (w === p || Math.abs(w.x - p.x) > 6 || w.s > 2.5) continue;
       if (w.kind === 'passerby' && random(st) < 0.04) return flee(sim, p, 'passerby');
       if (awake(w) && random(st) < 0.06) return flee(sim, p, 'spotted', w);
     }

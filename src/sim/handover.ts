@@ -12,6 +12,7 @@ import { scoreFor } from './impressiveness';
 import { household, newApplicant } from './leases';
 import { setGoal } from './pawns';
 import type { Sim } from './sim';
+import { BASE } from './start';
 import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
 
 /** Minutes Denise talks at each stop before moving on by herself. */
@@ -60,7 +61,7 @@ export function startHandover(sim: Sim): void {
     name: DENISE,
     kind: 'agent',
     x: st.plot.x0 + 2,
-    s: 0,
+    s: BASE,
     path: [],
     goal: null,
     task: 'go',
@@ -129,10 +130,10 @@ export function stopFlat(sim: Sim): string | null {
 function spotFor(sim: Sim, stop: Stop): [number, number] {
   const lay = sim.layout;
   const flat = stop.flat === 'lobby' ? undefined : lay.flats[stop.flat];
-  if (!flat) return [sim.state.plot.x0 + 2, 0];
+  if (!flat) return [sim.state.plot.x0 + 2, BASE];
   const nodes = flat.rooms.flatMap((r) => lay.rooms[r].nodes).filter((n) => !lay.isDoorNode(n)).map((n) => lay.xs(n));
   nodes.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
-  return nodes[Math.floor(nodes.length / 2)] ?? [sim.state.plot.x0 + 2, 0];
+  return nodes[Math.floor(nodes.length / 2)] ?? [sim.state.plot.x0 + 2, BASE];
 }
 
 /** Denise's next move on the walk. False once it's over (she's off, like any agent). */
