@@ -6,6 +6,7 @@ import { buyFurniture } from '../src/sim/furnish';
 import { accept, changeRent, giveNotice, likelyLiking, noticeProblem } from '../src/sim/leases';
 import { choose } from '../src/sim/post';
 import { answer } from '../src/sim/chat';
+import { itemsIn } from '../src/sim/environment';
 import { scoreFor } from '../src/sim/impressiveness';
 import type { Sim } from '../src/sim/sim';
 import { mend } from '../src/sim/upkeep';
@@ -60,6 +61,16 @@ export function landlord(sim: Sim, policy: Policy): void {
         buyFurniture(sim, def, x, s, false);
         break;
       }
+    }
+  }
+  // The council wants a smoke alarm in every flat people live in: both fit one when they're let (cheapest thing there is).
+  for (const f of sim.layout.flats) {
+    if (!flatInfo(sim, f.id).lease || itemsIn(sim, f.id, 'smokeAlarm') > 0) continue;
+    const cells = sim.layout.flatCells(f).map((n) => sim.layout.xs(n));
+    for (const [x, s] of cells) {
+      if (typeof furnitureProblem(st, 'smokeAlarm', x, s) === 'string') continue;
+      buyFurniture(sim, 'smokeAlarm', x, s, false);
+      break;
     }
   }
   // Even the ruthless one mends what the council has told them to.

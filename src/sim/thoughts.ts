@@ -8,7 +8,7 @@
 
 import { flatInfo, goingRate } from './economy';
 import { expectGrade, expectThought } from './expectations';
-import { SHARED, binsOverflowing, dirtOf, tempOf } from './environment';
+import { SHARED, binsOverflowing, dirtOf, itemsIn, tempOf } from './environment';
 import { flatScore, type FlatScore } from './impressiveness';
 import { opinion } from './social';
 import type { Sim } from './sim';
@@ -16,7 +16,7 @@ import { TICKS_PER_HOUR, type Life, type NeedId, type Pawn } from './state';
 import { has } from './traits';
 import { brokenIn } from './upkeep';
 import { furnitureDef } from './defs';
-import { BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
+import { BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, ITEMS, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
 
 // The memories, need bands and what each thought is worth are in tuning.ts.
 export { BASELINE, MEMORIES, type MemoryDef } from './tuning';
@@ -70,6 +70,11 @@ function placeThoughts(sim: Sim, life: Life, flatId: string): Thought[] {
   }
   if (dirtOf(sim, SHARED) > LIVE.grubbyStairs.above) out.push({ label: 'Grubby stairwell', value: proud ? LIVE.grubbyStairs.houseProud : LIVE.grubbyStairs.value });
   if (binsOverflowing(sim)) out.push({ label: 'Bins overflowing', value: LIVE.binsOverflowing });
+  if (itemsIn(sim, SHARED, 'intercom') > 0) out.push({ label: 'Intercom on the street door', value: ITEMS.intercomLikes });
+  if (itemsIn(sim, SHARED, 'cctv') > 0) {
+    if (has(life, 'knowsRights')) out.push({ label: 'Camera pointed at the lobby', value: ITEMS.cctvKnowsRights });
+    else if (has(life, 'busybody')) out.push({ label: 'Can see who comes and goes', value: ITEMS.cctvBusybody });
+  }
   if (life.pet && life.pet !== 'asked') out.push({ label: `Has ${life.pet}`, value: LIVE.hasPet });
   for (const f of brokenIn(sim, flatId).slice(0, LIVE.broken.most)) out.push({ label: `Broken ${furnitureDef(f.def).name.toLowerCase()}`, value: LIVE.broken.value });
   return out;
@@ -143,6 +148,7 @@ function memoryThoughts(sim: Sim, life: Life): Thought[] {
     let each = def.value;
     if (each < 0 && has(life, 'easyGoing')) each *= EASY_GOING_BAD;
     if (id === 'cookedMeal' && has(life, 'keenCook')) each *= KEEN_COOK_MEAL;
+    if (id === 'goodRead' && ITEMS.keenReaders.some((t) => has(life, t))) each *= ITEMS.keenReadingFeel;
     if (heard) each *= HEARD;
     let value = 0;
     for (let i = 0; i < count; i++) value += each * STACK_FACTOR ** i;

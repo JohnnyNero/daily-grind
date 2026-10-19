@@ -117,10 +117,12 @@ function stillHeld(st: State, change: (cells: Record<string, CellKind>) => void)
 
 /** Furniture with any part in this cell. */
 export function furnitureAt(st: State, x: number, s: number): Furniture | undefined {
-  return st.furniture.find((f) => {
+  const here = st.furniture.filter((f) => {
     const d = furnitureDef(f.def);
     return x >= f.x && x < f.x + d.w && s >= f.s && s < f.s + d.h;
   });
+  // A rug under something: the something comes first.
+  return here.find((f) => !furnitureDef(f.def).underfoot) ?? here[0];
 }
 
 /** Furniture standing on this cell. */
@@ -304,6 +306,8 @@ export function furnitureProblem(st: State, def: string, x: number, s: number, i
     const o = furnitureDef(f.def);
     const overlapX = x < f.x + o.w && f.x < x + d.w;
     const overlapS = s < f.s + o.h && f.s < s + d.h;
+    // A rug lies under floor furniture, so they can share cells.
+    if (!!d.underfoot !== !!o.underfoot && !d.wall && !o.wall) continue;
     if (overlapX && overlapS) return `${o.name} in the way`;
   }
   return null;

@@ -120,7 +120,7 @@ describe('a party as a group', () => {
   it('has a neighbour knock on the door late on, and the music can go down', () => {
     let turnedDown = 0;
     let knocked = 0;
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
+    for (let seed = 1; seed <= 30; seed++) {
       const sim = Sim.create(seed);
       at(sim, 12, 20);
       for (const i of [1, 2, 3, 4]) newTenant(sim, i);

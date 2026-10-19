@@ -40,6 +40,10 @@ export interface FurnitureDef {
   /** Columns people use it from, counted from the left. */
   spots?: number[];
   offers?: Offer[];
+  /** Counts as this other piece for `needsNearby` (a big telly is a telly). */
+  as?: string;
+  /** Lies on the floor under other things (a rug): it may share a cell with floor furniture. */
+  underfoot?: boolean;
 }
 
 export const FURNITURE: readonly FurnitureDef[] = [
@@ -71,6 +75,17 @@ export const FURNITURE: readonly FurnitureDef[] = [
   { id: 'picture', name: 'Picture', w: 1, h: 1, wall: true, group: 'decor', value: 12, decor: true },
   { id: 'mirror', name: 'Mirror', w: 1, h: 1, wall: true, group: 'bathroom', value: 8, decor: true },
   { id: 'clock', name: 'Wall clock', w: 1, h: 1, wall: true, group: 'decor', value: 6, decor: true },
+  // New in-flat items: each one touches a system (dirt, noise, sleep, the council, burglars).
+  { id: 'dishwasher', name: 'Dishwasher', w: 1, h: 1, group: 'kitchen', value: 30 },
+  { id: 'console', name: 'Games console', w: 1, h: 1, group: 'sit', value: 40, valuable: true, spots: [0], offers: [{ need: 'fun', rate: 0.9, minutes: [40, 120], pose: 'sit', also: { comfort: 0.3 }, needsNearby: 'tv', doing: 'Playing on the console' }] },
+  { id: 'bigTv', name: 'Big telly', w: 3, h: 1, group: 'sit', value: 70, valuable: true, as: 'tv' },
+  { id: 'bookshelf', name: 'Bookshelf', w: 2, h: 2, group: 'storage', value: 25, decor: true, spots: [0], offers: [{ need: 'fun', rate: 0.3, minutes: [30, 90], pose: 'stand', also: { comfort: 0.1 }, doing: 'Reading', memory: 'goodRead' }] },
+  { id: 'diningSet', name: 'Dining set', w: 3, h: 1, group: 'sit', value: 28, spots: [0, 2], offers: [{ need: 'comfort', rate: 0.4, minutes: [15, 40], pose: 'sit', doing: 'Sitting down' }] },
+  { id: 'rug', name: 'Rug', w: 2, h: 1, group: 'decor', value: 8, decor: true, underfoot: true },
+  { id: 'curtains', name: 'Curtains', w: 1, h: 2, wall: true, group: 'decor', value: 10, decor: true },
+  { id: 'smokeAlarm', name: 'Smoke alarm', w: 1, h: 1, wall: true, group: 'decor', value: 0 },
+  { id: 'cctv', name: 'CCTV camera', w: 1, h: 1, wall: true, group: 'decor', value: 20 },
+  { id: 'intercom', name: 'Door intercom', w: 1, h: 1, wall: true, group: 'decor', value: 15 },
 ];
 
 const byId = new Map(FURNITURE.map((d) => [d.id, d]));

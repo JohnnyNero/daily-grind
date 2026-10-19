@@ -265,7 +265,9 @@ export class Renderer {
       this.drawCell(ctx, lay, colours, x, s, kind);
     }
     this.drawDoorsteps(ctx, lay);
-    for (const f of st.furniture) {
+    // Rugs first, so everything else stands on them.
+    const drawOrder = [...st.furniture].sort((a, b) => Number(!!furnitureDef(b.def).underfoot) - Number(!!furnitureDef(a.def).underfoot));
+    for (const f of drawOrder) {
       const d = furnitureDef(f.def);
       const top = floorY(f.s) - d.h * TILE;
       drawFurniture(ctx, f.def, f.x * TILE, top, f.flip);

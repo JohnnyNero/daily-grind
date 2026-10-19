@@ -146,6 +146,7 @@ export function flatNeeds(sim: Sim, flatId: string): Need[] {
     { label: 'A loo', done: s.has.toilet, must: true, group: 'bathroom' },
     { label: 'A shower or a bath', done: s.has.wash, must: true, group: 'bathroom' },
     { label: 'A cooker or a fridge', done: s.has.kitchen, must: true, group: 'kitchen' },
+    { label: 'A smoke alarm (the council checks)', done: any('smokeAlarm'), must: false, group: 'decor' },
     { label: 'A radiator', done: any('radiator'), must: false, group: 'decor' },
     { label: 'Somewhere to sit', done: any('sofa', 'armchair', 'chair'), must: false, group: 'sit' },
     { label: 'A window or a lamp', done: s.factors.light > 15, must: false, group: 'decor' },

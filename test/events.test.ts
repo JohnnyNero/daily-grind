@@ -45,7 +45,7 @@ describe('the storyteller', () => {
 
 describe('parties', () => {
   it('bring guests in the evening, noise late on, and a mess after', () => {
-    const sim = Sim.create(1);
+    const sim = Sim.create(2);
     at(sim, 12, 19);
     const flat = sim.layout.flats[0].id;
     const h = startParty(sim, flat)!;

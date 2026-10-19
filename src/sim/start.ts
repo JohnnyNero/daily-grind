@@ -141,6 +141,9 @@ function buildShell(st: State): void {
     put('radiator', 19, s, 1);
     put('radiator', 23, s, 1);
   }
+  // The council wants a smoke alarm in every flat people live in. The furnished ones have one.
+  for (const s of [1, 2]) put('smokeAlarm', 2, s, 2);
+  put('smokeAlarm', 16, 0, 2);
 }
 
 /**
