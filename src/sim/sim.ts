@@ -3,8 +3,12 @@
 import { Layout } from './layout';
 import { stepPawns } from './pawns';
 import { newState } from './start';
-import { moveIn } from './tenants';
-import { TICKS_PER_DAY, TICKS_PER_MINUTE, type State } from './state';
+import { morning, mortgageDue, weeklyBills } from './economy';
+import { applicantsHour, rentMorning } from './leases';
+import { outcomesHour } from './outcomes';
+import { postMorning } from './post';
+import { startingTenants } from './start';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
 
 export class Sim {
   /** Bumped by every change to the building, so anything worked out from it knows to redo it. */
@@ -13,12 +17,18 @@ export class Sim {
 
   constructor(public state: State) {}
 
-  /** A fresh game: the starting building, with a couple already living on the ground floor. */
+  /** A fresh game: the starting building, with its sitting tenants. */
   static create(seed: number): Sim {
     const sim = new Sim(newState(seed));
-    const first = sim.layout.flats[0];
-    if (first) moveIn(sim, first.id, 2);
+    startingTenants(sim);
     return sim;
+  }
+
+  /** A short piece of news for the player. */
+  notify(text: string): void {
+    const n = this.state.notices;
+    n.push({ tick: this.state.tick, text });
+    if (n.length > 40) n.splice(0, n.length - 40);
   }
 
   get layout(): Layout {
@@ -47,7 +57,27 @@ export class Sim {
   }
 
   tick(): void {
-    this.state.tick++;
+    const st = this.state;
+    st.tick++;
+    if (st.repossessed !== undefined) return;
+    if (st.tick % TICKS_PER_HOUR === 0) this.hour();
     stepPawns(this);
+  }
+
+  private hour(): void {
+    const st = this.state;
+    const hour = Math.floor(this.minuteOfDay / 60);
+    if (hour === 7) {
+      morning(this);
+      rentMorning(this);
+      postMorning(this);
+    }
+    // Mondays at nine: the mortgage and the bills.
+    if (hour === 9 && (this.day - 1) % 7 === 0 && this.day > 1) {
+      weeklyBills(this);
+      mortgageDue(this);
+    }
+    applicantsHour(this);
+    for (const p of [...st.pawns]) if (p.life) outcomesHour(this, p);
   }
 }

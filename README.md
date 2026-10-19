@@ -9,7 +9,25 @@ implementation plan).
 
 ## Where it's up to
 
-Milestones 1 and 2 of 6, **the building** and **one household**.
+Milestones 1 to 3 of 6: **the building**, **one household**, and **money and tenants**.
+
+Milestone 3, money and tenants:
+
+- Money: rent comes in every morning; the mortgage (£250) and the building's bills go out
+  every Monday. Miss four mortgage payments in a row and the bank takes the building; pay
+  it off and it's yours. Building work and furniture cost money (furniture sells back cheap).
+- Each flat's impressiveness tier sets its going rate; you set the rent. Rent against the
+  going rate is a thought tenants have, and rises need a week's notice.
+- Empty flats you list draw applicants: fewer if the rent's steep, only desperate ones if
+  it hasn't got the basics. Each shows one trait and references hinting at the rest, and a
+  likely liking. Pick one: they pay a deposit and move in on a six-week lease.
+- Every tenant has two or three traits (17 of them), shown as they come out.
+- Fed-up tenants act on it, picked by their traits: notes, formal complaints, holding back
+  rent, haggling, giving notice, reporting you to the council. Happy ones pay early, send
+  friends, fix things. Leases renew or end.
+- The building comes with sitting tenants on old, cheap rolling tenancies.
+- New menus, after the mockups: a tenant bar ringed by liking, alerts down the right, and
+  Building, People, Money, Post and Build tabs along the bottom.
 
 Milestone 2, one household:
 

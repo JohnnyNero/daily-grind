@@ -375,3 +375,15 @@ function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, wal
 
 /** How tall a person is drawn, in world pixels (for tapping and name tags). */
 export const PERSON_H = 23;
+
+/** A head-and-shoulders portrait, for panels and the tenant bar. */
+export function portrait(p: Pick<Pawn, 'look' | 'kind'>): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = 16;
+  c.height = 18;
+  const ctx = c.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  rect(ctx, 0, 0, 16, 18, '#d9ccb6');
+  drawPerson(ctx, { ...p, facing: 1 } as Pawn, 8, 25, 0, false);
+  return c;
+}

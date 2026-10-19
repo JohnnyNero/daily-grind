@@ -53,7 +53,7 @@ export const FURNITURE: readonly FurnitureDef[] = [
   { id: 'tv', name: 'Telly', w: 2, h: 1, group: 'sit', value: 30 },
   { id: 'counter', name: 'Kitchen counter', w: 1, h: 1, group: 'kitchen', value: 10 },
   { id: 'sink', name: 'Kitchen sink', w: 1, h: 1, group: 'kitchen', value: 15 },
-  { id: 'cooker', name: 'Cooker', w: 1, h: 1, group: 'kitchen', value: 30, offers: [{ need: 'food', rate: 0, minutes: [20, 35], pose: 'stand', needsNearby: 'fridge', doing: 'Cooking' }] },
+  { id: 'cooker', name: 'Cooker', w: 1, h: 1, group: 'kitchen', value: 30, offers: [{ need: 'food', rate: 0, minutes: [20, 35], pose: 'stand', doing: 'Cooking' }] },
   { id: 'fridge', name: 'Fridge', w: 1, h: 2, group: 'kitchen', value: 30, offers: [{ need: 'food', rate: 2.5, minutes: [4, 8], pose: 'stand', doing: 'Eating out of the fridge', memory: 'fridgeDinner' }] },
   { id: 'toilet', name: 'Toilet', w: 1, h: 1, group: 'bathroom', value: 15, offers: [{ need: 'bladder', rate: 12, minutes: [3, 6], pose: 'sit', doing: 'On the loo' }] },
   { id: 'basin', name: 'Basin', w: 1, h: 1, group: 'bathroom', value: 8, offers: [{ need: 'hygiene', rate: 2, minutes: [4, 8], pose: 'stand', doing: 'Washing at the basin' }] },

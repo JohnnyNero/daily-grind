@@ -6,9 +6,11 @@
 // for less each time, so a run of good dinners doesn't buy endless goodwill. The liking
 // shown eases towards the total, so one bad night is a dip, not a crash.
 
+import { flatInfo, goingRate } from './economy';
 import { flatScore, type FlatScore } from './impressiveness';
 import type { Sim } from './sim';
 import { TICKS_PER_HOUR, type Life, type NeedId, type Pawn } from './state';
+import { has } from './traits';
 
 export const BASELINE = 50;
 
@@ -33,6 +35,13 @@ export const MEMORIES: Record<string, MemoryDef> = {
   fridgeDinner: { label: 'Had tea out of the fridge', value: -2, hours: 8, stack: 2 },
   longBath: { label: 'Had a long bath', value: 4, hours: 8, stack: 1 },
   commute: { label: 'Grim commute', value: -2, hours: 3, stack: 1 },
+  newPlace: { label: 'New place', value: 5, hours: 5 * 24, stack: 1 },
+  rentRiseSmall: { label: 'Rent went up', value: -5, hours: 10 * 24, stack: 2 },
+  rentRiseBig: { label: 'Rent went up a lot', value: -12, hours: 14 * 24, stack: 2 },
+  rentCut: { label: 'Rent came down', value: 6, hours: 10 * 24, stack: 1 },
+  refusedHaggle: { label: 'Landlord wouldn\'t budge on rent', value: -6, hours: 7 * 24, stack: 1 },
+  agreedHaggle: { label: 'Got money off the rent', value: 6, hours: 7 * 24, stack: 1 },
+  letOffSteam: { label: 'Let off steam', value: 8, hours: 2 * 24, stack: 1 },
 };
 
 export interface Thought {
@@ -77,13 +86,33 @@ export function thoughtsOf(sim: Sim, p: Pawn): Thought[] {
   if (!flat) out.push({ label: 'Their flat has no front door any more', value: -20 });
   else {
     const score = flatScore(sim, flat.id);
-    const tier = TIER_THOUGHTS[score.tier];
-    if (tier) out.push({ label: `Lives in a ${score.tier.toLowerCase()} flat`, value: tier });
+    const tier = tierThought(score.tier, has(life, 'houseProud'));
+    if (tier) out.push(tier);
     out.push(...missingThoughts(score));
     if (!flat.enclosed) out.push({ label: 'Flat is open to the weather', value: -20 });
+    const lease = flatInfo(sim, flat.id).lease;
+    const rent = lease ? rentThought(lease.rent, goingRate(sim, flat.id)) : null;
+    if (rent) out.push(rent);
   }
   out.push(...memoryThoughts(sim, life));
   return out;
+}
+
+/** What they think of the flat's tier. House-proud tenants feel it half as much again, both ways. */
+export function tierThought(tier: string, houseProud: boolean): Thought | null {
+  const v = TIER_THOUGHTS[tier];
+  if (!v) return null;
+  return { label: `Lives in a ${tier.toLowerCase()} flat${houseProud ? ' (house-proud)' : ''}`, value: houseProud ? Math.round(v * 1.5) : v };
+}
+
+/** What they think of the rent against the going rate for the flat. */
+export function rentThought(rent: number, going: number): Thought | null {
+  const r = rent / Math.max(1, going);
+  if (r < 0.8) return { label: 'Rent is a bargain', value: 6 };
+  if (r < 0.95) return { label: 'Fair rent', value: 2 };
+  if (r <= 1.1) return null;
+  if (r <= 1.3) return { label: 'Rent is steep', value: -6 };
+  return { label: 'Daylight robbery', value: -14 };
 }
 
 function missingThoughts(score: FlatScore): Thought[] {
@@ -108,8 +137,12 @@ function memoryThoughts(sim: Sim, life: Life): Thought[] {
   for (const [id, n] of groups) {
     const def = MEMORIES[id];
     const count = Math.min(n, def.stack);
+    // Easy-going people let bad things go; keen cooks love a proper meal.
+    let each = def.value;
+    if (each < 0 && has(life, 'easyGoing')) each *= 0.75;
+    if (id === 'cookedMeal' && has(life, 'keenCook')) each *= 2;
     let value = 0;
-    for (let i = 0; i < count; i++) value += def.value * STACK_FACTOR ** i;
+    for (let i = 0; i < count; i++) value += each * STACK_FACTOR ** i;
     out.push({ label: count > 1 ? `${def.label} ×${count}` : def.label, value: Math.round(value * 10) / 10, memory: count });
   }
   return out;

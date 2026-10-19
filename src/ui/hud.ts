@@ -1,32 +1,81 @@
-// The top bar, notices, and the info panel for a flat or a person.
+// What's always on screen: the top bar (time, money, speed), the row of tenant portraits,
+// alerts down the right edge, the tabs along the bottom and short notices.
 
-import { furnitureDef } from '../sim/defs';
-import { FACTOR_NAMES, flatScore, type FactorId, type FlatScore } from '../sim/impressiveness';
+import { BILLS, flatInfo, pounds } from '../sim/economy';
+import { linesFor } from '../sim/outcomes';
 import type { Sim } from '../sim/sim';
-import { TICKS_PER_DAY, TICKS_PER_MINUTE, type NeedId, type Pawn } from '../sim/state';
-import { NEED_NAMES } from '../sim/tenants';
-import { BASELINE, likingTarget, thoughtsOf } from '../sim/thoughts';
+import { TICKS_PER_DAY, TICKS_PER_MINUTE } from '../sim/state';
 import { el, h, hhmm } from './dom';
+import { dayName, face, likingColour, type Panels, type Showing } from './panels';
+
+interface Alert {
+  key: string;
+  title: string;
+  sub: string;
+  colour: string;
+  urgent?: boolean;
+  open: Showing;
+}
 
 export class Hud {
   private dayEl = el('day');
   private timeEl = el('time');
-  private statusEl = el('status');
+  private moneyEl = el('money');
+  private changeEl = el('money-change');
+  private moneyPop = el('money-pop');
   private toastEl = el<HTMLButtonElement>('toast');
-  private info = el('info');
   private toastUntil = 0;
-  /** What the info panel is showing, so it can refresh. */
-  private showing: { kind: 'flat'; id: string } | { kind: 'pawn'; id: number } | null = null;
-  onClose: () => void = () => {};
+  private toastQueue: { text: string; bad: boolean }[] = [];
+  private noticesSeen: number;
+  private lastBar = '';
+  private lastAlerts = '';
+  private lastSlow = 0;
+  onBuild: () => void = () => {};
 
-  constructor(private readonly sim: Sim, private readonly setSpeed: (s: number) => void) {
+  constructor(private readonly sim: Sim, private readonly panels: Panels, private readonly setSpeed: (s: number) => void) {
     for (const b of document.querySelectorAll<HTMLButtonElement>('.speeds [data-speed]')) {
       b.addEventListener('click', () => this.setSpeed(Number(b.dataset.speed)));
     }
     this.toastEl.addEventListener('click', () => {
       this.toastEl.hidden = true;
+      this.toastUntil = 0;
     });
-    el('info-close').addEventListener('click', () => this.closeInfo());
+    el('money-button').addEventListener('click', () => {
+      this.moneyPop.hidden = !this.moneyPop.hidden;
+      el('money-button').setAttribute('aria-expanded', String(!this.moneyPop.hidden));
+      this.renderMoneyPop();
+    });
+    this.moneyPop.addEventListener('click', () => {
+      this.moneyPop.hidden = true;
+      panels.show({ kind: 'money' });
+    });
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#tabbar [data-tab]')) {
+      b.addEventListener('click', () => this.tab(b.dataset.tab!));
+    }
+    for (const span of document.querySelectorAll<HTMLElement>('[data-icon]')) span.innerHTML = ICONS[span.dataset.icon!] ?? '';
+    const n = sim.state.notices;
+    this.noticesSeen = n.length ? n[n.length - 1].tick : -1;
+    panels.onChange = () => this.markTab();
+  }
+
+  private tab(name: string): void {
+    if (name === 'build') {
+      this.panels.close();
+      this.onBuild();
+      return;
+    }
+    if (name === 'building') this.panels.close();
+    else this.panels.show({ kind: name as 'people' | 'money' | 'post' });
+  }
+
+  /** Lights up the tab for whatever's open. */
+  private markTab(): void {
+    const s = this.panels.showing;
+    const current = !s ? 'building' : s.kind === 'people' || s.kind === 'pawn' ? 'people' : s.kind === 'money' ? 'money' : s.kind === 'post' ? 'post' : 'building';
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#tabbar [data-tab]')) {
+      if (b.dataset.tab === current) b.setAttribute('aria-current', 'page');
+      else b.removeAttribute('aria-current');
+    }
   }
 
   showSpeed(speed: number): void {
@@ -36,197 +85,145 @@ export class Hud {
   }
 
   notify(text: string, bad = false): void {
-    this.toastEl.textContent = text;
-    this.toastEl.classList.toggle('bad', bad);
-    this.toastEl.hidden = false;
-    this.toastUntil = performance.now() + 4000;
+    this.toastQueue.push({ text, bad });
   }
 
-  update(now: number, speed: number): void {
-    this.dayEl.textContent = `Day ${this.sim.day}`;
-    this.timeEl.textContent = hhmm(this.sim.minuteOfDay);
-    const agent = this.sim.state.pawns.find((p) => p.kind === 'agent');
-    this.statusEl.textContent = speed === 0 ? 'Paused' : agent ? agent.doing.replace(/^/, 'Denise: ') : '';
-    if (!this.toastEl.hidden && now > this.toastUntil) this.toastEl.hidden = true;
-    if (this.showing?.kind === 'pawn') this.renderPawn();
-  }
-
-  get infoOpen(): boolean {
-    return !this.info.hidden;
-  }
-
-  showFlat(id: string): void {
-    this.showing = { kind: 'flat', id };
-    this.renderFlat();
-    this.open();
-  }
-
-  showPawn(p: Pawn): void {
-    this.showing = { kind: 'pawn', id: p.id };
-    this.renderPawn();
-    this.open();
-  }
-
-  closeInfo(): void {
-    this.info.hidden = true;
-    this.showing = null;
-    document.body.classList.remove('panel-open');
-    this.onClose();
-  }
-
-  private open(): void {
-    this.info.hidden = false;
-    document.body.classList.add('panel-open');
-  }
-
-  /** The flat might have changed (or gone) while the panel was open. */
-  refresh(): void {
-    if (this.showing?.kind === 'flat') this.renderFlat();
-  }
-
-  private renderFlat(): void {
-    if (this.showing?.kind !== 'flat') return;
-    const lay = this.sim.layout;
-    const flat = lay.flat(this.showing.id);
-    if (!flat) {
-      this.closeInfo();
-      return;
+  update(now: number): void {
+    const sim = this.sim;
+    const st = sim.state;
+    this.dayEl.textContent = `Day ${sim.day} · ${dayName(sim.day)}`;
+    this.timeEl.textContent = hhmm(sim.minuteOfDay);
+    this.moneyEl.textContent = pounds(st.money);
+    this.moneyEl.classList.toggle('negative', st.money < 0);
+    // News from the sim becomes notices.
+    for (const n of st.notices) {
+      if (n.tick > this.noticesSeen) {
+        this.toastQueue.push({ text: n.text, bad: false });
+        this.noticesSeen = n.tick;
+      }
     }
-    const nodes = flat.rooms.flatMap((r) => lay.rooms[r].nodes);
-    const inFlat = new Set(nodes);
-    const furniture = this.sim.state.furniture.filter((f) => inFlat.has(lay.node(f.x, f.s)));
-    const floors = flat.storeys.map((s) => (s === 0 ? 'Ground floor' : `Floor ${s}`)).join(' and ');
-    const score = flatScore(this.sim, flat.id);
-    const residents = this.sim.state.pawns.filter((p) => p.life?.flat === flat.id);
-    el('info-title').textContent = flat.name;
-    el('info-sub').textContent = `${floors} · ${flat.rooms.length === 1 ? 'one room' : `${flat.rooms.length} rooms`} · ${flat.area} tiles`;
-    const body = el('info-body');
-    const key = JSON.stringify([score, residents.map((p) => p.id), furniture.length]);
-    if (body.dataset.key === key) return;
-    body.dataset.key = key;
-    const factors = (Object.keys(FACTOR_NAMES) as FactorId[]).map((id) =>
-      meter(FACTOR_NAMES[id], score.factors[id], id === score.weakest ? 'Holding it back' : undefined),
+    if (now > this.toastUntil && this.toastQueue.length > 0) {
+      const t = this.toastQueue.shift()!;
+      this.toastEl.textContent = t.text;
+      this.toastEl.classList.toggle('bad', t.bad);
+      this.toastEl.hidden = false;
+      this.toastUntil = now + 4500;
+    } else if (now > this.toastUntil) this.toastEl.hidden = true;
+    // The slower parts, twice a second.
+    if (now - this.lastSlow > 500) {
+      this.lastSlow = now;
+      const todayStart = (sim.day - 1) * TICKS_PER_DAY;
+      const today = st.ledger.filter((e) => e.tick >= todayStart).reduce((n, e) => n + e.amount, 0);
+      this.changeEl.textContent = today ? `${pounds(today, true)} today` : 'Nothing yet today';
+      const unread = st.post.filter((l) => !l.read || (l.choices && l.chosen === undefined)).length;
+      const badge = el('post-badge');
+      badge.hidden = unread === 0;
+      badge.textContent = String(unread);
+      this.renderTenantBar();
+      this.renderAlerts();
+      if (!this.moneyPop.hidden) this.renderMoneyPop();
+      // The bar's height can change (tenants come and go), and everything sits below it.
+      document.body.style.setProperty('--top-h', `${el('topbar').offsetHeight}px`);
+      document.body.style.setProperty('--tab-h', `${el('tabbar').offsetHeight}px`);
+    }
+    this.panels.render();
+  }
+
+  private renderTenantBar(): void {
+    const sim = this.sim;
+    const bar = el('tenantbar');
+    const tenants = sim.state.pawns.filter((p) => p.life && !p.life.leaving);
+    const order = sim.layout.flats.map((f) => f.id);
+    tenants.sort((a, b) => order.indexOf(a.life!.flat) - order.indexOf(b.life!.flat));
+    const empty = sim.layout.flats.filter((f) => !flatInfo(sim, f.id).lease);
+    const key = JSON.stringify([tenants.map((p) => [p.id, Math.round(p.life!.liking)]), empty.map((f) => f.name)]);
+    if (key === this.lastBar) return;
+    this.lastBar = key;
+    bar.replaceChildren(
+      ...tenants.map((p) => {
+        const lk = Math.round(p.life!.liking);
+        const b = h('button', { type: 'button', className: 'who', style: `--c:${likingColour(lk)}`, 'aria-label': `${p.name}, liking ${lk}` }, h('span', { className: 'face' }, face(p).firstChild!), h('small', {}, String(lk)));
+        b.addEventListener('click', () => this.panels.show({ kind: 'pawn', id: p.id }));
+        return b;
+      }),
+      ...empty.map((f) => {
+        const b = h('button', { type: 'button', className: 'who empty', 'aria-label': `${f.name} is empty` }, h('span', { className: 'face' }, f.name.replace('Flat ', '')), h('small', {}, 'empty'));
+        b.addEventListener('click', () => this.panels.show({ kind: 'flat', id: f.id }));
+        return b;
+      }),
     );
-    const counts = new Map<string, number>();
-    for (const f of furniture) {
-      const name = furnitureDef(f.def).name;
-      counts.set(name, (counts.get(name) ?? 0) + 1);
-    }
-    body.replaceChildren(
-      h('div', { className: 'score-head' }, h('b', { className: 'tier' }, score.tier), h('span', {}, `Impressiveness ${score.score}`)),
-      h('div', { className: 'meters' }, ...factors),
-      h('p', { className: 'hint-line' }, fixHint(score)),
-      h(
-        'p',
-        { className: 'people-line' },
-        residents.length === 0 ? 'Nobody lives here.' : 'Lives here: ',
-        ...residents.flatMap((p, i) => [
-          i > 0 ? ', ' : '',
-          h('button', { type: 'button', className: 'link', onclick: () => this.showPawn(p) }, p.name),
-        ]),
-      ),
-      h('div', { className: 'chips' }, ...[...counts].map(([name, n]) => h('span', { className: 'chip' }, n > 1 ? `${name} ×${n}` : name))),
-    );
-    if (furniture.length === 0) body.append(h('p', { className: 'note' }, 'Stripped back to the brick. Nothing in it yet.'));
-    if (!flat.enclosed) body.append(h('p', { className: 'note' }, 'Open to the weather: it needs walls and a ceiling all round.'));
   }
 
-  private pawnTab: 'thoughts' | 'needs' = 'thoughts';
+  private alerts(): Alert[] {
+    const sim = this.sim;
+    const st = sim.state;
+    const out: Alert[] = [];
+    const m = st.mortgage;
+    if (m.missed > 0) out.push({ key: 'missed', title: `${m.missed} of 4 payments missed`, sub: `${pounds(m.arrears)} in arrears`, colour: 'var(--bad)', urgent: true, open: { kind: 'money' } });
+    const daysToMonday = (7 - ((sim.day - 1) % 7)) % 7 || 7;
+    const empty = sim.layout.flats.filter((f) => !flatInfo(sim, f.id).lease).length;
+    const due = m.paidOffDay === undefined ? Math.min(m.balance, m.payment + m.arrears) + BILLS.insurance + BILLS.lighting + BILLS.bins + BILLS.emptyFlatTax * empty : 0;
+    if (daysToMonday <= 2 && st.money < due) out.push({ key: 'short', title: 'Short for Monday', sub: `Need ${pounds(due - st.money)} more`, colour: 'var(--bad)', urgent: true, open: { kind: 'money' } });
+    for (const p of st.pawns) {
+      if (!p.life || p.life.leaving) continue;
+      const lines = linesFor(p);
+      if (p.life.liking < lines.extreme) out.push({ key: `risk${p.id}`, title: `${p.name.split(' ')[0]} may leave`, sub: `Liking ${Math.round(p.life.liking)}`, colour: 'var(--bad)', urgent: true, open: { kind: 'pawn', id: p.id } });
+      else if (p.life.liking < lines.major) out.push({ key: `fed${p.id}`, title: `${p.name.split(' ')[0]} is fed up`, sub: `Liking ${Math.round(p.life.liking)}`, colour: 'var(--low)', open: { kind: 'pawn', id: p.id } });
+    }
+    for (const f of sim.layout.flats) {
+      const info = flatInfo(sim, f.id);
+      if (info.lease?.owed) out.push({ key: `owed${f.id}`, title: 'Rent owed', sub: `${f.name} · ${pounds(info.lease.owed)}`, colour: 'var(--low)', open: { kind: 'flat', id: f.id } });
+      if (info.lease?.notice) out.push({ key: `notice${f.id}`, title: `${f.name} leaving`, sub: `Out on day ${info.lease.notice.day}`, colour: 'var(--low)', open: { kind: 'flat', id: f.id } });
+      const n = st.applicants.filter((a) => a.flat === f.id).length;
+      if (!info.lease && n > 0) out.push({ key: `apps${f.id}`, title: `${f.name} empty`, sub: `${n} applicant${n > 1 ? 's' : ''}`, colour: '#8d9097', open: { kind: 'applicants', flat: f.id } });
+    }
+    for (const l of st.post.filter((x) => x.choices && x.chosen === undefined)) {
+      out.push({ key: `letter${l.id}`, title: 'Needs an answer', sub: l.title, colour: 'var(--ok)', open: { kind: 'post', letter: l.id } });
+    }
+    return out.slice(0, 7);
+  }
 
-  private renderPawn(): void {
-    if (this.showing?.kind !== 'pawn') return;
-    const id = this.showing.id;
-    const p = this.sim.state.pawns.find((o) => o.id === id);
-    if (!p) {
-      this.closeInfo();
-      return;
-    }
-    el('info-title').textContent = p.name;
-    const body = el('info-body');
-    const life = p.life;
-    if (!life) {
-      el('info-sub').textContent = p.kind === 'agent' ? 'Shows flats to people. Has keys to everything.' : 'Just walking past.';
-      if (body.textContent !== p.doing) body.replaceChildren(h('p', {}, p.doing));
-      return;
-    }
-    const flat = this.sim.layout.flat(life.flat);
-    const job = life.job ? `${life.job.title}, ${hhmm(life.job.leave)} to ${hhmm(life.job.back)} weekdays` : 'Works from home';
-    el('info-sub').textContent = `${flat?.name ?? 'No flat'} · ${job}`;
-    const thoughts = thoughtsOf(this.sim, p);
-    const target = likingTarget(thoughts);
-    const doing = life.away ? `${life.away.why} (back about ${hhmm(minuteOf(life.away.until))})` : p.doing;
-    const key = JSON.stringify([this.pawnTab, Math.round(life.liking), target, doing, thoughts, this.pawnTab === 'needs' ? Object.values(life.needs).map((v) => Math.round(v * 50)) : 0]);
-    if (body.dataset.key === key) return;
-    body.dataset.key = key;
-    const liking = Math.round(life.liking);
-    const trend = target > liking + 1 ? '↑' : target < liking - 1 ? '↓' : '';
-    const tab = (id: 'thoughts' | 'needs', label: string) =>
-      h('button', { type: 'button', role: 'tab', 'aria-selected': String(this.pawnTab === id), onclick: () => { this.pawnTab = id; this.renderPawn(); } }, label);
-    const page =
-      this.pawnTab === 'thoughts'
-        ? h(
-            'div',
-            { className: 'thoughts' },
-            ...thoughts.map((t) => h('div', { className: 'thought' }, h('span', {}, t.label), h('b', { className: t.value > 0 ? 'good' : t.value < 0 ? 'bad' : '' }, signed(t.value)))),
-            h('div', { className: 'thought total' }, h('span', {}, `Adds up to (from ${BASELINE})`), h('b', {}, String(Math.round(target)))),
-          )
-        : h('div', { className: 'meters' }, ...(Object.keys(NEED_NAMES) as NeedId[]).map((n) => meter(NEED_NAMES[n], life.needs[n] * 100)));
-    body.replaceChildren(
-      h('p', { className: 'doing' }, doing),
-      h(
-        'div',
-        { className: 'liking' },
-        h('div', { className: 'liking-num' }, h('b', {}, String(liking)), h('span', {}, `${likingWord(liking)} ${trend}`)),
-        h('div', { className: 'track big' }, h('div', { className: `fill ${liking < 35 ? 'low' : ''}`, style: `width:${liking}%` }), h('div', { className: 'target', style: `left:${target}%` })),
-        h('p', { className: 'small' }, 'How much they like living here'),
-      ),
-      h('div', { className: 'tabs', role: 'tablist' }, tab('thoughts', 'Thoughts'), tab('needs', 'Needs')),
-      page,
+  private renderAlerts(): void {
+    const list = this.alerts();
+    const key = JSON.stringify(list.map((a) => [a.key, a.title, a.sub]));
+    if (key === this.lastAlerts) return;
+    this.lastAlerts = key;
+    el('alerts').replaceChildren(
+      ...list.map((a) => {
+        const b = h('button', { type: 'button', className: `alert ${a.urgent ? 'urgent' : ''}`, style: `--c:${a.colour}` }, h('b', {}, a.title), h('span', {}, a.sub));
+        b.addEventListener('click', () => this.panels.show(a.open));
+        return b;
+      }),
+    );
+  }
+
+  private renderMoneyPop(): void {
+    const st = this.sim.state;
+    const todayStart = (this.sim.day - 1) * TICKS_PER_DAY;
+    const today = st.ledger.filter((e) => e.tick >= todayStart);
+    this.moneyPop.replaceChildren(
+      ...today.slice(-6).map((e) => h('div', { className: 'row' }, h('span', {}, `${hhmm(Math.floor((e.tick % TICKS_PER_DAY) / TICKS_PER_MINUTE))} ${e.label}`), h('b', { className: e.amount >= 0 ? 'pos' : 'neg' }, pounds(e.amount, true)))),
+      today.length === 0 ? h('div', { className: 'row' }, h('span', {}, 'Nothing in or out yet today.')) : '',
+      h('div', { className: 'row total' }, h('span', {}, 'Now'), h('b', {}, pounds(st.money))),
+      h('p', { className: 'small muted', style: 'margin:6px 0 0' }, 'Tap for the full money page.'),
     );
   }
 }
 
-function signed(v: number): string {
-  const r = Math.round(v * 10) / 10;
-  return r > 0 ? `+${r}` : String(r);
-}
-
-function likingWord(v: number): string {
-  if (v >= 80) return 'Loves it here';
-  if (v >= 60) return 'Settled';
-  if (v >= 40) return 'Getting by';
-  if (v >= 20) return 'Fed up';
-  return 'Wants out';
-}
-
-function minuteOf(tick: number): number {
-  return Math.floor((tick % TICKS_PER_DAY) / TICKS_PER_MINUTE);
-}
-
-function meter(label: string, value: number, note?: string): HTMLElement {
-  const v = Math.round(value);
-  return h(
-    'div',
-    { className: `meter ${note ? 'weakest' : ''}` },
-    h('span', {}, label, note ? h('small', {}, ` ${note}`) : ''),
-    h('div', { className: 'track' }, h('div', { className: `fill ${v < 30 ? 'low' : ''}`, style: `width:${v}%` })),
-    h('b', {}, String(v)),
-  );
-}
-
-function fixHint(score: FlatScore): string {
-  switch (score.weakest) {
-    case 'space':
-      return 'To improve it: more room per person. Fewer people, or knock through.';
-    case 'furnishing':
-      return 'To improve it: more (or better) furniture.';
-    case 'basics': {
-      const missing = [!score.has.bed && 'a bed', !score.has.toilet && 'a toilet', !score.has.wash && 'a shower or bath', !score.has.kitchen && 'a cooker and fridge'].filter(Boolean);
-      return `To improve it: it needs ${missing.join(', ')}.`;
-    }
-    case 'light':
-      return 'To improve it: a window or a lamp.';
-    case 'decor':
-      return 'To improve it: pictures, plants, a mirror.';
-  }
-}
+// Little pixel icons for the tabs, drawn from 8x8 grids.
+const GRIDS: Record<string, string[]> = {
+  building: ['..####..', '.#....#.', '########', '#.##.#.#', '########', '#.#..#.#', '#.#..#.#', '########'],
+  people: ['.##..##.', '.##..##.', '........', '####.###', '####.###', '####.###', '........', '........'],
+  money: ['..####..', '.#....#.', '#..###.#', '#..#...#', '#.####.#', '#..#...#', '.#####..', '..####..'],
+  post: ['........', '########', '##....##', '#.#..#.#', '#..##..#', '#......#', '########', '........'],
+  build: ['####....', '#####...', '####.#..', '...#.#..', '....#.#.', '.....#.#', '......##', '........'],
+};
+const ICONS: Record<string, string> = Object.fromEntries(
+  Object.entries(GRIDS).map(([name, rows]) => {
+    let r = '';
+    rows.forEach((row, y) => [...row].forEach((c, x) => {
+      if (c === '#') r += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+    }));
+    return [name, `<svg viewBox="0 0 8 8" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">${r}</svg>`];
+  }),
+);

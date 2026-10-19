@@ -42,11 +42,11 @@ const MEAN_SHARE = 0.65;
 const cache = new WeakMap<Sim, { key: string; scores: Map<string, FlatScore> }>();
 
 export function occupants(sim: Sim, flatId: string): number {
-  return sim.state.pawns.filter((p) => p.life?.flat === flatId).length;
+  return sim.state.pawns.filter((p) => p.life?.flat === flatId && !p.life.leaving).length;
 }
 
 export function flatScore(sim: Sim, flatId: string): FlatScore {
-  const key = `${sim.version}|${sim.state.pawns.filter((p) => p.life).map((p) => p.life!.flat).join(',')}`;
+  const key = `${sim.version}|${sim.state.pawns.filter((p) => p.life && !p.life.leaving).map((p) => p.life!.flat).join(',')}`;
   let c = cache.get(sim);
   if (!c || c.key !== key) {
     c = { key, scores: new Map() };
@@ -60,20 +60,25 @@ export function flatScore(sim: Sim, flatId: string): FlatScore {
   return s;
 }
 
-function computeScore(sim: Sim, flatId: string): FlatScore {
+/** How a flat would score with this many people in it (for applicants). */
+export function scoreFor(sim: Sim, flatId: string, people: number): FlatScore {
+  return computeScore(sim, flatId, people);
+}
+
+function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatScore {
   const lay = sim.layout;
   const flat = lay.flat(flatId);
   const nodes = flat ? flat.rooms.flatMap((r) => lay.rooms[r].nodes) : [];
   const inFlat = new Set(nodes);
   const furniture = sim.state.furniture.filter((f) => inFlat.has(lay.node(f.x, f.s)));
   const defs = furniture.map((f) => furnitureDef(f.def));
-  const people = Math.max(1, occupants(sim, flatId));
+  const people = Math.max(1, peopleOverride ?? occupants(sim, flatId));
   const perPerson = nodes.length / people;
   const has = {
     bed: defs.some((d) => d.id === 'bed' || d.id === 'doubleBed'),
     toilet: defs.some((d) => d.id === 'toilet'),
     wash: defs.some((d) => d.id === 'shower' || d.id === 'bath'),
-    kitchen: defs.some((d) => d.id === 'cooker') && defs.some((d) => d.id === 'fridge'),
+    kitchen: defs.some((d) => d.id === 'cooker' || d.id === 'fridge'),
   };
   // Windows in the flat's walls (either side of any of its tiles).
   let windows = 0;

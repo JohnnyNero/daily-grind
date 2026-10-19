@@ -8,11 +8,12 @@ import { furnitureDef, spotColumns, type Offer } from './defs';
 import { flatScore } from './impressiveness';
 import type { Flat } from './layout';
 import { findPath } from './layout';
-import { FIRST, LAST, keysOf, setGoal } from './pawns';
+import { keysOf, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type Life, type NeedId, type Pawn } from './state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type Life, type NeedId, type Pawn, type Person } from './state';
 import { forget, likingTarget, remember, thoughtsOf } from './thoughts';
+import { has } from './traits';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -45,36 +46,37 @@ const SOFA_SLEEP: Offer = { need: 'sleep', rate: 1 / 8.5, minutes: [420, 540], p
 
 const ON_THE_FLOOR = -1;
 
-const JOBS = ['Office manager', 'Nurse', 'Barista', 'Civil servant', 'Delivery driver', 'Teaching assistant', 'Software tester', 'Estate agent'];
+export type { Person };
 
 // ------------------------------------------------------------------ moving in
 
-/** A new household moves into a flat: `size` people, most of them with jobs. */
-export function moveIn(sim: Sim, flatId: string, size: number): Pawn[] {
+/** A household moves into a flat. `revealed` are the traits you already know about (the first person's). */
+export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: string[] = []): Pawn[] {
   const st = sim.state;
   const lay = sim.layout;
   const flat = lay.flat(flatId);
   if (!flat) throw new Error(`No flat ${flatId}`);
-  const nodes = flat.rooms.flatMap((r) => lay.rooms[r].nodes);
-  const surname = pick(st, LAST);
+  const nodes = flat.rooms.flatMap((r) => lay.rooms[r].nodes).filter((n) => !lay.isDoorNode(n));
   const out: Pawn[] = [];
-  for (let i = 0; i < size; i++) {
+  people.forEach((person, i) => {
     const [x, s] = lay.xs(pick(st, nodes));
-    // The first has a nine-to-five; others might work from home.
-    const works = i === 0 || random(st) < 0.5;
-    const leave = randInt(st, 7 * 4, 9 * 4) * 15;
     const life: Life = {
       flat: flatId,
       needs: { sleep: 0.8, food: 0.7, hygiene: 0.8, bladder: 0.8, fun: 0.6, comfort: 0.6 },
       memories: [],
       liking: 50,
-      job: works ? { leave, back: leave + randInt(st, 32, 40) * 15, title: pick(st, JOBS) } : null,
+      job: person.job ? { ...person.job } : null,
       away: null,
       using: null,
+      traits: [...person.traits],
+      revealed: i === 0 ? revealed.filter((r) => person.traits.includes(r)) : [],
+      under: { minor: 0, major: 0, extreme: 0 },
+      calmUntil: 0,
+      since: sim.day,
     };
     const p: Pawn = {
       id: st.nextId++,
-      name: `${pick(st, FIRST.filter((n) => !out.some((o) => o.name.startsWith(`${n} `))))} ${i === 0 || random(st) < 0.5 ? surname : pick(st, LAST)}`,
+      name: person.name,
       kind: 'tenant',
       x,
       s,
@@ -85,13 +87,14 @@ export function moveIn(sim: Sim, flatId: string, size: number): Pawn[] {
       doing: 'Settling in',
       waitUntil: 0,
       flat: flatId,
-      look: { skin: randInt(st, 0, 5), hair: randInt(st, 0, 7), top: randInt(st, 0, 9), legs: randInt(st, 0, 5) },
+      look: { ...person.look },
       facing: 1,
       life,
+      note: person.note,
     };
     st.pawns.push(p);
     out.push(p);
-  }
+  });
   for (const p of out) p.life!.liking = likingTarget(thoughtsOf(sim, p));
   return out;
 }
@@ -105,6 +108,7 @@ export function minuteOfLife(sim: Sim, p: Pawn): void {
   const using = life.using && life.using.until > 0 ? offerOf(sim, life.using) : null;
   for (const need of Object.keys(DECAY) as NeedId[]) {
     let rate = -DECAY[need];
+    if (need === 'fun' && has(life, 'partyAnimal')) rate *= 1.4;
     if (life.away) {
       // At work: lunch and a loo are sorted; comfort is a desk chair.
       if (need === 'food') rate *= 0.35;
@@ -141,16 +145,20 @@ function isWorkday(sim: Sim): boolean {
 
 /** When they wake up and go to bed, in minutes of the day. */
 function wakeAt(sim: Sim, life: Life): number {
-  return life.job && isWorkday(sim) ? life.job.leave - 75 : 8 * 60 + 30;
+  if (life.job && isWorkday(sim)) return life.job.leave - 75;
+  return has(life, 'nightOwl') ? 10 * 60 + 30 : 8 * 60 + 30;
 }
 
-function bedtime(sim: Sim): number {
-  return (sim.day - 1) % 7 >= 4 ? 24 * 60 - 1 : 23 * 60;
+/** Bedtime, in minutes after midnight the night before (so past midnight is over 24 * 60). */
+function bedtime(sim: Sim, life: Life): number {
+  const weekend = (sim.day - 1) % 7 >= 4;
+  return (weekend ? 24 * 60 - 1 : 23 * 60) + (has(life, 'nightOwl') ? 120 : 0);
 }
 
 function asleepHours(sim: Sim, life: Life): boolean {
   const m = sim.minuteOfDay;
-  return m >= bedtime(sim) || m < wakeAt(sim, life);
+  const bed = bedtime(sim, life);
+  return (bed < 24 * 60 ? m >= bed : m < bed - 24 * 60) || m < wakeAt(sim, life);
 }
 
 export function tenantThink(sim: Sim, p: Pawn): void {
@@ -163,6 +171,11 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   delete p.pose;
   const flat = home(sim, p);
   const edge = p.exit === 0 ? 0 : st.w - 1;
+  if (life.leaving && p.task !== 'leave') {
+    life.outing = { why: 'Moved out', until: st.tick };
+    p.task = 'leave';
+    p.doing = 'Moving out';
+  }
   // Off out: to work, or for whatever the flat doesn't have.
   if (p.task === 'leave') {
     if (Math.round(p.x) === edge && Math.round(p.s) === 0) {
@@ -391,6 +404,10 @@ function goAway(sim: Sim, p: Pawn): void {
   const st = sim.state;
   const out = life.outing ?? { why: 'Out', until: st.tick + TICKS_PER_HOUR };
   delete life.outing;
+  if (life.leaving) {
+    st.pawns.splice(st.pawns.indexOf(p), 1);
+    return;
+  }
   life.away = { until: Math.max(st.tick + 15 * TICKS_PER_MINUTE, out.until), why: out.why };
   if (out.why === 'At work') life.workedDay = sim.day;
   p.doing = out.why;

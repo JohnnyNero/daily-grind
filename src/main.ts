@@ -5,6 +5,7 @@ import { TICKS_PER_MINUTE } from './sim/state';
 import { BuildUi } from './ui/buildUi';
 import { el } from './ui/dom';
 import { Hud } from './ui/hud';
+import { Panels } from './ui/panels';
 import { attachInput } from './ui/input';
 
 /** At 1x an in-game minute takes 2.5 real seconds, so a day takes about an hour. */
@@ -45,19 +46,21 @@ function play(sim: Sim): void {
   let speed = 1;
   let resetting = false;
 
-  const hud = new Hud(sim, (s) => {
+  const panels = new Panels(sim, (text, bad) => hud.notify(text, bad));
+  const hud = new Hud(sim, panels, (s) => {
     speed = s;
     hud.showSpeed(speed);
   });
   hud.showSpeed(speed);
-  hud.onClose = () => {
+  panels.onClose = () => {
     renderer.selectedPawn = null;
   };
   const build = new BuildUi(sim, renderer);
+  hud.onBuild = () => build.start();
 
   function fitView(): void {
     const top = topbar.getBoundingClientRect().bottom;
-    const bottom = build.active ? el('buildbar').offsetHeight : 64;
+    const bottom = build.active ? el('buildbar').offsetHeight : el('tabbar').offsetHeight;
     renderer.fit(8, top + 8, window.innerWidth - 16, window.innerHeight - top - bottom - 16);
   }
   function onResize(): void {
@@ -68,11 +71,6 @@ function play(sim: Sim): void {
   onResize();
   build.onToggle = fitView;
   el('recentre').addEventListener('click', fitView);
-
-  el('build-open').addEventListener('click', () => {
-    hud.closeInfo();
-    build.start();
-  });
 
   attachInput(canvas, renderer.camera, {
     onDragStart: (x, y) => build.dragStart(x, y),
@@ -87,15 +85,15 @@ function play(sim: Sim): void {
       const p = renderer.pawnAt(x, y);
       if (p) {
         renderer.selectedPawn = p.id;
-        hud.showPawn(p);
+        panels.show({ kind: 'pawn', id: p.id });
         return;
       }
       const cell = renderer.cellAt(x, y);
       const flat = cell && cell.r < 3 ? sim.layout.flatAt(cell.x, cell.s) : undefined;
       if (flat) {
         renderer.selectedPawn = null;
-        hud.showFlat(flat.id);
-      } else hud.closeInfo();
+        panels.show({ kind: 'flat', id: flat.id });
+      } else panels.close();
     },
   });
 
@@ -127,8 +125,7 @@ function play(sim: Sim): void {
       hud.notify(err instanceof Error ? err.message : "Couldn't load that file.", true);
     }
   });
-  el('menu-new').addEventListener('click', () => {
-    if (!confirm('Start again with a new building? This one will be gone.')) return;
+  const startAgain = () => {
     resetting = true;
     try {
       localStorage.removeItem(SAVE_KEY);
@@ -136,7 +133,18 @@ function play(sim: Sim): void {
       // Nothing to clear.
     }
     location.reload();
+  };
+  // Starting again needs a second tap to confirm (the page can't show a confirm box everywhere).
+  let armed = false;
+  el('menu-new').addEventListener('click', () => {
+    if (!armed) {
+      armed = true;
+      el('menu-new').textContent = 'Tap again to throw this building away';
+      return;
+    }
+    startAgain();
   });
+  el('end-new').addEventListener('click', startAgain);
 
   const doSave = () => {
     if (!resetting) save(sim);
@@ -150,7 +158,6 @@ function play(sim: Sim): void {
   let last = performance.now();
   let carry = 0;
   let lastView = '';
-  let lastVersion = sim.version;
   function frame(now: number): void {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
@@ -158,15 +165,17 @@ function play(sim: Sim): void {
     const ticks = Math.min(MAX_TICKS_PER_FRAME, Math.floor(carry));
     carry -= ticks;
     sim.run(ticks);
-    if (sim.version !== lastVersion) {
-      lastVersion = sim.version;
-      hud.refresh();
+    if (sim.state.repossessed !== undefined && el('endscreen').hidden) {
+      el('endscreen').hidden = false;
+      el('end-body').textContent = `Four missed mortgage payments, and on day ${sim.state.repossessed} Northfold Building Society took the building. The tenants have been told. Some of them are pleased.`;
+      speed = 0;
+      hud.showSpeed(speed);
     }
     const c = renderer.camera;
     const view = `${c.ox}|${c.oy}|${c.scale}|${renderer.selectedPawn}|${renderer.build.version}|${sim.version}`;
     if (ticks > 0 || view !== lastView) renderer.draw();
     lastView = view;
-    hud.update(now, speed);
+    hud.update(now);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

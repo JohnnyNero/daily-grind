@@ -3,7 +3,13 @@
 // each upper floor, a one-bed on the ground floor, and the top one-bed stripped to the brick.
 
 import { placeFurniture, placeSegment, placeStair } from './build';
-import { TICKS_PER_HOUR, key, type State } from './state';
+import { MORTGAGE, POUND, START_MONEY, TIER_RENT, flatInfo } from './economy';
+import { flatScore } from './impressiveness';
+import { makePerson, sittingTenants } from './leases';
+import { LAST } from './pawns';
+import { pick } from './rng';
+import type { Sim } from './sim';
+import { SAVE_VERSION, TICKS_PER_HOUR, key, type State } from './state';
 
 const STREET = 10;
 const PLOT_W = 28;
@@ -11,7 +17,7 @@ const STOREYS = 3;
 
 export function newState(seed: number): State {
   const st: State = {
-    version: 1,
+    version: SAVE_VERSION,
     seed,
     rng: seed | 0,
     tick: 8 * TICKS_PER_HOUR,
@@ -24,6 +30,13 @@ export function newState(seed: number): State {
     furniture: [],
     pawns: [],
     timers: { passerby: 8 * TICKS_PER_HOUR, agent: 9 * TICKS_PER_HOUR },
+    money: START_MONEY,
+    mortgage: { ...MORTGAGE, missed: 0, arrears: 0 },
+    flats: {},
+    applicants: [],
+    post: [],
+    ledger: [],
+    notices: [],
   };
   buildShell(st);
   return st;
@@ -91,4 +104,30 @@ function buildShell(st: State): void {
     put('mirror', 25, s, 1);
     put('shower', 26, s);
   }
+}
+
+/**
+ * The sitting tenants the building comes with, on old cheap rolling tenancies: a couple in
+ * the ground-floor one-bed and someone retired in the top-floor studio.
+ */
+export function startingTenants(sim: Sim): void {
+  const st = sim.state;
+  const flats = sim.layout.flats;
+  const surname = pick(st, LAST);
+  if (flats[0]) sittingTenants(sim, flats[0].id, [makePerson(st, surname, true), makePerson(st, surname)], 70 * POUND);
+  if (flats[3]) sittingTenants(sim, flats[3].id, [makePerson(st, undefined, false)], 55 * POUND);
+  // Going rates start from how the flats score with their tenants in.
+  for (const f of flats) {
+    const info = flatInfo(sim, f.id);
+    info.tier = flatScore(sim, f.id).tier;
+    if (!info.lease) info.asking = TIER_RENT[info.tier];
+  }
+  st.post.push({
+    id: st.nextId++,
+    day: 1,
+    from: 'Northfold Building Society',
+    title: 'Welcome to your mortgage',
+    body: `Congratulations on your purchase. Your payment of £${MORTGAGE.payment / POUND} is due every Monday. Miss four in a row and the building becomes ours, which we mention only for completeness.`,
+    read: false,
+  });
 }

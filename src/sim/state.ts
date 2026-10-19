@@ -16,7 +16,7 @@ export const TICKS_PER_MINUTE = 60;
 export const TICKS_PER_HOUR = 60 * TICKS_PER_MINUTE;
 export const TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 /**
  * What fills one storey-high slot in a column. Doors: an inside door, a flat's front door
@@ -96,6 +96,19 @@ export interface Life {
   workedDay?: number;
   /** How they slept last: in a bed, on the sofa or the floor (for the morning's memory). */
   sleptOn?: 'bed' | 'sofa' | 'floor';
+  /** Personality: two or three traits. */
+  traits: string[];
+  /** The traits you know about. */
+  revealed: string[];
+  /** Ticks spent below each unhappiness line, and when they can next kick off. */
+  under: { minor: number; major: number; extreme: number };
+  calmUntil: number;
+  /** Day they moved in. */
+  since: number;
+  /** Moving out: heading off for good. */
+  leaving?: boolean;
+  /** Took any flat going; there's a catch. */
+  desperate?: boolean;
 }
 
 export interface Pawn {
@@ -130,6 +143,8 @@ export interface Pawn {
   pose?: 'sit' | 'sleep';
   /** Tenants only. */
   life?: Life;
+  /** How they describe themselves: their job, or "Retired". */
+  note?: string;
 }
 
 export interface State {
@@ -151,6 +166,118 @@ export interface State {
   pawns: Pawn[];
   /** The next time someone walks past on the street, and when the agent next calls round. */
   timers: { passerby: number; agent: number };
+  /** In pence. */
+  money: number;
+  mortgage: Mortgage;
+  flats: Record<string, FlatInfo>;
+  applicants: Applicant[];
+  post: Letter[];
+  ledger: LedgerEntry[];
+  /** The day the bank took the building, if it has. */
+  repossessed?: number;
+  /** Short news for the player, newest last. */
+  notices: { tick: number; text: string }[];
+}
+
+/** A tenancy: who rents a flat, for how much, and how it's going. Money is in pence. */
+export interface Lease {
+  /** Weekly rent, in pence. */
+  rent: number;
+  /** A rent change waiting out its notice: the new weekly rent and when it starts. */
+  rise?: { rent: number; from: number };
+  startDay: number;
+  /** Last day of the fixed term; null for an old rolling tenancy. */
+  endDay: number | null;
+  deposit: number;
+  /** Rent owed and unpaid, in pence. */
+  owed: number;
+  /** Days paid on time, late, and held back. */
+  paid: number;
+  late: number;
+  /** Notice given: by whom, why, and the day they go. */
+  notice?: { by: 'tenant' | 'landlord'; why: string; day: number };
+  /** A sitting tenant on an old, cheap tenancy. */
+  sitting?: boolean;
+  /** Held back on purpose until this tick. */
+  withholdUntil?: number;
+  /** Days already paid for in advance. */
+  prepaid?: number;
+}
+
+export interface FlatInfo {
+  /** Asking rent for an empty flat, weekly, in pence. */
+  asking: number;
+  listed: boolean;
+  /** The tier its going rate is set by; it only drops after a few days below. */
+  tier: string;
+  belowSince?: number;
+  lease: Lease | null;
+  nextApplicant: number;
+}
+
+/** Someone moving in: who they are, their job if they have one, and their traits. */
+export interface Person {
+  name: string;
+  job: { title: string; leave: number; back: number } | null;
+  /** How they describe themselves (their job, or "Retired"). */
+  note: string;
+  look: Pawn['look'];
+  traits: string[];
+}
+
+export interface Applicant {
+  id: number;
+  flat: string;
+  people: Person[];
+  traits: string[];
+  /** The one you know about. */
+  shown: string;
+  /** What their references say, hinting at the rest. */
+  hints: string[];
+  /** Weekly rent they'll pay, in pence. */
+  offer: number;
+  /** Gone if you don't decide by this tick. */
+  until: number;
+  /** Comes with a catch you find out later. */
+  desperate?: boolean;
+}
+
+export interface Letter {
+  id: number;
+  day: number;
+  from: string;
+  title: string;
+  body: string;
+  read: boolean;
+  /** For a decision: the choices, the day it's due and what happens if you don't choose. */
+  choices?: { label: string; note: string; act: string }[];
+  dueDay?: number;
+  fallback?: number;
+  chosen?: number;
+  /** The flat or person it's about. */
+  flat?: string;
+  pawn?: number;
+}
+
+export interface LedgerEntry {
+  tick: number;
+  label: string;
+  /** Pence: positive in, negative out. */
+  amount: number;
+}
+
+export interface Mortgage {
+  /** Still owed, in pence. */
+  balance: number;
+  /** Due every Monday, in pence. */
+  payment: number;
+  /** Yearly interest, as a fraction. */
+  rate: number;
+  /** Payments missed in a row. */
+  missed: number;
+  arrears: number;
+  /** The day it was paid off. */
+  paidOffDay?: number;
 }
 
 export const key = (x: number, s: number): string => `${x},${s}`;

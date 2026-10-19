@@ -22,8 +22,10 @@ import {
   snapshot,
   stairIn,
   stairProblem,
+  type BuildParts,
 } from '../sim/build';
 import { FURNITURE, furnitureDef } from '../sim/defs';
+import { DEMOLISH_PRICE, FLOOR_PRICE, RESALE, SEGMENT_PRICE, STAIRS_PRICE, book, furniturePrice, pounds } from '../sim/economy';
 import type { Sim } from '../sim/sim';
 import { ROOM_ROWS, key, type Segment } from '../sim/state';
 import { drawFurniture } from '../render/art';
@@ -116,11 +118,47 @@ export class BuildUi {
     this.renderer.build.version++;
   }
 
-  /** Runs a change to the building, keeping an undo step if anything changed. */
-  private change(fn: () => unknown, keepUndo = true): void {
-    const before = snapshot(this.sim.state);
+  /** The building and the money, for undo. */
+  private snap(): string {
+    const st = this.sim.state;
+    return JSON.stringify({ parts: snapshot(st), money: st.money, ledger: st.ledger.length });
+  }
+
+  private restoreSnap(json: string): void {
+    const s = JSON.parse(json) as { parts: string; money: number; ledger: number };
+    const st = this.sim.state;
+    restore(st, s.parts);
+    st.money = s.money;
+    st.ledger.length = Math.min(st.ledger.length, s.ledger);
+  }
+
+  /**
+   * Charges for what changed since `before` (the parts as they were). If it can't be
+   * afforded, puts the parts back and says so.
+   */
+  private pay(before: string): string | null {
+    const st = this.sim.state;
+    const cost = buildCost(JSON.parse(before) as BuildParts, JSON.parse(snapshot(st)) as BuildParts);
+    if (cost === 0) return null;
+    if (cost > 0 && st.money < cost) {
+      restore(st, before);
+      return `Can't afford that: it's ${pounds(cost)} and you have ${pounds(st.money)}`;
+    }
+    book(this.sim, cost > 0 ? 'Building work' : 'Sold furniture', -cost);
+    return null;
+  }
+
+  /** Runs a change to the building, keeping an undo step if anything changed. Returns why it didn't happen, if it didn't. */
+  private change(fn: () => unknown, keepUndo = true): string | null {
+    const before = this.snap();
+    const parts = snapshot(this.sim.state);
     fn();
-    if (snapshot(this.sim.state) === before) return;
+    const problem = this.pay(parts);
+    if (problem) {
+      this.setHint(problem, true);
+      return problem;
+    }
+    if (this.snap() === before) return null;
     if (keepUndo) {
       this.undo.push(before);
       if (this.undo.length > MAX_UNDO) this.undo.shift();
@@ -128,12 +166,13 @@ export class BuildUi {
     this.sim.changed();
     this.bump();
     this.updateButtons();
+    return null;
   }
 
   private doUndo(): void {
     const prev = this.undo.pop();
     if (!prev) return;
-    restore(this.sim.state, prev);
+    this.restoreSnap(prev);
     this.renderer.build.selected = null;
     this.sim.changed();
     this.bump();
@@ -157,12 +196,12 @@ export class BuildUi {
     this.tools.replaceChildren();
     if (this.tab === 'structure') {
       for (const t of TOOLS) {
-        const b = h('button', { type: 'button', 'aria-pressed': String(t.id === this.tool), onclick: () => this.pickTool(t.id) }, toolIcon(t.id), t.name);
+        const b = h('button', { type: 'button', 'aria-pressed': String(t.id === this.tool), onclick: () => this.pickTool(t.id) }, toolIcon(t.id), t.name, h('small', {}, toolPrice(t.id)));
         this.tools.append(b);
       }
     } else {
       for (const d of FURNITURE) {
-        const b = h('button', { type: 'button', 'aria-pressed': String(d.id === this.piece), onclick: () => this.pickPiece(d.id) }, pieceIcon(d.id), d.name);
+        const b = h('button', { type: 'button', 'aria-pressed': String(d.id === this.piece), onclick: () => this.pickPiece(d.id) }, pieceIcon(d.id), d.name, h('small', {}, pounds(furniturePrice(d.id))));
         this.tools.append(b);
       }
     }
@@ -218,11 +257,11 @@ export class BuildUi {
       const under = furnitureAt(this.sim.state, cell.x, cell.s, cell.r);
       if (sel === null || under?.id !== sel) return false;
       this.drag = { start: cell, last: cell, moved: false, furniture: sel };
-      this.undo.push(snapshot(this.sim.state));
+      this.undo.push(this.snap());
       return true;
     }
     this.drag = { start: cell, last: cell, moved: false };
-    if (this.tool !== 'room') this.undo.push(snapshot(this.sim.state));
+    if (this.tool !== 'room') this.undo.push(this.snap());
     this.preview(cell);
     return true;
   }
@@ -266,10 +305,11 @@ export class BuildUi {
     if (this.tool === 'room') {
       if (Math.abs(d.last.x - d.start.x) < 2) this.setHint('Make it at least three tiles wide.', true);
       else this.change(() => buildRoom(this.sim.state, d.start.x, d.start.s, d.last.x, d.last.s));
+
     } else if (!d.moved) {
       this.undo.pop();
       this.apply(d.start, d.start, true);
-    } else if (this.undo.length > 0 && this.undo[this.undo.length - 1] === snapshot(this.sim.state)) {
+    } else if (this.undo.length > 0 && this.undo[this.undo.length - 1] === this.snap()) {
       this.undo.pop();
     }
     this.renderer.build.marks = [];
@@ -283,7 +323,7 @@ export class BuildUi {
     if (d && d.furniture === undefined && this.tool !== 'room') {
       const prev = this.undo.pop();
       if (prev) {
-        restore(this.sim.state, prev);
+        this.restoreSnap(prev);
         this.sim.changed();
       }
     }
@@ -304,9 +344,14 @@ export class BuildUi {
         const out = fn();
         if (typeof out === 'string') problem = out;
       };
-      if (single) this.change(go);
-      else {
+      if (single) {
+        const p = this.change(go);
+        if (p) problem = p;
+      } else {
+        const parts = snapshot(st);
         go();
+        const p = this.pay(parts);
+        if (p) problem = p;
         this.sim.changed();
         this.bump();
       }
@@ -368,9 +413,10 @@ export class BuildUi {
     }
     const spot = this.spotFor(this.piece, cell);
     let result: ReturnType<typeof placeFurniture> = 'Nothing placed';
-    this.change(() => {
+    const cantAfford = this.change(() => {
       result = placeFurniture(st, this.piece!, spot.x, spot.s, spot.r, this.flip);
     });
+    if (cantAfford) return;
     if (typeof result === 'string') this.setHint(result, true);
     else this.setHint(null);
     this.updateButtons();
@@ -483,4 +529,32 @@ function toolIcon(t: Tool): HTMLCanvasElement {
       break;
   }
   return c;
+}
+
+// ------------------------------------------------------------------ prices
+
+function toolPrice(t: Tool): string {
+  if (t === 'room') return 'by the part';
+  if (t === 'floor') return `${pounds(FLOOR_PRICE)} a tile`;
+  if (t === 'stairs') return pounds(STAIRS_PRICE);
+  if (t === 'demolish') return pounds(DEMOLISH_PRICE);
+  return pounds(SEGMENT_PRICE[t]);
+}
+
+/** What a change to the building costs: new parts at their price, knocking down at a flat fee, furniture taken out sold back cheap. */
+export function buildCost(before: BuildParts, after: BuildParts): number {
+  let cost = 0;
+  for (const [k, seg] of Object.entries(after.walls)) if (before.walls[k] !== seg) cost += SEGMENT_PRICE[seg];
+  for (const k of Object.keys(before.walls)) if (!(k in after.walls)) cost += DEMOLISH_PRICE;
+  for (const k of Object.keys(after.slabs)) if (!before.slabs[k]) cost += FLOOR_PRICE;
+  for (const k of Object.keys(before.slabs)) if (!after.slabs[k]) cost += DEMOLISH_PRICE;
+  const stairsBefore = new Set(before.stairs.map((s) => s.id));
+  const stairsAfter = new Set(after.stairs.map((s) => s.id));
+  for (const id of stairsAfter) if (!stairsBefore.has(id)) cost += STAIRS_PRICE;
+  for (const id of stairsBefore) if (!stairsAfter.has(id)) cost += DEMOLISH_PRICE;
+  const furnBefore = new Map(before.furniture.map((f) => [f.id, f]));
+  const furnAfter = new Set(after.furniture.map((f) => f.id));
+  for (const f of after.furniture) if (!furnBefore.has(f.id)) cost += furniturePrice(f.def);
+  for (const f of before.furniture) if (!furnAfter.has(f.id)) cost -= Math.round(furniturePrice(f.def) * RESALE);
+  return cost;
 }

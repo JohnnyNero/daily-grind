@@ -2,6 +2,7 @@
 // anything missing or broken is filled in or dropped rather than refusing to load.
 
 import { isFurniture } from './defs';
+import { MORTGAGE, START_MONEY } from './economy';
 import { Sim } from './sim';
 import { SAVE_VERSION, type State } from './state';
 
@@ -27,6 +28,22 @@ function normalize(raw: Partial<State>): State {
   st.furniture = (st.furniture ?? []).filter((f) => isFurniture(f.def));
   st.pawns ??= [];
   st.timers ??= { passerby: st.tick, agent: st.tick };
+  // Version 2 added money, leases, letters and traits.
+  st.money ??= START_MONEY;
+  st.mortgage ??= { ...MORTGAGE, missed: 0, arrears: 0 };
+  st.flats ??= {};
+  st.applicants ??= [];
+  st.post ??= [];
+  st.ledger ??= [];
+  st.notices ??= [];
+  for (const p of st.pawns) {
+    if (!p.life) continue;
+    p.life.traits ??= [];
+    p.life.revealed ??= [];
+    p.life.under ??= { minor: 0, major: 0, extreme: 0 };
+    p.life.calmUntil ??= 0;
+    p.life.since ??= 1;
+  }
   st.nextId = Math.max(st.nextId ?? 1, ...st.furniture.map((f) => f.id + 1), ...st.stairs.map((t) => t.id + 1), ...st.pawns.map((p) => p.id + 1));
   return st;
 }

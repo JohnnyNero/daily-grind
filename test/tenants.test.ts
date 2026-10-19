@@ -9,11 +9,17 @@ import { BASELINE, likingTarget, thoughtsOf } from '../src/sim/thoughts';
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life);
 
 describe('tenants', () => {
-  it('a couple live in Flat 1 from the start', () => {
+  it('the building comes with sitting tenants: a couple in Flat 1 and one person in Flat 4', () => {
     const sim = Sim.create(4);
     const ts = tenants(sim);
-    expect(ts).toHaveLength(2);
-    expect(new Set(ts.map((p) => p.life!.flat))).toEqual(new Set([sim.layout.flats[0].id]));
+    expect(ts).toHaveLength(3);
+    const flats = sim.layout.flats;
+    expect(ts.filter((p) => p.life!.flat === flats[0].id)).toHaveLength(2);
+    expect(ts.filter((p) => p.life!.flat === flats[3].id)).toHaveLength(1);
+    for (const p of ts) {
+      expect(p.life!.traits.length).toBeGreaterThanOrEqual(2);
+      expect(sim.state.flats[p.life!.flat].lease?.sitting).toBe(true);
+    }
   });
 
   it('live a month without getting stuck, and every point of liking is a listed thought', () => {
