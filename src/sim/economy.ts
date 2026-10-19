@@ -5,6 +5,7 @@
 import { furnitureDef } from './defs';
 import { flatScore, TIERS } from './impressiveness';
 import type { Sim } from './sim';
+import { CLEANER_WEEKLY, gasBill } from './environment';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type FlatInfo, type Letter, type Segment } from './state';
 
 export const POUND = 100;
@@ -48,6 +49,7 @@ export const SEGMENT_PRICE: Record<Segment, number> = {
 export const FLOOR_PRICE = 50 * POUND;
 export const STAIRS_PRICE = 900 * POUND;
 export const DEMOLISH_PRICE = 20 * POUND;
+export const INSULATE_PRICE = 120 * POUND;
 /** What you get back for furniture you take out. */
 export const RESALE = 0.3;
 
@@ -133,6 +135,13 @@ export function morning(sim: Sim): void {
   }
 }
 
+/** What Monday's bills come to (not the mortgage). */
+export function billsDue(sim: Sim): number {
+  const st = sim.state;
+  const empty = sim.layout.flats.filter((f) => !flatInfo(sim, f.id).lease).length;
+  return BILLS.insurance + BILLS.lighting + BILLS.bins + BILLS.emptyFlatTax * empty + gasBill(sim) + (st.cleaner ? CLEANER_WEEKLY : 0);
+}
+
 export function weeklyBills(sim: Sim): void {
   const st = sim.state;
   const empty = sim.layout.flats.filter((f) => !flatInfo(sim, f.id).lease).length;
@@ -140,6 +149,9 @@ export function weeklyBills(sim: Sim): void {
   book(sim, 'Stairwell lighting', -BILLS.lighting);
   book(sim, 'Bin collection', -BILLS.bins);
   if (empty > 0) book(sim, `Council tax on ${empty} empty flat${empty > 1 ? 's' : ''}`, -BILLS.emptyFlatTax * empty);
+  const gas = gasBill(sim);
+  if (gas > 0) book(sim, 'Gas for the central boiler', -gas);
+  if (st.cleaner) book(sim, 'Cleaner for the stairs', -CLEANER_WEEKLY);
   if (st.money < 0) book(sim, 'Overdraft charge', -10 * POUND);
 }
 

@@ -9,11 +9,12 @@ export interface BuildParts {
   slabs: State['slabs'];
   stairs: Stair[];
   furniture: Furniture[];
+  insulated: State['insulated'];
 }
 
 /** The parts that can change in build mode, as a copy (for undo). */
 export function snapshot(s: State): string {
-  const parts: BuildParts = { walls: s.walls, slabs: s.slabs, stairs: s.stairs, furniture: s.furniture };
+  const parts: BuildParts = { walls: s.walls, slabs: s.slabs, stairs: s.stairs, furniture: s.furniture, insulated: s.insulated };
   return JSON.stringify(parts);
 }
 
@@ -23,6 +24,29 @@ export function restore(s: State, json: string): void {
   s.slabs = parts.slabs;
   s.stairs = parts.stairs;
   s.furniture = parts.furniture;
+  s.insulated = parts.insulated ?? {};
+}
+
+// ------------------------------------------------------------------ insulation
+
+/** Wall tiles are "w:x,s", floor tiles "f:x,level" (level 0 is the ground floor's floor). */
+export function insulateProblem(st: State, part: string): string | null {
+  if (st.insulated[part]) return 'Already insulated';
+  const [kind, rest] = part.split(':');
+  const [x, n] = rest.split(',').map(Number);
+  if (!inPlot(st, x)) return 'Outside your plot';
+  if (kind === 'w') {
+    const seg = st.walls[key(x, n)];
+    if (seg !== 'wall' && seg !== 'window') return 'Insulate a wall, not a door or a gap';
+  } else if (n > 0 && st.slabs[key(x, n)] !== true) return 'No floor there';
+  return null;
+}
+
+export function insulate(st: State, part: string): string | null {
+  const problem = insulateProblem(st, part);
+  if (problem) return problem;
+  st.insulated[part] = true;
+  return null;
 }
 
 const inPlot = (st: State, x: number) => x >= st.plot.x0 && x <= st.plot.x1;
@@ -65,6 +89,7 @@ export function placeSegment(st: State, x: number, s: number, seg: Segment): str
 export function removeSegment(st: State, x: number, s: number): boolean {
   if (!inPlot(st, x) || st.walls[key(x, s)] === undefined) return false;
   delete st.walls[key(x, s)];
+  delete st.insulated[`w:${key(x, s)}`];
   return true;
 }
 
@@ -96,6 +121,7 @@ export function removeSlab(st: State, x: number, level: number): string | null {
   const problem = slabRemoveProblem(st, x, level);
   if (problem) return problem;
   delete st.slabs[key(x, level)];
+  delete st.insulated[`f:${key(x, level)}`];
   return null;
 }
 

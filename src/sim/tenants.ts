@@ -14,6 +14,11 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type Life, type NeedId, type Pawn, type Person } from './state';
 import { forget, likingTarget, remember, thoughtsOf } from './thoughts';
 import { has } from './traits';
+import { SHARED, dirtOf, isNight, noiseReaching, tempOf, tidy, warmthOf } from './environment';
+import { noticeTrait } from './outcomes';
+import { post, recently } from './chat';
+import { rememberAbout } from './social';
+import { hhmm } from './time';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -22,10 +27,12 @@ export const NEED_NAMES: Record<NeedId, string> = {
   bladder: 'Bladder',
   fun: 'Fun',
   comfort: 'Comfort',
+  warmth: 'Warmth',
+  quiet: 'Quiet',
 };
 
-/** How fast each need runs down while awake, per game hour. */
-const DECAY: Record<NeedId, number> = {
+/** How fast each need runs down while awake, per game hour. Warmth and quiet come from the building instead. */
+const DECAY: Record<Exclude<NeedId, 'warmth' | 'quiet'>, number> = {
   sleep: 1 / 17,
   food: 1 / 7,
   hygiene: 1 / 30,
@@ -35,7 +42,7 @@ const DECAY: Record<NeedId, number> = {
 };
 
 /** Below this, they go and do something about it. */
-const SEEK: Record<NeedId, number> = { sleep: 0.15, food: 0.4, hygiene: 0.3, bladder: 0.35, fun: 0.4, comfort: 0.35 };
+const SEEK: Record<keyof typeof DECAY, number> = { sleep: 0.15, food: 0.4, hygiene: 0.3, bladder: 0.35, fun: 0.4, comfort: 0.35 };
 
 /** Eating a meal they've cooked: sitting down if there's a seat. */
 const EAT: Offer = { need: 'food', rate: 3, minutes: [15, 25], pose: 'sit', doing: 'Eating' };
@@ -62,7 +69,8 @@ export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: str
     const [x, s] = lay.xs(pick(st, nodes));
     const life: Life = {
       flat: flatId,
-      needs: { sleep: 0.8, food: 0.7, hygiene: 0.8, bladder: 0.8, fun: 0.6, comfort: 0.6 },
+      needs: { sleep: 0.8, food: 0.7, hygiene: 0.8, bladder: 0.8, fun: 0.6, comfort: 0.6, warmth: 1, quiet: 1 },
+      social: [],
       memories: [],
       liking: 50,
       job: person.job ? { ...person.job } : null,
@@ -106,7 +114,7 @@ export function minuteOfLife(sim: Sim, p: Pawn): void {
   const life = p.life!;
   const per = 1 / 60;
   const using = life.using && life.using.until > 0 ? offerOf(sim, life.using) : null;
-  for (const need of Object.keys(DECAY) as NeedId[]) {
+  for (const need of Object.keys(DECAY) as (keyof typeof DECAY)[]) {
     let rate = -DECAY[need];
     if (need === 'fun' && has(life, 'partyAnimal')) rate *= 1.4;
     if (life.away) {
@@ -123,10 +131,43 @@ export function minuteOfLife(sim: Sim, p: Pawn): void {
     }
     life.needs[need] = Math.max(0, Math.min(1, life.needs[need] + rate * per));
   }
+  buildingNeeds(sim, p);
   // Liking eases towards what their thoughts add up to.
   const target = likingTarget(thoughtsOf(sim, p));
   life.liking += (target - life.liking) * 0.02;
   if (sim.state.tick % TICKS_PER_HOUR === 0) forget(sim, life);
+}
+
+/**
+ * Warmth and quiet come from the building: they drift towards how warm the flat is and how
+ * much noise is getting in. Asleep at night with the neighbours loud, they're kept awake.
+ */
+function buildingNeeds(sim: Sim, p: Pawn): void {
+  const life = p.life!;
+  if (life.away) return;
+  const warm = warmthOf(tempOf(sim, life.flat));
+  life.needs.warmth += (warm - life.needs.warmth) * 0.03;
+  const { amount, loudest } = noiseReaching(sim, sim.noise(), life.flat);
+  const night = isNight(sim);
+  const felt = amount * (has(life, 'lightSleeper') ? 2 : 1) * (night ? 1.5 : 1);
+  const quiet = 1 - Math.min(1, felt / 4);
+  life.needs.quiet += (quiet - life.needs.quiet) * (quiet < life.needs.quiet ? 0.15 : 0.03);
+  if (p.pose === 'sleep' && night && felt >= 1.5 && loudest) {
+    const recent = life.memories.some((m) => m.id === 'keptAwake' && sim.state.tick - m.at < 3 * TICKS_PER_HOUR);
+    if (recent) return;
+    const from = loudest === SHARED ? 'the stairwell' : (sim.layout.flat(loudest)?.name ?? 'next door');
+    life.memories.push({ id: 'keptAwake', at: sim.state.tick, note: `Kept awake by ${from}` });
+    if (has(life, 'lightSleeper')) noticeTrait(sim, p, 'lightSleeper');
+    if (loudest !== SHARED) {
+      for (const n of sim.state.pawns.filter((o) => o.life?.flat === loudest)) rememberAbout(sim, p, 'noise', n);
+      if (!recently(sim, 'Some of us are trying to sleep')) {
+        post(sim, p, `Some of us are trying to sleep. ${from}, it's ${hhmm(sim.minuteOfDay)}`, [
+          { label: `Have a word with ${from}`, note: `${from} won't thank you; ${p.name.split(' ')[0]} will`, act: `word:${loudest}` },
+          { label: 'Not my business', note: `${p.name.split(' ')[0]} will remember`, act: 'notMine' },
+        ]);
+      }
+    }
+  }
 }
 
 // ------------------------------------------------------------------ deciding
@@ -195,6 +236,14 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   }
   const here = sim.layout.flatAt(Math.round(p.x), Math.round(p.s));
   if (here?.id !== flat.id || sim.layout.isDoorNode(sim.layout.node(Math.round(p.x), Math.round(p.s)))) {
+    // On the way in, a look at the post in the lobby: where neighbours bump into each other.
+    const room = sim.layout.roomOf[sim.layout.node(Math.round(p.x), Math.round(p.s))];
+    if (room !== -1 && sim.layout.rooms[room].shared && life.postDay !== sim.day && random(st) < 0.6) {
+      life.postDay = sim.day;
+      p.doing = random(st) < 0.3 ? 'Reading a leaflet about bins' : 'Checking the post';
+      p.waitUntil = st.tick + randInt(st, 3, 8) * TICKS_PER_MINUTE;
+      return;
+    }
     goHome(sim, p, flat);
     return;
   }
@@ -235,6 +284,22 @@ export function tenantThink(sim: Sim, p: Pawn): void {
     }
   }
   if (needs.comfort < SEEK.comfort && tryUse(sim, p, flat, 'comfort')) return;
+  // Musicians practise in the evenings (night owls until nearly midnight).
+  const practiseUntil = has(life, 'nightOwl') ? 23 * 60 + 30 : 21 * 60 + 30;
+  if (has(life, 'musician') && m >= 18 * 60 && m < practiseUntil && needs.fun < 0.85 && random(st) < 0.3) {
+    p.doing = 'Practising';
+    life.needs.fun = Math.min(1, needs.fun + 0.3);
+    p.waitUntil = st.tick + randInt(st, 30, 60) * TICKS_PER_MINUTE;
+    return;
+  }
+  // Tidying up, unless they're messy. House-proud tenants can't leave it.
+  const dirt = dirtOf(sim, flat.id);
+  if (!has(life, 'messy') && dirt > (has(life, 'houseProud') ? 0.15 : 0.45)) {
+    p.doing = 'Tidying up';
+    tidy(sim, flat.id, 0.5);
+    p.waitUntil = st.tick + randInt(st, 20, 40) * TICKS_PER_MINUTE;
+    return;
+  }
   potter(sim, p, flat);
 }
 
@@ -452,6 +517,18 @@ function goHome(sim: Sim, p: Pawn, flat: Flat): void {
 function potter(sim: Sim, p: Pawn, flat: Flat): void {
   const st = sim.state;
   const lay = sim.layout;
+  // Sociable types hang about on the landing outside their door, in the hope of a chat.
+  const life = p.life!;
+  const m = sim.minuteOfDay;
+  if ((has(life, 'friendly') || has(life, 'busybody') || has(life, 'partyAnimal')) && m >= 9 * 60 && m < 21 * 60 && random(st) < 0.25) {
+    const door = flat.doors[0].split(',').map(Number);
+    const outside = [door[0] - 1, door[0] + 1].map((x) => lay.node(x, door[1])).find((n) => lay.roomOf[n] !== -1 && lay.rooms[lay.roomOf[n]].shared);
+    if (outside !== undefined && setGoal(sim, p, lay.xs(outside))) {
+      p.doing = 'Hanging about on the landing';
+      p.waitUntil = st.tick + randInt(st, 10, 25) * TICKS_PER_MINUTE;
+      return;
+    }
+  }
   if (p.life!.needs.comfort < 0.8 && random(st) < 0.4 && tryUse(sim, p, flat, 'comfort')) return;
   const nodes = flatNodes(sim, flat).filter((n) => !lay.isDoorNode(n));
   if (nodes.length > 0) setGoal(sim, p, lay.xs(pick(st, nodes)));

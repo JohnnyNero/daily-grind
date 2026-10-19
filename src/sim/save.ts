@@ -36,8 +36,19 @@ function normalize(raw: Partial<State>): State {
   st.post ??= [];
   st.ledger ??= [];
   st.notices ??= [];
+  // Version 3 added the neighbours: insulation, the boiler, dirt, warmth, noise, the chat.
+  st.insulated ??= {};
+  st.boiler ??= 1;
+  st.cleaner ??= false;
+  st.dirt ??= {};
+  st.temps ??= {};
+  st.noiseAvg ??= {};
+  st.chat ??= [];
   for (const p of st.pawns) {
     if (!p.life) continue;
+    p.life.social ??= [];
+    p.life.needs.warmth ??= 1;
+    p.life.needs.quiet ??= 1;
     p.life.traits ??= [];
     p.life.revealed ??= [];
     p.life.under ??= { minor: 0, major: 0, extreme: 0 };

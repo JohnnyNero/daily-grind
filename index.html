@@ -43,6 +43,13 @@
 
   <div class="alerts" id="alerts" aria-label="Alerts"></div>
 
+  <div class="overlays" id="overlays" role="group" aria-label="Show on the building">
+    <button type="button" data-overlay="none" aria-pressed="true">Off</button>
+    <button type="button" data-overlay="noise" aria-pressed="false">Noise</button>
+    <button type="button" data-overlay="warmth" aria-pressed="false">Warmth</button>
+    <button type="button" data-overlay="liking" aria-pressed="false">Liking</button>
+  </div>
+
   <button type="button" class="toast" id="toast" hidden></button>
 
   <button type="button" class="recentre" id="recentre" aria-label="Fit the building to the screen">
@@ -53,6 +60,7 @@
     <button type="button" data-tab="building" aria-current="page"><span class="ic" data-icon="building"></span>Building</button>
     <button type="button" data-tab="people"><span class="ic" data-icon="people"></span>People</button>
     <button type="button" data-tab="money"><span class="ic" data-icon="money"></span>Money</button>
+    <button type="button" data-tab="chat"><span class="ic" data-icon="chat"></span>Chat<span class="badge" id="chat-badge" hidden></span></button>
     <button type="button" data-tab="post"><span class="ic" data-icon="post"></span>Post<span class="badge" id="post-badge" hidden></span></button>
     <button type="button" data-tab="build"><span class="ic" data-icon="build"></span>Build</button>
   </nav>

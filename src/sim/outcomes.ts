@@ -9,6 +9,7 @@
 
 import { POUND, book, flatInfo, letter, pounds } from './economy';
 import { newApplicant } from './leases';
+import { post, recently } from './chat';
 import { pick, random } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type Pawn } from './state';
@@ -83,6 +84,12 @@ interface Outcome {
 const from = (sim: Sim, p: Pawn) => `${p.name}, ${sim.layout.flat(p.life!.flat)?.name ?? 'your building'}`;
 
 const OUTCOMES: Outcome[] = [
+  {
+    level: 'minor',
+    run(sim, p, straw) {
+      if (!recently(sim, straw)) post(sim, p, `${straw}. Just saying. @Landlord`);
+    },
+  },
   {
     level: 'minor',
     run(sim, p, straw) {

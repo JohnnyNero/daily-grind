@@ -8,6 +8,7 @@ import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
 import { MAX_STOREYS, ROOM_ROWS, STOREY_ROWS, TILE, TICKS_PER_MINUTE, isDoor, type Pawn, type Segment } from '../sim/state';
+import { SHARED, floorKey, noiseReaching, tempOf, wallKey, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
 
 const SKY_ROWS = 4;
@@ -53,6 +54,8 @@ export class Renderer {
   private layerVersion = -1;
   private lightMap: HTMLCanvasElement = document.createElement('canvas');
   private lightKey = '';
+  /** A tint over each flat: noise getting in, warmth, or how much they like it. */
+  overlay: 'none' | 'noise' | 'warmth' | 'liking' = 'none';
   /** How far open each door is, and which way it swings. */
   private doors = new Map<string, { open: number; dir: 1 | -1 }>();
   private dpr = 1;
@@ -152,6 +155,7 @@ export class Renderer {
     this.drawSky();
     ctx.setTransform(this.dpr * c.scale, 0, 0, this.dpr * c.scale, this.dpr * c.ox, this.dpr * c.oy);
     ctx.drawImage(this.layer, 0, 0);
+    this.drawDirt(ctx);
     this.drawDoors(ctx);
     const pawns = this.visiblePawns().sort((a, b) => Number(!!a.front) - Number(!!b.front));
     for (const p of pawns) {
@@ -170,6 +174,7 @@ export class Renderer {
       }
     }
     this.drawLight(ctx);
+    if (this.overlay !== 'none') this.drawOverlay(ctx);
     if (this.build.active) this.drawBuild();
     // Text at screen resolution.
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -340,6 +345,11 @@ export class Renderer {
     rect(ctx, X, y, TILE, TILE, PAL.slab);
     for (let xx = X + (level % 2); xx < X + TILE; xx += 2) rect(ctx, xx, y + TILE - 2, 1, 1, dark(PAL.slab, 0.25));
     rect(ctx, X, y + TILE - 1, TILE, 1, PAL.outline);
+    if (this.sim.state.insulated[floorKey(x, level)]) {
+      // A layer of insulation in the floor.
+      rect(ctx, X, y + 4, TILE, 5, '#e3c45a');
+      for (let i = 0; i < TILE; i += 4) rect(ctx, X + i + (level % 2) * 2, y + 5, 2, 3, '#c9a63e');
+    }
     this.drawFloorTop(ctx, x, y);
   }
 
@@ -390,16 +400,21 @@ export class Renderer {
       rect(ctx, bx - 1, top, 1, h, PAL.outline);
       rect(ctx, bx + bw, top, 1, h, PAL.outline);
     };
+    const insulated = !!this.sim.state.insulated[wallKey(x, s)];
+    const lagged = (top: number, h: number) => {
+      body(top, h);
+      if (insulated && h > 0) for (let yy = top + 1; yy < top + h - 1; yy += 4) rect(ctx, bx + 1, yy, bw - 2, 2, '#e3c45a');
+    };
     if (seg === 'window') {
-      body(y, 8);
-      body(y + 38, H - 38);
+      lagged(y, 8);
+      lagged(y + 38, H - 38);
       rect(ctx, X + 7, y + 8, 2, 30, PAL.glass);
       rect(ctx, X + 7, y + 20, 2, 1, light(PAL.glass, 0.6));
       box(ctx, X + 2, y + 37, 12, 3, PAL.white);
     } else if (isDoor(seg)) {
       body(y, H - DOOR_H - 1);
       box(ctx, X + 1, y + H - DOOR_H - 2, TILE - 2, 3, PAL.woodDark);
-    } else body(y, H);
+    } else lagged(y, H);
   }
 
   private drawStairs(ctx: CanvasRenderingContext2D, x: number, s: number, dir: 1 | -1): void {
@@ -449,6 +464,54 @@ export class Renderer {
       const left = state.dir === 1 ? hinge : hinge - w;
       box(ctx, left, F - DOOR_H, w, DOOR_H, leaf);
       if (w > 4) rect(ctx, state.dir === 1 ? left + w - 3 : left + 2, F - 15, 1, 2, PAL.poster);
+    }
+  }
+
+  // ------------------------------------------------------------------ dirt and overlays
+
+  /** Specks on the floor where it's dirty, more the dirtier it is. */
+  private drawDirt(ctx: CanvasRenderingContext2D): void {
+    const lay = this.sim.layout;
+    const dirt = this.sim.state.dirt;
+    for (const room of lay.rooms) {
+      if (room.outdoor) continue;
+      const d = room.flat !== null ? (dirt[room.flat] ?? 0) : room.shared ? (dirt[SHARED] ?? 0) : 0;
+      if (d < 0.15) continue;
+      const count = Math.floor(d * 6);
+      for (const n of room.nodes) {
+        const [x, s] = lay.xs(n);
+        const F = floorY(s);
+        for (let i = 0; i < count; i++) {
+          const hsh = ((n * 73 + i * 151) * 2654435761) >>> 0;
+          rect(ctx, x * TILE + (hsh % 15), F - 1 - ((hsh >> 5) % 2), 1 + ((hsh >> 8) % 2), 1, '#4a3324aa');
+        }
+        if (d > 0.6 && n % 3 === 0) rect(ctx, x * TILE + 3, F - 30, 8, 6, '#6b5a3a33');
+      }
+    }
+  }
+
+  private drawOverlay(ctx: CanvasRenderingContext2D): void {
+    const sim = this.sim;
+    const lay = sim.layout;
+    const made = sim.noise();
+    for (const f of lay.flats) {
+      let v: number;
+      if (this.overlay === 'noise') v = 1 - Math.min(1, noiseReaching(sim, made, f.id).amount / 3);
+      else if (this.overlay === 'warmth') v = warmthOf(tempOf(sim, f.id));
+      else {
+        const people = sim.state.pawns.filter((p) => p.life?.flat === f.id && !p.life.leaving);
+        if (people.length === 0) continue;
+        v = people.reduce((n, p) => n + p.life!.liking, 0) / people.length / 100;
+      }
+      const colour = v >= 0.6 ? '#5f9a4c' : v >= 0.4 ? '#d6a63c' : v >= 0.25 ? '#d9813a' : '#c4523f';
+      ctx.globalAlpha = 0.45;
+      for (const r of f.rooms) {
+        for (const n of lay.rooms[r].nodes) {
+          const [x, s] = lay.xs(n);
+          rect(ctx, x * TILE, floorY(s) - ROOM_ROWS * TILE, TILE, ROOM_ROWS * TILE, colour);
+        }
+      }
+      ctx.globalAlpha = 1;
     }
   }
 
@@ -584,6 +647,25 @@ export class Renderer {
       ctx.fillRect(sx - w / 2, sy, w, size + 4);
       ctx.fillStyle = '#f3efe6';
       ctx.fillText(f.name, sx, sy + 2);
+    }
+    // Speech bubbles over anyone talking.
+    const tick = this.sim.state.tick;
+    ctx.font = `700 ${Math.max(10, Math.min(14, c.scale * 4))}px system-ui, sans-serif`;
+    for (const p of this.visiblePawns()) {
+      if (!p.bubble || p.bubble.until <= tick || p.pose === 'sleep') continue;
+      const { px, py } = this.feet(p);
+      const [sx, sy] = toScreen(px, py - 26);
+      const w = Math.max(18, ctx.measureText(p.bubble.text).width + 10);
+      const hgt = 18;
+      ctx.fillStyle = p.bubble.text === '!' ? '#f6d2ca' : '#fbf7ef';
+      ctx.strokeStyle = PAL.outline;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(sx - w / 2, sy - hgt - 6, w, hgt, 5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = PAL.outline;
+      ctx.fillText(p.bubble.text, sx, sy - hgt - 3);
     }
     // Name tags under people, once zoomed in enough to read.
     if (c.scale < 1.6) return;

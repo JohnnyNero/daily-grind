@@ -29,9 +29,7 @@ export function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-export function hhmm(minutes: number): string {
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-}
+export { hhmm } from '../sim/time';
 
 /** Wires a panel's `.tabs` buttons to its `.tab-page`s (matched by data-tab). The first tab starts open. */
 let tabIds = 0;

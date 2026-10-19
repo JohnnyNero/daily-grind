@@ -16,7 +16,7 @@ export const TICKS_PER_MINUTE = 60;
 export const TICKS_PER_HOUR = 60 * TICKS_PER_MINUTE;
 export const TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /**
  * What fills one storey-high slot in a column. Doors: an inside door, a flat's front door
@@ -56,12 +56,25 @@ export interface Furniture {
 
 export type PawnKind = 'agent' | 'passerby' | 'tenant';
 
-export type NeedId = 'sleep' | 'food' | 'hygiene' | 'bladder' | 'fun' | 'comfort';
+export type NeedId = 'sleep' | 'food' | 'hygiene' | 'bladder' | 'fun' | 'comfort' | 'warmth' | 'quiet';
 
 /** A remembered moment that colours how someone feels for a while. */
 export interface Memory {
   id: string;
   /** Tick it happened. */
+  at: number;
+  /** Words for this one ("Kept awake by Flat 3"), instead of the usual label. */
+  note?: string;
+  /** Heard about rather than lived: who from, and how many tellings away. */
+  from?: number;
+  hops?: number;
+}
+
+/** A memory about another person, which is what an opinion is made of. */
+export interface SocialMemory {
+  id: string;
+  /** Who it's about. */
+  about: number;
   at: number;
 }
 
@@ -109,6 +122,17 @@ export interface Life {
   leaving?: boolean;
   /** Took any flat going; there's a catch. */
   desperate?: boolean;
+  /** Memories about other people. */
+  social: SocialMemory[];
+  /** Their partner (a pawn id) and their exes. */
+  partner?: number;
+  exes?: number[];
+  /** Tick of their last chat with anyone, so they don't talk non-stop. */
+  lastTalk?: number;
+  /** A pet, if you said yes. */
+  pet?: string;
+  /** The day they last stopped for the post on the way in. */
+  postDay?: number;
 }
 
 export interface Pawn {
@@ -141,6 +165,10 @@ export interface Pawn {
   frontTo?: number;
   /** How they're posed: sitting or lying down (standing if missing). */
   pose?: 'sit' | 'sleep';
+  /** Stopped to talk until this tick. */
+  talkUntil?: number;
+  /** A speech bubble over their head, and when it goes. */
+  bubble?: { text: string; until: number };
   /** Tenants only. */
   life?: Life;
   /** How they describe themselves: their job, or "Retired". */
@@ -177,6 +205,35 @@ export interface State {
   repossessed?: number;
   /** Short news for the player, newest last. */
   notices: { tick: number; text: string }[];
+  /** Insulated walls and floors: "w:x,s" and "f:x,level". Quieter and warmer. */
+  insulated: Record<string, true>;
+  /** The central boiler: 0 off to 3 high. */
+  boiler: number;
+  /** A cleaner does the stairs and lobby every morning. */
+  cleaner: boolean;
+  /** How dirty each flat is (by id) and the shared parts ("shared"), 0 to 1. */
+  dirt: Record<string, number>;
+  /** Each flat's temperature, in degrees. */
+  temps: Record<string, number>;
+  /** How noisy each flat has been lately (0 to about 10), for its impressiveness. */
+  noiseAvg: Record<string, number>;
+  /** The building group chat. */
+  chat: ChatMessage[];
+}
+
+export interface ChatMessage {
+  id: number;
+  tick: number;
+  /** A tenant's pawn id, or 0 for you. */
+  from: number;
+  /** Their name and flat at the time, as shown. */
+  who: string;
+  text: string;
+  /** A request you can answer. */
+  choices?: { label: string; note: string; act: string }[];
+  chosen?: number;
+  /** You didn't answer in time. */
+  ignored?: boolean;
 }
 
 /** A tenancy: who rents a flat, for how much, and how it's going. Money is in pence. */

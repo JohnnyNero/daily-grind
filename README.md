@@ -9,7 +9,28 @@ implementation plan).
 
 ## Where it's up to
 
-Milestones 1 to 3 of 6: **the building**, **one household**, and **money and tenants**.
+Milestones 1 to 4 of 6: **the building**, **one household**, **money and tenants**, and
+**neighbours**.
+
+Milestone 4, neighbours:
+
+- Tenants who end up near each other (on the landing, checking the post, at home) talk:
+  chats, proper talks, slights, insults that turn into rows, flirting, favours, moaning
+  about you, and gossip. What they think of each other is the sum of their memories of
+  each other, with hidden chemistry for every pair. Friends cheer people up; rivals don't.
+  Couples get together and split up.
+- Gossip passes on what you did (rent rises, refusing, ignoring the chat) at less than half
+  strength, at most two tellings away. Tenants find out who pays less for a flat no better.
+- Noise from the telly, practising and rows passes through shared walls and floors; light
+  sleepers get kept awake and fall out with whoever's below. Insulate walls and floors in
+  build mode to cut it to a sixth and keep the heat in.
+- Every flat has a temperature: the seasons turn, the central boiler (Off to High, paid in
+  gas each week) heats it through the radiators. Dirt gets walked in and builds up; a
+  cleaner does the stairs; the bins overflow if there aren't enough.
+- The building group chat: tenants post when things happen, moan, and ask (a pet, the
+  heating, painting the bedroom). Your answers are seen by everyone; not answering is one.
+- Overlays show noise, warmth and liking across the building; flats show their temperature,
+  noise, insulation and dirt; tenants have a Social tab.
 
 Milestone 3, money and tenants:
 

@@ -110,6 +110,12 @@ function step(sim: Sim, p: Pawn): void {
       if (p.goal) setGoal(sim, p, p.goal);
     }
   }
+  // Stopped to talk.
+  if (p.talkUntil !== undefined) {
+    if (st.tick < p.talkUntil) return;
+    delete p.talkUntil;
+    if (!p.life?.using) p.doing = p.path.length > 0 ? 'Walking' : 'Pottering about';
+  }
   if (p.path.length > 0) {
     walk(p);
     return;

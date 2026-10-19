@@ -57,6 +57,9 @@ function play(sim: Sim): void {
   };
   const build = new BuildUi(sim, renderer);
   hud.onBuild = () => build.start();
+  hud.onOverlay = (mode) => {
+    renderer.overlay = mode;
+  };
 
   function fitView(): void {
     const top = topbar.getBoundingClientRect().bottom;
@@ -172,7 +175,7 @@ function play(sim: Sim): void {
       hud.showSpeed(speed);
     }
     const c = renderer.camera;
-    const view = `${c.ox}|${c.oy}|${c.scale}|${renderer.selectedPawn}|${renderer.build.version}|${sim.version}`;
+    const view = `${c.ox}|${c.oy}|${c.scale}|${renderer.selectedPawn}|${renderer.build.version}|${sim.version}|${renderer.overlay}`;
     if (ticks > 0 || view !== lastView) renderer.draw();
     lastView = view;
     hud.update(now);

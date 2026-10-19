@@ -95,7 +95,7 @@ describe('tenants', () => {
     const bare = flatScore(sim, lay.flats[4].id);
     expect(bare.tier).toBe('Grim');
     expect(one.score).toBeGreaterThan(bare.score);
-    const mean = Object.values(one.factors).reduce((a, b) => a + b, 0) / 5;
+    const mean = Object.values(one.factors).reduce((a, b) => a + b, 0) / Object.values(one.factors).length;
     expect(one.score).toBeLessThanOrEqual(Math.round(mean));
   });
 

@@ -22,17 +22,20 @@ import {
   snapshot,
   stairIn,
   stairProblem,
+  insulate,
+  insulateProblem,
   type BuildParts,
 } from '../sim/build';
 import { FURNITURE, furnitureDef } from '../sim/defs';
-import { DEMOLISH_PRICE, FLOOR_PRICE, RESALE, SEGMENT_PRICE, STAIRS_PRICE, book, furniturePrice, pounds } from '../sim/economy';
+import { DEMOLISH_PRICE, FLOOR_PRICE, INSULATE_PRICE, RESALE, SEGMENT_PRICE, STAIRS_PRICE, book, furniturePrice, pounds } from '../sim/economy';
+import { floorKey, wallKey } from '../sim/environment';
 import type { Sim } from '../sim/sim';
 import { ROOM_ROWS, key, type Segment } from '../sim/state';
 import { drawFurniture } from '../render/art';
 import type { Cell, Renderer } from '../render/renderer';
 import { el, h } from './dom';
 
-type Tool = 'room' | Segment | 'floor' | 'stairs' | 'demolish';
+type Tool = 'room' | Segment | 'floor' | 'stairs' | 'insulate' | 'demolish';
 
 const TOOLS: { id: Tool; name: string; hint: string }[] = [
   { id: 'room', name: 'Room', hint: 'Drag across to mark out a room: walls at both ends, a floor and a ceiling.' },
@@ -43,6 +46,7 @@ const TOOLS: { id: Tool; name: string; hint: string }[] = [
   { id: 'entrance', name: 'Street door', hint: 'The way in from the street, on the ground floor.' },
   { id: 'floor', name: 'Floor', hint: 'Tap or drag along a storey to lay a floor (or a ceiling) there.' },
   { id: 'stairs', name: 'Stairs', hint: 'Tap where the stairs should start. "Turn round" makes them climb the other way.' },
+  { id: 'insulate', name: 'Insulate', hint: 'Tap a wall or a floor to insulate it: a quarter of the noise gets through, and the heat stays in.' },
   { id: 'demolish', name: 'Knock down', hint: 'Tap or drag to take out walls, doors, floors, stairs and furniture.' },
 ];
 
@@ -375,12 +379,24 @@ export class BuildUi {
       case 'demolish':
         run(() => this.demolish(cell.x, s, r));
         break;
+      case 'insulate': {
+        const part = this.insulatePart(cell.x, s, r);
+        if (!part) problem = 'Tap a wall, or a floor between storeys';
+        else run(() => insulate(st, part));
+        break;
+      }
       default:
         if (r === ROOM_ROWS) problem = 'Tap the storey, not the floor';
         else run(() => placeSegment(st, cell.x, s, this.tool as Segment));
     }
     if (problem) this.setHint(problem, true);
     else this.setHint(null);
+  }
+
+  /** The wall or floor tile the insulate tool means at a cell. */
+  private insulatePart(x: number, s: number, r: number): string | null {
+    if (r === ROOM_ROWS) return floorKey(x, s + 1);
+    return this.sim.state.walls[key(x, s)] ? wallKey(x, s) : null;
   }
 
   private demolish(x: number, s: number, r: number): string | null {
@@ -458,6 +474,11 @@ export class BuildUi {
     } else if (this.tool === 'floor') {
       const level = cell.r === ROOM_ROWS ? cell.s + 1 : cell.s;
       b.marks.push({ x: cell.x, s: level - 1, r: ROOM_ROWS, w: 1, h: 1, ok: level >= 1 && slabProblem(st, cell.x, level) === null });
+    } else if (this.tool === 'insulate') {
+      const part = this.insulatePart(cell.x, cell.s, cell.r);
+      const ok = part !== null && insulateProblem(st, part) === null;
+      if (cell.r === ROOM_ROWS) b.marks.push({ x: cell.x, s: cell.s, r: ROOM_ROWS, w: 1, h: 1, ok });
+      else b.marks.push({ x: cell.x, s: cell.s, r: 0, w: 1, h: ROOM_ROWS, ok });
     } else if (this.tool === 'demolish') {
       const ok = cell.r === ROOM_ROWS ? slabRemoveProblem(st, cell.x, cell.s + 1) === null : true;
       b.marks.push({ x: cell.x, s: cell.s, r: cell.r === ROOM_ROWS ? ROOM_ROWS : 0, w: 1, h: cell.r === ROOM_ROWS ? 1 : ROOM_ROWS, ok });
@@ -521,6 +542,10 @@ function toolIcon(t: Tool): HTMLCanvasElement {
     case 'stairs':
       for (let i = 0; i < 6; i++) r(4 + i * 4, 20 - i * 3, 4, 3 + i * 3, '#835a3c');
       break;
+    case 'insulate':
+      r(11, 2, 10, 21, '#d6c9b2');
+      for (let i = 0; i < 5; i++) r(12 + (i % 2) * 4, 3 + i * 4, 4, 3, '#e8c84a');
+      break;
     case 'demolish':
       r(14, 3, 4, 14, '#6b4a32');
       r(8, 3, 16, 6, '#56606d');
@@ -538,6 +563,7 @@ function toolPrice(t: Tool): string {
   if (t === 'floor') return `${pounds(FLOOR_PRICE)} a tile`;
   if (t === 'stairs') return pounds(STAIRS_PRICE);
   if (t === 'demolish') return pounds(DEMOLISH_PRICE);
+  if (t === 'insulate') return pounds(INSULATE_PRICE);
   return pounds(SEGMENT_PRICE[t]);
 }
 
@@ -556,5 +582,6 @@ export function buildCost(before: BuildParts, after: BuildParts): number {
   const furnAfter = new Set(after.furniture.map((f) => f.id));
   for (const f of after.furniture) if (!furnBefore.has(f.id)) cost += furniturePrice(f.def);
   for (const f of before.furniture) if (!furnAfter.has(f.id)) cost -= Math.round(furniturePrice(f.def) * RESALE);
+  for (const k of Object.keys(after.insulated ?? {})) if (!before.insulated?.[k]) cost += INSULATE_PRICE;
   return cost;
 }

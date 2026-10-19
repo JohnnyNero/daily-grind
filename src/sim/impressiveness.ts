@@ -1,13 +1,15 @@
-// How impressive a flat is. Five factors, each 0 to 100: space per person, how well it's
-// furnished, the basics (a bed, a loo, somewhere to wash, a kitchen), light and decoration.
+// How impressive a flat is. Eight factors, each 0 to 100: space per person, how well it's
+// furnished, the basics (a bed, a loo, somewhere to wash, a kitchen), light, decoration,
+// how clean it is, how warm, and how quiet.
 // The score is mostly their average, but the weakest one drags it down, and space is a
 // ceiling: a tiny flat can't be impressive however nice the sofa. Scores fall into named
 // tiers, and the tiers are what tenants notice.
 
 import { furnitureDef } from './defs';
 import type { Sim } from './sim';
+import { warmthOf } from './environment';
 
-export type FactorId = 'space' | 'furnishing' | 'basics' | 'light' | 'decor';
+export type FactorId = 'space' | 'furnishing' | 'basics' | 'light' | 'decor' | 'clean' | 'warmth' | 'quiet';
 
 export const FACTOR_NAMES: Record<FactorId, string> = {
   space: 'Space',
@@ -15,6 +17,9 @@ export const FACTOR_NAMES: Record<FactorId, string> = {
   basics: 'Basics',
   light: 'Light',
   decor: 'Decoration',
+  clean: 'Cleanliness',
+  warmth: 'Warmth',
+  quiet: 'Quiet',
 };
 
 export const TIERS: readonly { min: number; name: string }[] = [
@@ -46,7 +51,7 @@ export function occupants(sim: Sim, flatId: string): number {
 }
 
 export function flatScore(sim: Sim, flatId: string): FlatScore {
-  const key = `${sim.version}|${sim.state.pawns.filter((p) => p.life && !p.life.leaving).map((p) => p.life!.flat).join(',')}`;
+  const key = `${sim.version}|${Math.floor(sim.state.tick / 3600)}|${sim.state.pawns.filter((p) => p.life && !p.life.leaving).map((p) => p.life!.flat).join(',')}`;
   let c = cache.get(sim);
   if (!c || c.key !== key) {
     c = { key, scores: new Map() };
@@ -99,12 +104,17 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
     basics: (Number(has.bed) + Number(has.toilet) + Number(has.wash) + Number(has.kitchen)) * 25,
     light: Math.min(100, 15 + windows * 30 + lamps * 20),
     decor: Math.min(100, defs.filter((d) => d.decor).length * 20),
+    clean: 100 * (1 - (sim.state.dirt[flatId] ?? 0)),
+    warmth: 100 * warmthOf(sim.state.temps[flatId] ?? 18),
+    quiet: Math.max(0, 100 - (sim.state.noiseAvg[flatId] ?? 0) * 30),
   };
   const values = Object.values(factors);
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   let score = MEAN_SHARE * mean + (1 - MEAN_SHARE) * Math.min(...values);
   const ceiling = factors.space * 1.4;
   if (score > ceiling) score = ceiling + (score - ceiling) * 0.25;
+  // Missing the basics caps it too: a gutted flat is grim however quiet it is.
+  score = Math.min(score, 19 + factors.basics * 0.6);
   score = Math.round(Math.max(0, Math.min(100, score)));
   const weakest = (Object.keys(factors) as FactorId[]).reduce((a, b) => (factors[b] < factors[a] ? b : a));
   return { score, tier: tierOf(score), factors, weakest, perPerson, has };

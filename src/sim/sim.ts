@@ -7,6 +7,9 @@ import { morning, mortgageDue, weeklyBills } from './economy';
 import { applicantsHour, rentMorning } from './leases';
 import { outcomesHour } from './outcomes';
 import { postMorning } from './post';
+import { chatMorning } from './chat';
+import { environmentHour, noiseMade } from './environment';
+import { forgetSocial, romanceHour, requestsHour, socialMinute } from './social';
 import { startingTenants } from './start';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
 
@@ -22,6 +25,14 @@ export class Sim {
     const sim = new Sim(newState(seed));
     startingTenants(sim);
     return sim;
+  }
+
+  private noiseCache: { tick: number; made: Map<string, number> } | null = null;
+
+  /** Noise being made in each flat (and the shared parts) right now. Worked out once a tick. */
+  noise(): Map<string, number> {
+    if (this.noiseCache?.tick !== this.state.tick) this.noiseCache = { tick: this.state.tick, made: noiseMade(this) };
+    return this.noiseCache.made;
   }
 
   /** A short piece of news for the player. */
@@ -61,6 +72,7 @@ export class Sim {
     st.tick++;
     if (st.repossessed !== undefined) return;
     if (st.tick % TICKS_PER_HOUR === 0) this.hour();
+    if (st.tick % TICKS_PER_MINUTE === 0) socialMinute(this);
     stepPawns(this);
   }
 
@@ -71,7 +83,12 @@ export class Sim {
       morning(this);
       rentMorning(this);
       postMorning(this);
+      chatMorning(this);
     }
+    environmentHour(this);
+    romanceHour(this);
+    requestsHour(this);
+    if (hour === 4) for (const p of st.pawns) if (p.life) forgetSocial(this, p);
     // Mondays at nine: the mortgage and the bills.
     if (hour === 9 && (this.day - 1) % 7 === 0 && this.day > 1) {
       weeklyBills(this);

@@ -37,6 +37,13 @@ export function newState(seed: number): State {
     post: [],
     ledger: [],
     notices: [],
+    insulated: {},
+    boiler: 1,
+    cleaner: false,
+    dirt: {},
+    temps: {},
+    noiseAvg: {},
+    chat: [],
   };
   buildShell(st);
   return st;
@@ -79,6 +86,7 @@ function buildShell(st: State): void {
   put('bins', 1, 0);
   put('plant', 6, 0);
   put('clock', 4, 0, 2);
+  put('radiator', 3, 0, 1);
   // Studios on floors 1 and 2.
   for (const s of [1, 2]) {
     put('bed', 1, s);
@@ -89,6 +97,7 @@ function buildShell(st: State): void {
     put('toilet', 5, s);
     put('mirror', 5, s, 1);
     put('shower', 6, s);
+    put('radiator', 2, s, 1);
   }
   // One-beds on the ground and first floors.
   for (const s of [0, 1]) {
@@ -103,6 +112,8 @@ function buildShell(st: State): void {
     put('toilet', 25, s);
     put('mirror', 25, s, 1);
     put('shower', 26, s);
+    put('radiator', 19, s, 1);
+    put('radiator', 23, s, 1);
   }
 }
 

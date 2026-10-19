@@ -9,6 +9,8 @@ import { pick, randInt, random, type RngHolder } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type Lease, type Pawn } from './state';
 import { moveIn, type Person } from './tenants';
+import { friendsLeaving } from './social';
+import { post } from './chat';
 import { likingTarget, rentThought, tierThought, type Thought } from './thoughts';
 import { rollTraits, traitDef, touchiness, has } from './traits';
 
@@ -74,7 +76,12 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   const size = Math.min(roomFor, random(st) < 0.55 ? 1 : random(st) < 0.7 ? 2 : 3);
   const surname = pick(st, LAST);
   const people: Person[] = [];
-  for (let i = 0; i < size; i++) people.push(makePerson(st, i === 0 || random(st) < 0.6 ? surname : undefined, i === 0 ? random(st) < 0.8 : random(st) < 0.5));
+  for (let i = 0; i < size; i++) {
+    let person = makePerson(st, i === 0 || random(st) < 0.6 ? surname : undefined, i === 0 ? random(st) < 0.8 : random(st) < 0.5);
+    // Nobody shares a first name with someone they live with.
+    for (let tries = 0; tries < 10 && people.some((o) => o.name.split(' ')[0] === person.name.split(' ')[0]); tries++) person = { ...person, name: `${pick(st, FIRST)} ${person.name.split(' ').slice(1).join(' ')}` };
+    people.push(person);
+  }
   const lead = people[0];
   const shown = pick(st, lead.traits);
   const hidden = lead.traits.filter((t) => t !== shown);
@@ -126,6 +133,8 @@ export function accept(sim: Sim, applicantId: number): string | null {
   book(sim, `Deposit · ${flatName}`, lease.deposit);
   const pawns = moveIn(sim, a.flat, a.people, [a.shown]);
   for (const p of pawns) p.life!.memories.push({ id: 'newPlace', at: st.tick });
+  const greeter = st.pawns.find((p) => p.life && !p.life.leaving && !pawns.includes(p) && has(p.life, 'friendly'));
+  if (greeter) post(sim, greeter, `Welcome to ${flatName}, ${pawns.map((p) => p.name.split(' ')[0]).join(' and ')}! Bins go out Sunday night. Don't ask about the boiler.`);
   if (a.desperate) for (const p of pawns) p.life!.desperate = true;
   // Word gets round: fewer applicants for a while after someone moves in.
   for (const f of Object.values(st.flats)) f.nextApplicant = Math.max(f.nextApplicant, st.tick + 18 * TICKS_PER_HOUR);
@@ -261,9 +270,14 @@ export function moveOut(sim: Sim, flatId: string): void {
   const name = sim.layout.flat(flatId)?.name ?? 'Flat';
   const back = lease.deposit - lease.owed;
   if (back > 0) book(sim, `Deposit back · ${name}`, -back);
-  for (const p of st.pawns.filter((q) => q.life?.flat === flatId)) {
+  const leaving = st.pawns.filter((q) => q.life?.flat === flatId);
+  friendsLeaving(sim, leaving);
+  for (const p of leaving) {
     p.life!.leaving = true;
     p.life!.using = null;
+    // Whoever they were with stays single.
+    const partner = st.pawns.find((q) => q.id === p.life!.partner);
+    if (partner?.life && partner.life.flat !== flatId) delete partner.life.partner;
   }
   info.lease = null;
   info.listed = true;

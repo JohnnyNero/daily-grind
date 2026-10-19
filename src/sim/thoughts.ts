@@ -7,7 +7,9 @@
 // shown eases towards the total, so one bad night is a dip, not a crash.
 
 import { flatInfo, goingRate } from './economy';
+import { SHARED, binsOverflowing, dirtOf, tempOf } from './environment';
 import { flatScore, type FlatScore } from './impressiveness';
+import { opinion } from './social';
 import type { Sim } from './sim';
 import { TICKS_PER_HOUR, type Life, type NeedId, type Pawn } from './state';
 import { has } from './traits';
@@ -20,7 +22,12 @@ export interface MemoryDef {
   hours: number;
   /** Most copies that count at once. */
   stack: number;
+  /** Worth passing on: neighbours hear about it (at less than half the strength). */
+  gossip?: boolean;
 }
+
+/** Hearing about something counts this much of living it. */
+const HEARD = 0.4;
 
 /** Each extra copy of a memory counts this much of the one before. */
 const STACK_FACTOR = 0.75;
@@ -36,12 +43,24 @@ export const MEMORIES: Record<string, MemoryDef> = {
   longBath: { label: 'Had a long bath', value: 4, hours: 8, stack: 1 },
   commute: { label: 'Grim commute', value: -2, hours: 3, stack: 1 },
   newPlace: { label: 'New place', value: 5, hours: 5 * 24, stack: 1 },
-  rentRiseSmall: { label: 'Rent went up', value: -5, hours: 10 * 24, stack: 2 },
-  rentRiseBig: { label: 'Rent went up a lot', value: -12, hours: 14 * 24, stack: 2 },
-  rentCut: { label: 'Rent came down', value: 6, hours: 10 * 24, stack: 1 },
-  refusedHaggle: { label: 'Landlord wouldn\'t budge on rent', value: -6, hours: 7 * 24, stack: 1 },
-  agreedHaggle: { label: 'Got money off the rent', value: 6, hours: 7 * 24, stack: 1 },
+  rentRiseSmall: { label: 'Rent went up', value: -5, hours: 10 * 24, stack: 2, gossip: true },
+  rentRiseBig: { label: 'Rent went up a lot', value: -12, hours: 14 * 24, stack: 2, gossip: true },
+  rentCut: { label: 'Rent came down', value: 6, hours: 10 * 24, stack: 1, gossip: true },
+  refusedHaggle: { label: 'Landlord wouldn\'t budge on rent', value: -6, hours: 7 * 24, stack: 1, gossip: true },
+  agreedHaggle: { label: 'Got money off the rent', value: 6, hours: 7 * 24, stack: 1, gossip: true },
   letOffSteam: { label: 'Let off steam', value: 8, hours: 2 * 24, stack: 1 },
+  landlordListened: { label: 'Landlord listened', value: 4, hours: 5 * 24, stack: 2, gossip: true },
+  landlordShrugged: { label: 'Landlord couldn\'t care less', value: -4, hours: 5 * 24, stack: 2, gossip: true },
+  ignored: { label: 'Landlord ignored the chat', value: -5, hours: 5 * 24, stack: 2, gossip: true },
+  wearAJumper: { label: 'Told to wear a jumper', value: -6, hours: 5 * 24, stack: 1, gossip: true },
+  toldOff: { label: 'Landlord had a word about the noise', value: -5, hours: 5 * 24, stack: 1 },
+  gotPet: { label: 'Got a pet', value: 8, hours: 10 * 24, stack: 1 },
+  noPet: { label: 'Not allowed a pet', value: -6, hours: 7 * 24, stack: 1, gossip: true },
+  sawRow: { label: 'Saw a row on the stairs', value: -3, hours: 24, stack: 2, gossip: true },
+  keptAwake: { label: 'Kept awake by the neighbours', value: -6, hours: 14, stack: 3 },
+  friendLeft: { label: 'A friend moved out', value: -6, hours: 7 * 24, stack: 2 },
+  brokeUp: { label: 'Broke up', value: -12, hours: 7 * 24, stack: 1 },
+  paysMore: { label: 'Pays more than next door', value: -6, hours: 7 * 24, stack: 1 },
 };
 
 export interface Thought {
@@ -68,6 +87,14 @@ const NEED_THOUGHTS: Record<NeedId, { under: number; label: string; value: numbe
     { under: 0.3, label: 'Bored', value: -2 },
   ],
   comfort: [{ under: 0.2, label: 'Uncomfortable', value: -4 }],
+  warmth: [
+    { under: 0.25, label: 'Freezing in the flat', value: -10 },
+    { under: 0.5, label: 'Cold flat', value: -5 },
+  ],
+  quiet: [
+    { under: 0.3, label: 'Can\'t hear yourself think', value: -6 },
+    { under: 0.55, label: 'Noisy neighbours', value: -3 },
+  ],
 };
 
 /** What a flat's impressiveness tier does to how its tenants feel. Ordinary flats do nothing. */
@@ -93,8 +120,43 @@ export function thoughtsOf(sim: Sim, p: Pawn): Thought[] {
     const lease = flatInfo(sim, flat.id).lease;
     const rent = lease ? rentThought(lease.rent, goingRate(sim, flat.id)) : null;
     if (rent) out.push(rent);
+    out.push(...placeThoughts(sim, life, flat.id));
   }
+  out.push(...peopleThoughts(sim, p));
   out.push(...memoryThoughts(sim, life));
+  return out;
+}
+
+/** The building around them: heat, dirt, the bins, the stairwell. */
+function placeThoughts(sim: Sim, life: Life, flatId: string): Thought[] {
+  const out: Thought[] = [];
+  if (tempOf(sim, flatId) > 26) out.push({ label: 'Too hot in the flat', value: -3 });
+  const dirt = dirtOf(sim, flatId);
+  const proud = has(life, 'houseProud');
+  if (!has(life, 'messy')) {
+    if (dirt > 0.6) out.push({ label: 'Flat\'s a tip', value: -4 });
+    else if (proud && dirt > 0.3) out.push({ label: 'Flat could be cleaner', value: -4 });
+  }
+  if (dirtOf(sim, SHARED) > 0.5) out.push({ label: 'Grubby stairwell', value: proud ? -5 : -3 });
+  if (binsOverflowing(sim)) out.push({ label: 'Bins overflowing', value: -3 });
+  if (life.pet && life.pet !== 'asked') out.push({ label: `Has ${life.pet}`, value: 3 });
+  return out;
+}
+
+/** Friends, enemies and a partner in the building. */
+function peopleThoughts(sim: Sim, p: Pawn): Thought[] {
+  const out: Thought[] = [];
+  let friends = 0;
+  const rivals: Thought[] = [];
+  for (const o of sim.state.pawns) {
+    if (o === p || !o.life || o.life.leaving) continue;
+    const op = opinion(sim, p, o);
+    if (o.id === p.life!.partner && op > 0) out.push({ label: `In love with ${o.name.split(' ')[0]}`, value: 6 });
+    else if (op >= 30) friends++;
+    else if (op <= -30) rivals.push({ label: `Can't stand ${o.name.split(' ')[0]}`, value: -3 });
+  }
+  if (friends > 0) out.push({ label: friends > 1 ? `Friends in the building ×${friends}` : 'A friend in the building', value: Math.min(5, friends * 1.5) });
+  out.push(...rivals.slice(0, 3));
   return out;
 }
 
@@ -127,23 +189,30 @@ function missingThoughts(score: FlatScore): Thought[] {
 
 function memoryThoughts(sim: Sim, life: Life): Thought[] {
   const now = sim.state.tick;
-  const groups = new Map<string, number>();
+  // Grouped by what it was, its words, and whether they lived it or heard about it.
+  const groups = new Map<string, { id: string; label: string; heard: boolean; n: number }>();
   for (const m of life.memories) {
     const def = MEMORIES[m.id];
     if (!def || now - m.at >= def.hours * TICKS_PER_HOUR) continue;
-    groups.set(m.id, (groups.get(m.id) ?? 0) + 1);
+    const heard = m.from !== undefined;
+    const label = m.note ?? def.label;
+    const k = `${m.id}|${label}|${heard}`;
+    const g = groups.get(k) ?? { id: m.id, label: heard ? `Heard: ${label.charAt(0).toLowerCase()}${label.slice(1)}` : label, heard, n: 0 };
+    g.n++;
+    groups.set(k, g);
   }
   const out: Thought[] = [];
-  for (const [id, n] of groups) {
+  for (const { id, label, heard, n } of groups.values()) {
     const def = MEMORIES[id];
     const count = Math.min(n, def.stack);
     // Easy-going people let bad things go; keen cooks love a proper meal.
     let each = def.value;
     if (each < 0 && has(life, 'easyGoing')) each *= 0.75;
     if (id === 'cookedMeal' && has(life, 'keenCook')) each *= 2;
+    if (heard) each *= HEARD;
     let value = 0;
     for (let i = 0; i < count; i++) value += each * STACK_FACTOR ** i;
-    out.push({ label: count > 1 ? `${def.label} ×${count}` : def.label, value: Math.round(value * 10) / 10, memory: count });
+    out.push({ label: count > 1 ? `${label} ×${count}` : label, value: Math.round(value * 10) / 10, memory: count });
   }
   return out;
 }

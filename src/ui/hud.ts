@@ -1,7 +1,7 @@
 // What's always on screen: the top bar (time, money, speed), the row of tenant portraits,
 // alerts down the right edge, the tabs along the bottom and short notices.
 
-import { BILLS, flatInfo, pounds } from '../sim/economy';
+import { billsDue, flatInfo, pounds } from '../sim/economy';
 import { linesFor } from '../sim/outcomes';
 import type { Sim } from '../sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE } from '../sim/state';
@@ -56,7 +56,15 @@ export class Hud {
     const n = sim.state.notices;
     this.noticesSeen = n.length ? n[n.length - 1].tick : -1;
     panels.onChange = () => this.markTab();
+    for (const b of document.querySelectorAll<HTMLButtonElement>('#overlays [data-overlay]')) {
+      b.addEventListener('click', () => {
+        this.onOverlay(b.dataset.overlay as 'none');
+        for (const o of document.querySelectorAll<HTMLButtonElement>('#overlays [data-overlay]')) o.setAttribute('aria-pressed', String(o === b));
+      });
+    }
   }
+
+  onOverlay: (mode: 'none' | 'noise' | 'warmth' | 'liking') => void = () => {};
 
   private tab(name: string): void {
     if (name === 'build') {
@@ -65,13 +73,13 @@ export class Hud {
       return;
     }
     if (name === 'building') this.panels.close();
-    else this.panels.show({ kind: name as 'people' | 'money' | 'post' });
+    else this.panels.show({ kind: name as 'people' | 'money' | 'post' | 'chat' });
   }
 
   /** Lights up the tab for whatever's open. */
   private markTab(): void {
     const s = this.panels.showing;
-    const current = !s ? 'building' : s.kind === 'people' || s.kind === 'pawn' ? 'people' : s.kind === 'money' ? 'money' : s.kind === 'post' ? 'post' : 'building';
+    const current = !s ? 'building' : s.kind === 'people' || s.kind === 'pawn' ? 'people' : s.kind === 'money' || s.kind === 'post' || s.kind === 'chat' ? s.kind : 'building';
     for (const b of document.querySelectorAll<HTMLButtonElement>('#tabbar [data-tab]')) {
       if (b.dataset.tab === current) b.setAttribute('aria-current', 'page');
       else b.removeAttribute('aria-current');
@@ -119,6 +127,11 @@ export class Hud {
       const badge = el('post-badge');
       badge.hidden = unread === 0;
       badge.textContent = String(unread);
+      const asks = st.chat.filter((m) => m.choices && m.chosen === undefined).length;
+      const newChat = st.chat.filter((m) => m.id > this.panels.chatSeen).length;
+      const chatBadge = el('chat-badge');
+      chatBadge.hidden = asks + newChat === 0;
+      chatBadge.textContent = asks > 0 ? '!' : String(newChat);
       this.renderTenantBar();
       this.renderAlerts();
       if (!this.moneyPop.hidden) this.renderMoneyPop();
@@ -161,8 +174,7 @@ export class Hud {
     const m = st.mortgage;
     if (m.missed > 0) out.push({ key: 'missed', title: `${m.missed} of 4 payments missed`, sub: `${pounds(m.arrears)} in arrears`, colour: 'var(--bad)', urgent: true, open: { kind: 'money' } });
     const daysToMonday = (7 - ((sim.day - 1) % 7)) % 7 || 7;
-    const empty = sim.layout.flats.filter((f) => !flatInfo(sim, f.id).lease).length;
-    const due = m.paidOffDay === undefined ? Math.min(m.balance, m.payment + m.arrears) + BILLS.insurance + BILLS.lighting + BILLS.bins + BILLS.emptyFlatTax * empty : 0;
+    const due = (m.paidOffDay === undefined ? Math.min(m.balance, m.payment + m.arrears) : 0) + billsDue(sim);
     if (daysToMonday <= 2 && st.money < due) out.push({ key: 'short', title: 'Short for Monday', sub: `Need ${pounds(due - st.money)} more`, colour: 'var(--bad)', urgent: true, open: { kind: 'money' } });
     for (const p of st.pawns) {
       if (!p.life || p.life.leaving) continue;
@@ -176,6 +188,9 @@ export class Hud {
       if (info.lease?.notice) out.push({ key: `notice${f.id}`, title: `${f.name} leaving`, sub: `Out on day ${info.lease.notice.day}`, colour: 'var(--low)', open: { kind: 'flat', id: f.id } });
       const n = st.applicants.filter((a) => a.flat === f.id).length;
       if (!info.lease && n > 0) out.push({ key: `apps${f.id}`, title: `${f.name} empty`, sub: `${n} applicant${n > 1 ? 's' : ''}`, colour: '#8d9097', open: { kind: 'applicants', flat: f.id } });
+    }
+    for (const c of st.chat.filter((x) => x.choices && x.chosen === undefined)) {
+      out.push({ key: `chat${c.id}`, title: 'Asked in the chat', sub: c.who, colour: 'var(--ok)', open: { kind: 'chat' } });
     }
     for (const l of st.post.filter((x) => x.choices && x.chosen === undefined)) {
       out.push({ key: `letter${l.id}`, title: 'Needs an answer', sub: l.title, colour: 'var(--ok)', open: { kind: 'post', letter: l.id } });
@@ -216,6 +231,7 @@ const GRIDS: Record<string, string[]> = {
   people: ['.##..##.', '.##..##.', '........', '####.###', '####.###', '####.###', '........', '........'],
   money: ['..####..', '.#....#.', '#..###.#', '#..#...#', '#.####.#', '#..#...#', '.#####..', '..####..'],
   post: ['........', '########', '##....##', '#.#..#.#', '#..##..#', '#......#', '########', '........'],
+  chat: ['########', '#......#', '#.#.#.##', '#......#', '########', '.##.....', '.#......', '........'],
   build: ['####....', '#####...', '####.#..', '...#.#..', '....#.#.', '.....#.#', '......##', '........'],
 };
 const ICONS: Record<string, string> = Object.fromEntries(

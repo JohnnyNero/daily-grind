@@ -4,7 +4,10 @@
 
 import { portrait } from '../render/art';
 import { furnitureDef } from '../sim/defs';
-import { POUND, flatInfo, goingRate, overpay, pounds, MISSES_ALLOWED, MORTGAGE, BILLS } from '../sim/economy';
+import { POUND, billsDue, flatInfo, goingRate, overpay, pounds, MISSES_ALLOWED, MORTGAGE } from '../sim/economy';
+import { CLEANER_WEEKLY, flatClimate, gasBill, outdoorTemp, seasonName } from '../sim/environment';
+import { answer } from '../sim/chat';
+import { opinionParts, relationships } from '../sim/social';
 import { FACTOR_NAMES, flatScore, scoreFor, type FactorId, type FlatScore } from '../sim/impressiveness';
 import { accept, changeRent, giveNotice, household, householdLiking, likelyLiking, noticeProblem, turnAway } from '../sim/leases';
 import { linesFor } from '../sim/outcomes';
@@ -22,9 +25,11 @@ export type Showing =
   | { kind: 'people' }
   | { kind: 'money' }
   | { kind: 'post'; letter?: number }
-  | { kind: 'applicants'; flat: string };
+  | { kind: 'applicants'; flat: string }
+  | { kind: 'chat' };
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const BOILER = ['Off', 'Low', 'Medium', 'High'];
 
 export function dayName(day: number): string {
   return DAYS[(day - 1) % 7];
@@ -51,7 +56,9 @@ export class Panels {
   showing: Showing | null = null;
   private sheet = el('info');
   private body = el('info-body');
-  private pawnTab: 'liking' | 'needs' | 'about' = 'liking';
+  private pawnTab: 'liking' | 'needs' | 'social' | 'about' = 'liking';
+  /** The newest chat message you've seen (for the badge). */
+  chatSeen = 0;
   /** Rent being set in the flat panel before it's applied. */
   private draftRent: { flat: string; rent: number } | null = null;
   onClose: () => void = () => {};
@@ -101,6 +108,8 @@ export class Panels {
         return this.renderPost(s.letter);
       case 'applicants':
         return this.renderApplicants(s.flat);
+      case 'chat':
+        return this.renderChat();
     }
   }
 
@@ -150,6 +159,23 @@ export class Panels {
         h('div', { className: 'score-head' }, h('div', { className: 'tier-box' }, String(score.score)), h('div', {}, h('b', {}, score.tier), h('p', {}, 'Impressiveness: mostly the average of these, dragged down by the weakest'))),
         h('div', { className: 'meters sec' }, ...(Object.keys(FACTOR_NAMES) as FactorId[]).map((f) => meter(FACTOR_NAMES[f], score.factors[f], f === score.weakest ? 'weakest' : undefined))),
         h('div', { className: 'tip' }, h('b', {}, 'What to fix: '), fixHint(score)),
+      );
+      // Warmth, noise and dirt.
+      const cl = flatClimate(sim, id);
+      out.push(
+        h(
+          'div',
+          { className: 'sec' },
+          h('h3', {}, 'The place', h('em', {}, `${Math.round(outdoorTemp(sim))}° outside`)),
+          h(
+            'div',
+            { className: 'lines' },
+            h('div', { className: 'line' }, h('span', {}, 'Temperature', h('small', {}, `${cl.radiators} radiator${cl.radiators === 1 ? '' : 's'}, boiler on ${BOILER[sim.state.boiler].toLowerCase()}`)), h('b', {}, `${Math.round(cl.temp)}°`)),
+            h('div', { className: 'line' }, h('span', {}, 'Noise from next door', h('small', {}, 'Lately, on average')), h('b', {}, cl.noise < 0.3 ? 'Quiet' : cl.noise < 1 ? 'Some' : cl.noise < 2 ? 'Noisy' : 'Very noisy')),
+            h('div', { className: 'line' }, h('span', {}, 'Insulated', h('small', {}, 'Outside walls, roof and floor')), h('b', {}, `${cl.insulated} of ${cl.outside}`)),
+            h('div', { className: 'line' }, h('span', {}, 'Dirt'), h('b', {}, cl.dirt < 0.2 ? 'Clean' : cl.dirt < 0.5 ? 'A bit grubby' : 'A tip')),
+          ),
+        ),
       );
       // Rent.
       const rent = h('div', { className: 'rentbox' });
@@ -255,10 +281,11 @@ export class Panels {
     const target = Math.round(likingTarget(thoughts));
     const doing = life.away ? `${life.away.why} (back about ${hhmm(Math.floor((life.away.until % TICKS_PER_DAY) / TICKS_PER_MINUTE))})` : p.doing;
     const needsKey = this.pawnTab === 'needs' ? Object.values(life.needs).map((v) => Math.round(v * 50)) : 0;
-    this.fill([id, this.pawnTab, liking, target, doing, thoughts, needsKey, life.revealed, life.traits.length], () => {
-      const tab = (t: 'liking' | 'needs' | 'about', label: string) =>
+    const socialKey = this.pawnTab === 'social' ? relationships(sim, p).map((r) => [r.other.id, r.opinion]) : 0;
+    this.fill([id, this.pawnTab, liking, target, doing, thoughts, needsKey, life.revealed, life.traits.length, socialKey], () => {
+      const tab = (t: 'liking' | 'needs' | 'social' | 'about', label: string) =>
         h('button', { type: 'button', role: 'tab', 'aria-selected': String(this.pawnTab === t), onclick: () => { this.pawnTab = t; this.rerender(); } }, label);
-      const out: (Node | string)[] = [h('p', { className: 'doing' }, doing), h('div', { className: 'tabs', role: 'tablist' }, tab('liking', 'Liking'), tab('needs', 'Needs'), tab('about', 'About'))];
+      const out: (Node | string)[] = [h('p', { className: 'doing' }, doing), h('div', { className: 'tabs', role: 'tablist' }, tab('liking', 'Liking'), tab('needs', 'Needs'), tab('social', 'Social'), tab('about', 'About'))];
       if (this.pawnTab === 'liking') {
         const lines = linesFor(p);
         out.push(
@@ -281,6 +308,22 @@ export class Panels {
         if (liking < lines.major) out.push(h('div', { className: 'warn' }, h('b', {}, 'Close to the edge. '), `Worst right now: ${thoughts.filter((t) => t.value < 0).sort((a, b) => a.value - b.value)[0]?.label.toLowerCase() ?? 'nothing in particular'}.`));
       } else if (this.pawnTab === 'needs') {
         out.push(h('div', { className: 'meters' }, ...(Object.keys(NEED_NAMES) as NeedId[]).map((n) => meter(NEED_NAMES[n], life.needs[n] * 100))));
+        out.push(h('p', { className: 'small muted', style: 'margin-top:8px' }, 'Warmth and quiet come from the flat: the heating, the insulation and the neighbours.'));
+      } else if (this.pawnTab === 'social') {
+        const rels = relationships(sim, p);
+        if (rels.length === 0) out.push(h('p', {}, 'Doesn\'t really know anyone here yet.'));
+        for (const r of rels.slice(0, 10)) {
+          const v = r.opinion;
+          const why = opinionParts(sim, p, r.other).sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 2).map((x) => x.label).join(', ');
+          const c = v >= 0 ? 'var(--good)' : 'var(--bad)';
+          const bar = v >= 0 ? `left:50%;width:${Math.min(50, v / 2)}%` : `left:${50 + Math.max(-50, v / 2)}%;width:${Math.min(50, -v / 2)}%`;
+          const flat = sim.layout.flat(r.other.life!.flat)?.name ?? '';
+          const row = h('button', { type: 'button', className: 'rel link', style: 'text-decoration:none;width:100%;text-align:left;color:inherit', onclick: () => this.show({ kind: 'pawn', id: r.other.id }) },
+            face(r.other, likingColour(r.other.life!.liking)),
+            h('div', {}, h('b', {}, `${r.other.name} · ${flat}${life.partner === r.other.id ? ' · partner' : ''}`), h('small', {}, why || 'Hardly know each other'), h('div', { className: 'opbar' }, h('i', { style: `--c:${c};${bar}` }))),
+            h('span', { className: `v ${v >= 0 ? 'pos' : 'neg'}` }, signed(v)));
+          out.push(row);
+        }
       } else {
         const hidden = life.traits.filter((t) => !life.revealed.includes(t));
         out.push(
@@ -375,13 +418,13 @@ export class Panels {
     const st = sim.state;
     const m = st.mortgage;
     this.head('Money', `Day ${sim.day} · ${dayName(sim.day)}`);
-    this.fill([st.money, m, st.ledger.length, sim.day], () => {
+    this.fill([st.money, m, st.ledger.length, sim.day, st.boiler, st.cleaner], () => {
       const weekStart = (Math.floor((sim.day - 1) / 7) * 7) * TICKS_PER_DAY;
       const week = st.ledger.filter((e) => e.tick >= weekStart).reduce((n, e) => n + e.amount, 0);
       const todayStart = (sim.day - 1) * TICKS_PER_DAY;
       const today = st.ledger.filter((e) => e.tick >= todayStart).reduce((n, e) => n + e.amount, 0);
       const empty = sim.layout.flats.filter((f) => !flatInfo(sim, f.id).lease).length;
-      const bills = BILLS.insurance + BILLS.lighting + BILLS.bins + BILLS.emptyFlatTax * empty;
+      const bills = billsDue(sim);
       const due = m.paidOffDay !== undefined ? 0 : Math.min(m.balance, m.payment + m.arrears);
       const daysToMonday = (7 - ((sim.day - 1) % 7)) % 7 || 7;
       const paid = MORTGAGE.balance - m.balance;
@@ -416,8 +459,27 @@ export class Panels {
           'div',
           { className: 'sec' },
           h('h3', {}, 'Coming up', h('em', {}, `Monday, in ${daysToMonday} day${daysToMonday > 1 ? 's' : ''}`)),
-          h('div', { className: 'lines' }, h('div', { className: 'line' }, h('span', {}, 'Mortgage', h('small', {}, m.arrears ? 'Includes arrears' : `4% a year on what's owed`)), h('b', { className: 'neg' }, pounds(-due))), h('div', { className: 'line' }, h('span', {}, 'Bills', h('small', {}, `Insurance, stairwell lights, bins${empty ? `, council tax on ${empty} empty` : ''}`)), h('b', { className: 'neg' }, pounds(-bills)))),
+          h('div', { className: 'lines' }, h('div', { className: 'line' }, h('span', {}, 'Mortgage', h('small', {}, m.arrears ? 'Includes arrears' : `4% a year on what's owed`)), h('b', { className: 'neg' }, pounds(-due))), h('div', { className: 'line' }, h('span', {}, 'Bills', h('small', {}, `Insurance, stairwell lights, bins${empty ? `, council tax on ${empty} empty` : ''}, gas ${pounds(gasBill(sim))}${st.cleaner ? ', the cleaner' : ''}`)), h('b', { className: 'neg' }, pounds(-bills)))),
           st.money < due + bills ? h('p', { className: 'note small' }, `You're ${pounds(due + bills - st.money)} short for Monday.`) : '',
+        ),
+        h(
+          'div',
+          { className: 'sec' },
+          h('h3', {}, 'Central boiler', h('em', {}, `${Math.round(outdoorTemp(sim))}° outside · ${seasonName(sim)}`)),
+          h(
+            'div',
+            { className: 'seg-row' },
+            ...BOILER.map((label, i) =>
+              h('button', { type: 'button', 'aria-pressed': String(st.boiler === i), onclick: () => { st.boiler = i; this.rerender(); } }, label),
+            ),
+          ),
+          h('p', { className: 'small muted' }, `Gas: ${pounds(gasBill(sim))} a week at this setting, for ${sim.state.furniture.filter((f) => f.def === 'radiator').length} radiators.`),
+        ),
+        h(
+          'div',
+          { className: 'sec' },
+          h('h3', {}, 'Cleaner', h('em', {}, `${pounds(CLEANER_WEEKLY)} a week`)),
+          h('label', { className: 'line' }, h('span', {}, 'Does the stairs and lobby every morning'), h('input', { type: 'checkbox', id: 'cleaner', checked: st.cleaner, onchange: (e: Event) => { st.cleaner = (e.target as HTMLInputElement).checked; this.rerender(); } })),
         ),
         h(
           'div',
@@ -474,6 +536,53 @@ export class Panels {
     }
     if (l.flat && sim.layout.flat(l.flat)) box.append(h('button', { type: 'button', className: 'link', onclick: () => this.show({ kind: 'flat', id: l.flat! }) }, `Open ${sim.layout.flat(l.flat)!.name}`));
     return box;
+  }
+
+  // ------------------------------------------------------------------ the group chat
+
+  private renderChat(): void {
+    const sim = this.sim;
+    const st = sim.state;
+    const msgs = st.chat.slice(-40);
+    this.chatSeen = Math.max(this.chatSeen, ...msgs.map((m) => m.id), 0);
+    const members = st.pawns.filter((p) => p.life && !p.life.leaving).length;
+    this.head(`${sim.state.chat.length ? 'Albert Terrace (residents)' : 'Albert Terrace'}`, `${members} tenants and you · everyone reads everything`);
+    this.fill([msgs.map((m) => [m.id, m.chosen])], () => {
+      if (msgs.length === 0) return [h('p', {}, 'Nothing yet. It\'ll come.')];
+      const box = h('div', { className: 'chat' });
+      let day = -1;
+      for (const m of msgs) {
+        const d = Math.floor(m.tick / TICKS_PER_DAY) + 1;
+        if (d !== day) {
+          box.append(h('span', { className: 'sys' }, `Day ${d} · ${dayName(d)}`));
+          day = d;
+        }
+        const time = hhmm(Math.floor((m.tick % TICKS_PER_DAY) / TICKS_PER_MINUTE));
+        if (m.from === 0) {
+          box.append(h('div', { className: 'msg me' }, h('div', { className: 'bubble' }, h('b', {}, 'You'), m.text, h('time', {}, time))));
+          continue;
+        }
+        const p = st.pawns.find((x) => x.id === m.from);
+        box.append(h('div', { className: 'msg' }, p ? face(p, p.life ? likingColour(p.life.liking) : undefined) : h('span', {}), h('div', { className: 'bubble' }, h('b', {}, m.who), m.text, h('time', {}, time))));
+        if (m.choices && m.ignored) box.append(h('span', { className: 'sys' }, `No reply from you, so: "${m.choices[m.chosen ?? 0].label}". They noticed.`));
+        if (m.choices && m.chosen === undefined) {
+          box.append(
+            h(
+              'div',
+              { className: 'choice' },
+              h('b', {}, 'Reply as the landlord'),
+              ...m.choices.map((c, i) => h('button', { type: 'button', className: 'opt', onclick: () => { answer(sim, m.id, i); this.rerender(); } }, h('span', {}, `"${c.label}"`), h('small', {}, c.note))),
+              h('small', { className: 'muted' }, 'Left two days, it counts as a no, and they notice.'),
+            ),
+          );
+        }
+      }
+      // Newest at the bottom; start scrolled there.
+      requestAnimationFrame(() => {
+        this.sheet.scrollTop = this.sheet.scrollHeight;
+      });
+      return [box];
+    });
   }
 
   // ------------------------------------------------------------------ applicants
@@ -553,5 +662,11 @@ function fixHint(score: FlatScore): string {
       return 'a window or a lamp.';
     case 'decor':
       return 'pictures, plants, a mirror.';
+    case 'clean':
+      return 'it\'s dirty. Tenants who aren\'t messy tidy up after themselves; messy ones don\'t.';
+    case 'warmth':
+      return 'turn the boiler up, add radiators, or insulate the outside walls, roof and floor.';
+    case 'quiet':
+      return 'noise is getting in from next door. Insulate the walls and floors it shares.';
   }
 }

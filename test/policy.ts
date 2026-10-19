@@ -3,6 +3,7 @@
 import { flatInfo, goingRate, overpay, POUND } from '../src/sim/economy';
 import { accept, changeRent, giveNotice, likelyLiking, noticeProblem } from '../src/sim/leases';
 import { choose } from '../src/sim/post';
+import { answer } from '../src/sim/chat';
 import { scoreFor } from '../src/sim/impressiveness';
 import type { Sim } from '../src/sim/sim';
 
@@ -31,6 +32,13 @@ export function landlord(sim: Sim, policy: Policy): void {
       changeRent(sim, f.id, Math.round((info.lease.rent * 1.1) / (5 * POUND)) * 5 * POUND);
     }
     if (info.lease && !noticeProblem(sim, f.id)) giveNotice(sim, f.id);
+  }
+  // The decent one heats the building and pays a cleaner; the ruthless one doesn't.
+  st.boiler = policy === 'decent' ? Math.max(st.boiler, 2) : 1;
+  st.cleaner = policy === 'decent';
+  for (const m of st.chat) {
+    if (!m.choices || m.chosen !== undefined) continue;
+    answer(sim, m.id, policy === 'decent' ? 0 : m.choices.length - 1);
   }
   for (const l of st.post) {
     if (!l.choices || l.chosen !== undefined) continue;
