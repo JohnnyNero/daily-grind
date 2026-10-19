@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#1d1f23">
+  <title>Landlord</title>
+  <link rel="icon" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Landlord">
+  <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+  <canvas id="view" aria-label="Your building, side on. Drag to pan, pinch to zoom, tap a flat or a person."></canvas>
+
+  <header class="bar" id="topbar">
+    <div class="clock">
+      <span id="day">Day 1</span>
+      <span id="time">08:00</span>
+    </div>
+    <div class="status">
+      <span class="place" id="place">14 Albert Terrace</span>
+      <span id="status"></span>
+    </div>
+    <div class="speeds" role="group" aria-label="Game speed">
+      <button type="button" data-speed="0" aria-label="Pause">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/></svg>
+      </button>
+      <button type="button" data-speed="1" aria-label="Normal speed">1×</button>
+      <button type="button" data-speed="3" aria-label="Fast">3×</button>
+      <button type="button" data-speed="8" aria-label="Fastest">8×</button>
+    </div>
+    <button type="button" class="menu-button" id="menu-open" aria-label="Menu">
+      <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4h10M3 8h10M3 12h10"/></svg>
+    </button>
+  </header>
+
+  <button type="button" class="toast" id="toast" hidden></button>
+
+  <button type="button" class="recentre" id="recentre" aria-label="Fit the building to the screen">
+    <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>
+  </button>
+
+  <div class="corner-buttons">
+    <button type="button" class="main-button" id="build-open">Build</button>
+  </div>
+
+  <section class="buildbar" id="buildbar" hidden aria-label="Build mode">
+    <div class="tabs" role="tablist" aria-label="What to build">
+      <button type="button" role="tab" data-tab="structure">Building</button>
+      <button type="button" role="tab" data-tab="furniture">Furniture</button>
+    </div>
+    <p id="build-hint" class="hint"></p>
+    <div class="palette" id="build-tools"></div>
+    <div class="build-actions">
+      <button type="button" id="build-flip">Turn round</button>
+      <button type="button" id="build-remove">Remove</button>
+      <button type="button" id="build-undo">Undo</button>
+      <button type="button" class="primary" id="build-done">Done</button>
+    </div>
+  </section>
+
+  <section class="sheet" id="info" hidden aria-live="polite">
+    <div class="sheet-head">
+      <div><h2 id="info-title"></h2><p id="info-sub"></p></div>
+      <button type="button" class="close" id="info-close" aria-label="Close">✕</button>
+    </div>
+    <div id="info-body"></div>
+  </section>
+
+  <section class="sheet" id="menu" hidden>
+    <div class="sheet-head">
+      <div><h2>Menu</h2><p>Your building saves itself on this device.</p></div>
+      <button type="button" class="close" id="menu-close" aria-label="Close">✕</button>
+    </div>
+    <div class="menu-list">
+      <button type="button" id="menu-export">Save to a file</button>
+      <label class="file-button">Load from a file<input type="file" id="menu-import" accept="application/json,.json"></label>
+      <button type="button" id="menu-new" class="danger">Start again with a new building</button>
+      <a href="./cafe/">Play the old café game</a>
+    </div>
+  </section>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

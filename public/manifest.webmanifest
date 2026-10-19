@@ -1,0 +1,16 @@
+{
+  "name": "Landlord",
+  "short_name": "Landlord",
+  "description": "A side-on landlord sim: one tired block of flats, and the people who live in it.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#23262b",
+  "theme_color": "#1d1f23",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
