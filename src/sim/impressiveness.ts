@@ -6,6 +6,7 @@
 // tiers, and the tiers are what tenants notice.
 
 import { furnitureDef } from './defs';
+import { furnitureValue } from './grades';
 import type { Sim } from './sim';
 import { warmthOf } from './environment';
 import { curve } from './stat';
@@ -92,7 +93,8 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
     }
   }
   const lamps = defs.filter((d) => d.id === 'lamp').length;
-  const value = defs.reduce((n, d) => n + d.value, 0);
+  // Posh things make it look better furnished, cheap ones worse.
+  const value = furniture.reduce((n, f) => n + furnitureValue(f), 0);
   const I = IMPRESSIVE;
   const factors: Record<FactorId, number> = {
     space: curve(perPerson, I.space),

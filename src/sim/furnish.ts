@@ -3,10 +3,11 @@
 // counts, so a sofa can't go where a planned wall will stand (pass the plans as `plan`).
 
 import { furnitureProblem, moveFurniture, placeFurniture, removeFurniture, flipFurniture } from './build';
-import { furnitureDef } from './defs';
-import { RESALE, book, furniturePrice, pounds } from './economy';
+import { furnitureDef, isGraded } from './defs';
+import { POUND, RESALE, book, furniturePrice, pounds } from './economy';
+import { gradeOf, gradeProblem, gradedName } from './grades';
 import type { Sim } from './sim';
-import type { Furniture, State } from './state';
+import type { Furniture, Grade, State } from './state';
 import { disturb } from './tenants';
 
 /** Why a piece can't go here, now or once the plans are built. */
@@ -14,16 +15,19 @@ function problem(sim: Sim, plan: State | undefined, def: string, x: number, s: n
   return furnitureProblem(sim.state, def, x, s, ignoreId) ?? (plan ? furnitureProblem(plan, def, x, s, ignoreId) : null);
 }
 
-/** Buys a piece and puts it in. Returns it, or why not. */
-export function buyFurniture(sim: Sim, def: string, x: number, s: number, flip: boolean, plan?: State): Furniture | string {
+/** Buys a piece (at a grade, for the pieces that come in grades) and puts it in. Returns it, or why not. */
+export function buyFurniture(sim: Sim, def: string, x: number, s: number, flip: boolean, plan?: State, grade: Grade = 'standard'): Furniture | string {
   const st = sim.state;
-  const price = furniturePrice(def);
+  const g = isGraded(def) ? grade : 'standard';
+  const locked = gradeProblem(sim, def, g);
+  if (locked) return locked;
+  const price = furniturePrice(def, g);
   if (st.money < price) return `Can't afford it: it's ${pounds(price)} and you have ${pounds(st.money)}`;
   const why = problem(sim, plan, def, x, s);
   if (why) return why;
-  const f = placeFurniture(st, def, x, s, flip);
+  const f = placeFurniture(st, def, x, s, flip, g);
   if (typeof f === 'string') return f;
-  book(sim, `Bought a ${furnitureDef(def).name.toLowerCase()}`, -price);
+  book(sim, `Bought a ${g === 'standard' ? '' : `${g} `}${furnitureDef(def).name.toLowerCase()}`, -price);
   sim.changed();
   return f;
 }
@@ -46,9 +50,9 @@ export function turnFurniture(sim: Sim, id: number): void {
   sim.changed();
 }
 
-/** What you get back for a piece. */
-export function resaleOf(def: string): number {
-  return Math.round(furniturePrice(def) * RESALE);
+/** What you get back for a piece (at its grade). */
+export function resaleOf(def: string, grade: Grade = 'standard'): number {
+  return Math.round((furniturePrice(def, grade) * RESALE) / POUND) * POUND;
 }
 
 /** Sells a piece off for a fraction of what it cost. */
@@ -57,6 +61,6 @@ export function sellFurniture(sim: Sim, id: number): void {
   if (!f) return;
   disturb(sim, id);
   removeFurniture(sim.state, id);
-  book(sim, `Sold a ${furnitureDef(f.def).name.toLowerCase()}`, resaleOf(f.def));
+  book(sim, `Sold a ${gradedName(f).toLowerCase()}`, resaleOf(f.def, gradeOf(f)));
   sim.changed();
 }

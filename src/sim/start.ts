@@ -1,7 +1,8 @@
 // The building you start with: a tired three-storey block on a 28-tile plot. A street door
 // into a lobby with the bins, a door through to the stairwell up the middle, a cramped
 // studio and a one-bed on each upper floor, a one-bed on the ground floor. The first-floor
-// one-bed is unfurnished and the top one stripped to the brick.
+// one-bed is unfurnished and the top one stripped to the brick. Most of what's in it is
+// ordinary, but the ground-floor sofa is the cheap sort.
 
 import { placeFurniture } from './build';
 import { MORTGAGE, POUND, START_MONEY, TIER_RENT, flatInfo } from './economy';
@@ -11,7 +12,7 @@ import { makePerson, sittingTenants } from './leases';
 import type { Sim } from './sim';
 import { furnitureDef } from './defs';
 import { random } from './rng';
-import { SAVE_VERSION, TICKS_PER_DAY, TICKS_PER_HOUR, isDoor, key, type CellKind, type State } from './state';
+import { SAVE_VERSION, TICKS_PER_DAY, TICKS_PER_HOUR, isDoor, key, type CellKind, type Grade, type State } from './state';
 
 const STREET = 10;
 const PLOT_W = 28;
@@ -102,8 +103,8 @@ function buildShell(st: State): void {
   // Up the stairwell: a flight from the lobby to the first floor, and another on to the second.
   for (const [dx, from] of [[9, BASE], [11, BASE + STOREY]]) for (let r = 0; r < STOREY; r++) set(dx, from + r, 'stair');
 
-  const put = (def: string, dx: number, s: number, r = 0, flip = false) => {
-    const f = placeFurniture(st, def, at(dx), BASE + s * STOREY + r, flip);
+  const put = (def: string, dx: number, s: number, r = 0, flip = false, grade: Grade = 'standard') => {
+    const f = placeFurniture(st, def, at(dx), BASE + s * STOREY + r, flip, grade);
     if (typeof f === 'string') throw new Error(`Start building: ${def} ${f}`);
   };
   // Lobby.
@@ -131,7 +132,7 @@ function buildShell(st: State): void {
     put('cooker', 15, s);
     put('cupboard', 15, s, 2);
     put('sink', 16, s);
-    put('sofa', 17, s, 0, true);
+    put('sofa', 17, s, 0, true, 'cheap');
     put('picture', 18, s, 2);
     put('doubleBed', 21, s);
     put('shelf', 21, s, 2);

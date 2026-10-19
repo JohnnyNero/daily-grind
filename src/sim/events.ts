@@ -13,6 +13,7 @@ import { POUND, book, letter } from './economy';
 import { SHARED, noiseReaching } from './environment';
 import { household } from './leases';
 import { furnitureDef } from './defs';
+import { furnitureValue } from './grades';
 import { addPawn, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
@@ -80,7 +81,7 @@ function flush(sim: Sim): boolean {
 /** What the building's worth to the storyteller: its furniture, flats let, weekly rent roll and tenants. */
 export function points(sim: Sim): number {
   const st = sim.state;
-  const things = st.furniture.reduce((n, f) => n + furnitureDef(f.def).value, 0);
+  const things = st.furniture.reduce((n, f) => n + furnitureValue(f), 0);
   const lets = Object.values(st.flats).filter((f) => f.lease);
   const roll = lets.reduce((n, f) => n + f.lease!.rent, 0) / POUND;
   return Math.round(things / POINTS.perFurniture + lets.length * POINTS.perLet + roll / POINTS.perRent + tenants(sim).length * POINTS.perTenant);

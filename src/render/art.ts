@@ -2,7 +2,7 @@
 // shading, drawn in world pixels (16 to a tile) and scaled up without smoothing.
 
 import { furnitureDef } from '../sim/defs';
-import type { Pawn } from '../sim/state';
+import type { Grade, Pawn } from '../sim/state';
 import { TILE } from '../sim/state';
 
 type Ctx = CanvasRenderingContext2D;
@@ -280,8 +280,11 @@ function bed(c: Ctx, W: number, duvet: string): void {
   box(c, W - 3, -9, 3, 9, PAL.woodDark);
 }
 
-/** Draws a piece of furniture whose footprint's top-left is (x, y) in world pixels. */
-export function drawFurniture(ctx: Ctx, def: string, x: number, y: number, flip = false): void {
+/**
+ * Draws a piece of furniture whose footprint's top-left is (x, y) in world pixels. A cheap
+ * or posh one is the same drawing with a touch over it (see gradedSprite).
+ */
+export function drawFurniture(ctx: Ctx, def: string, x: number, y: number, flip = false, grade: Grade = 'standard'): void {
   const d = furnitureDef(def);
   const W = d.w * TILE;
   const H = d.h * TILE;
@@ -291,10 +294,68 @@ export function drawFurniture(ctx: Ctx, def: string, x: number, y: number, flip 
     ctx.translate(W, 0);
     ctx.scale(-1, 1);
   }
+  const sprite = grade === 'standard' ? null : gradedSprite(def, grade);
+  if (sprite) ctx.drawImage(sprite, -SPRITE_PAD, -H - SPRITE_TOP);
+  else drawPiece(ctx, def, W, H);
+  ctx.restore();
+}
+
+function drawPiece(ctx: Ctx, def: string, W: number, H: number): void {
   const draw = PIECES[def];
   if (draw) draw(ctx, W);
   else box(ctx, 1, -H + 1, W - 2, H - 2, '#c040c0');
-  ctx.restore();
+}
+
+/** Room round a piece's footprint in its sprite: some poke out of it (a laptop on a desk). */
+const SPRITE_PAD = 2;
+const SPRITE_TOP = 16;
+const GILT = hex('#e8be4a');
+const sprites = new Map<string, HTMLCanvasElement | null>();
+
+/**
+ * A cheap or posh piece, drawn once and kept. Cheap is the same piece a bit faded and
+ * grubby; posh has a gilt line along its top edge, so it reads at a glance.
+ */
+function gradedSprite(def: string, grade: Grade): HTMLCanvasElement | null {
+  const k = `${def}|${grade}`;
+  if (sprites.has(k)) return sprites.get(k)!;
+  const d = furnitureDef(def);
+  const W = d.w * TILE;
+  const H = d.h * TILE;
+  const c = typeof document === 'undefined' ? null : document.createElement('canvas');
+  const g = c?.getContext('2d', { willReadFrequently: true });
+  if (!c || !g) {
+    sprites.set(k, null);
+    return null;
+  }
+  c.width = W + SPRITE_PAD * 2;
+  c.height = H + SPRITE_TOP + 1;
+  g.translate(SPRITE_PAD, H + SPRITE_TOP);
+  drawPiece(g, def, W, H);
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const px = img.data;
+  const at = (x: number, y: number) => (y * c.width + x) * 4;
+  if (grade === 'cheap') {
+    // Faded towards grey and a shade darker.
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3] === 0) continue;
+      const grey = 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2];
+      for (let j = 0; j < 3; j++) px[i + j] = Math.round((px[i + j] + (grey - px[i + j]) * 0.45) * 0.9);
+    }
+  } else {
+    // The top pixel of each column (anything solid enough to be the piece, not glass) turns gilt.
+    for (let x = 0; x < c.width; x++) {
+      for (let y = 0; y < c.height; y++) {
+        const i = at(x, y);
+        if (px[i + 3] < 200) continue;
+        [px[i], px[i + 1], px[i + 2]] = GILT;
+        break;
+      }
+    }
+  }
+  g.putImageData(img, 0, 0);
+  sprites.set(k, c);
+  return c;
 }
 
 /** Furniture that gives off light in the evening, and its colour. */

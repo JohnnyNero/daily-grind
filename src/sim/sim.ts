@@ -17,6 +17,7 @@ import { crimeMinute } from './crime';
 import { councilMorning, upkeepHour } from './upkeep';
 import { planningMorning } from './planning';
 import { expectationsMorning } from './expectations';
+import { gradesMorning } from './grades';
 import { handoverHour, startHandover } from './handover';
 import { talesHour } from './tales';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
@@ -96,6 +97,7 @@ export class Sim {
     if (hour === 7) {
       morning(this);
       expectationsMorning(this);
+      gradesMorning(this);
       rentMorning(this);
       postMorning(this);
       chatMorning(this);

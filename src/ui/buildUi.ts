@@ -24,10 +24,11 @@ import {
   stairsProblem,
   unsupportedCells,
 } from '../sim/build';
-import { FURNITURE, furnitureDef, type FurnitureGroup } from '../sim/defs';
+import { FURNITURE, furnitureDef, isGraded, type FurnitureGroup } from '../sim/defs';
 import { CELL_PRICE, DEMOLISH_PRICE, INSULATE_PRICE, book, furniturePrice, pounds } from '../sim/economy';
+import { GRADE_NAMES, GRADE_ORDER, gradeOf, gradeProblem, gradedName, poshLockedWhy, poshUnlocked } from '../sim/grades';
 import type { Sim } from '../sim/sim';
-import { DOOR_ROWS, TILE, isDoor, isSolid, key, type CellKind, type State } from '../sim/state';
+import { DOOR_ROWS, TILE, isDoor, isSolid, key, type CellKind, type Grade, type State } from '../sim/state';
 import { buyFurniture, shiftFurniture, turnFurniture } from '../sim/furnish';
 import { partsOf, piecesBetween, quote } from '../sim/works';
 import { drawFurniture } from '../render/art';
@@ -82,7 +83,9 @@ export class BuildUi {
    * A piece being placed: what, where and which way round it would go, and (if it's
    * already in the building) which one is moving. Nothing changes until Place.
    */
-  private pending: { def: string; x: number; s: number; flip: boolean; id?: number } | null = null;
+  private pending: { def: string; x: number; s: number; flip: boolean; id?: number; grade?: Grade } | null = null;
+  /** The grade new pieces are bought at (pieces that don't come in grades ignore it). */
+  private grade: Grade = 'standard';
   private placeBar = el('place-bar');
   /** The draft: the building as you've drawn it (its cells and insulation; the rest is the real thing). */
   private draft!: State;
@@ -154,7 +157,7 @@ export class BuildUi {
     if (!f) return;
     this.group = GROUPS.find((g) => g.furniture?.includes(furnitureDef(f.def).group)) ?? this.group;
     this.render();
-    this.startPlacing({ def: f.def, x: f.x, s: f.s, flip: !!f.flip, id });
+    this.startPlacing({ def: f.def, x: f.x, s: f.s, flip: !!f.flip, id, grade: gradeOf(f) });
   }
 
   // ------------------------------------------------------------------ placing furniture
@@ -189,7 +192,10 @@ export class BuildUi {
     this.syncDraft();
     const problem = furnitureProblem(this.sim.state, p.def, p.x, p.s, p.id) ?? furnitureProblem(this.draft, p.def, p.x, p.s, p.id);
     if (problem) return problem;
-    if (p.id === undefined && this.sim.state.money < furniturePrice(p.def)) return `Can't afford it: you have ${pounds(this.sim.state.money)}`;
+    if (p.id !== undefined) return null;
+    const locked = gradeProblem(this.sim, p.def, p.grade ?? 'standard');
+    if (locked) return locked;
+    if (this.sim.state.money < furniturePrice(p.def, p.grade)) return `Can't afford it: you have ${pounds(this.sim.state.money)}`;
     return null;
   }
 
@@ -198,15 +204,15 @@ export class BuildUi {
     const p = this.pending;
     if (!p) return;
     const problem = this.pendingProblem();
-    this.renderer.build.ghost = { def: p.def, x: p.x, s: p.s, flip: p.flip, ok: problem === null };
-    const name = furnitureDef(p.def).name;
-    el('place-name').textContent = p.id === undefined ? `${name} · ${pounds(furniturePrice(p.def))}` : `Moving the ${name.toLowerCase()}`;
+    this.renderer.build.ghost = { def: p.def, x: p.x, s: p.s, flip: p.flip, ok: problem === null, grade: p.grade };
+    const name = gradedName({ def: p.def, grade: p.grade });
+    el('place-name').textContent = p.id === undefined ? `${name} · ${pounds(furniturePrice(p.def, p.grade))}` : `Moving the ${name.toLowerCase()}`;
     const why = el('place-why');
     why.textContent = problem ?? 'Tap where it should go, or drag it.';
     why.classList.toggle('bad', problem !== null);
     const ok = el('place-ok') as HTMLButtonElement;
     ok.disabled = problem !== null;
-    ok.textContent = p.id === undefined ? `Place ${pounds(furniturePrice(p.def))}` : 'Place';
+    ok.textContent = p.id === undefined ? `Place ${pounds(furniturePrice(p.def, p.grade))}` : 'Place';
     el('place-cancel').textContent = p.id === undefined ? 'Done' : 'Cancel';
     this.bump();
   }
@@ -218,7 +224,7 @@ export class BuildUi {
     const out = { problem: null as string | null };
     this.furnish(() => {
       if (p.id === undefined) {
-        const f = buyFurniture(this.sim, p.def, p.x, p.s, p.flip, this.draft);
+        const f = buyFurniture(this.sim, p.def, p.x, p.s, p.flip, this.draft, p.grade);
         if (typeof f === 'string') out.problem = f;
         return;
       }
@@ -511,8 +517,11 @@ export class BuildUi {
         this.tools.append(h('button', { type: 'button', 'aria-pressed': String(t === this.tool), onclick: () => this.pickTool(t) }, toolIcon(t), TOOLS[t].name, h('small', {}, toolPrice(t))));
       }
     } else {
-      for (const d of FURNITURE.filter((f) => this.group!.furniture!.includes(f.group))) {
-        this.tools.append(h('button', { type: 'button', onclick: () => this.pickPiece(d.id) }, pieceIcon(d.id), d.name, h('small', {}, pounds(furniturePrice(d.id)))));
+      const pieces = FURNITURE.filter((f) => this.group!.furniture!.includes(f.group));
+      if (pieces.some((d) => isGraded(d.id))) this.tools.append(this.gradeToggle());
+      for (const d of pieces) {
+        const g = isGraded(d.id) ? this.grade : 'standard';
+        this.tools.append(h('button', { type: 'button', onclick: () => this.pickPiece(d.id) }, pieceIcon(d.id, g), d.name, h('small', {}, pounds(furniturePrice(d.id, g)))));
       }
     }
     this.renderZoom();
@@ -536,7 +545,47 @@ export class BuildUi {
 
   private pickPiece(id: string): void {
     this.select(null);
-    this.startPlacing({ def: id, ...this.middleSpot(id), flip: false });
+    this.startPlacing({ def: id, ...this.middleSpot(id), flip: false, grade: isGraded(id) ? this.grade : 'standard' });
+  }
+
+  /**
+   * Cheap, standard or posh, above the pieces: the prices below follow it. Posh shows a
+   * padlock until it opens up, and tapping it says what it takes.
+   */
+  private gradeToggle(): HTMLElement {
+    const open = poshUnlocked(this.sim);
+    if (!open && this.grade === 'posh') this.grade = 'standard';
+    const note: Record<Grade, string> = { cheap: 'Wears fast', standard: 'Does the job', posh: open ? 'Lasts, impresses' : 'Locked' };
+    return h(
+      'div',
+      { class: 'grades', role: 'radiogroup', 'aria-label': 'Grade' },
+      ...GRADE_ORDER.map((g) => {
+        const locked = g === 'posh' && !open;
+        const b = h(
+          'button',
+          {
+            type: 'button',
+            role: 'radio',
+            'aria-checked': String(g === this.grade),
+            'aria-disabled': locked ? 'true' : undefined,
+            class: `grade-${g}${locked ? ' locked' : ''}`,
+            title: locked ? poshLockedWhy() : undefined,
+            onclick: () => {
+              if (locked) {
+                this.setHint(`${poshLockedWhy()}.`, true);
+                return;
+              }
+              this.grade = g;
+              this.render();
+            },
+          },
+          h('b', {}, GRADE_NAMES[g]),
+          h('small', {}, note[g]),
+        );
+        if (locked) b.prepend(padlock());
+        return b;
+      }),
+    );
   }
 
   private updateButtons(): void {
@@ -817,13 +866,29 @@ function iconCanvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingCo
   return [c, ctx];
 }
 
-function pieceIcon(id: string): HTMLCanvasElement {
+function pieceIcon(id: string, grade: Grade = 'standard'): HTMLCanvasElement {
   const d = furnitureDef(id);
   const scale = Math.min(1, 32 / (d.w * 16), 24 / (d.h * 16));
   const [c, ctx] = iconCanvas(32, 24);
   ctx.translate((32 - d.w * 16 * scale) / 2, 24 - d.h * 16 * scale);
   ctx.scale(scale, scale);
-  drawFurniture(ctx, id, 0, 0);
+  drawFurniture(ctx, id, 0, 0, false, grade);
+  return c;
+}
+
+/** A small padlock, for posh before it opens up. */
+function padlock(): HTMLCanvasElement {
+  const [c, ctx] = iconCanvas(8, 9);
+  c.style.width = '12px';
+  c.style.height = '14px';
+  c.className = 'padlock';
+  ctx.fillStyle = '#7a6a55';
+  ctx.fillRect(2, 0, 4, 1);
+  ctx.fillRect(1, 1, 1, 3);
+  ctx.fillRect(6, 1, 1, 3);
+  ctx.fillRect(0, 4, 8, 5);
+  ctx.fillStyle = '#efe7da';
+  ctx.fillRect(3, 6, 2, 2);
   return c;
 }
 

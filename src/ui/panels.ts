@@ -9,6 +9,7 @@ import { burglaryRisk, fitAlarm, fitLocks, riskWord } from '../sim/crime';
 import type { ListingStyle } from '../sim/state';
 import { portrait } from '../render/art';
 import { furnitureDef } from '../sim/defs';
+import { gradedName } from '../sim/grades';
 import { POUND, billsDue, flatInfo, goingRate, overpay, pounds, MISSES_ALLOWED, MORTGAGE, LOCKS_PRICE, ALARM_PRICE, ALARM_WEEKLY } from '../sim/economy';
 import { CLEANER_WEEKLY, flatClimate, gasBill, outdoorTemp, seasonName } from '../sim/environment';
 import { answer } from '../sim/chat';
@@ -265,8 +266,9 @@ export class Panels {
         );
       }
       const counts = new Map<string, number>();
-      for (const f of furniture) counts.set(furnitureDef(f.def).name, (counts.get(furnitureDef(f.def).name) ?? 0) + 1);
-      out.push(h('div', { className: 'chips sec' }, ...[...counts].map(([n, c]) => h('span', { className: 'chip' }, c > 1 ? `${n} ×${c}` : n))));
+      // By name and grade: "Posh sofa", "Cheap cooker".
+      for (const f of furniture) counts.set(gradedName(f), (counts.get(gradedName(f)) ?? 0) + 1);
+      out.push(h('div', { className: 'chips sec' }, ...[...counts].map(([n, c]) => h('span', { className: `chip${n.startsWith('Posh ') ? ' posh' : n.startsWith('Cheap ') ? ' cheap' : ''}` }, c > 1 ? `${n} ×${c}` : n))));
       if (furniture.length === 0) out.push(h('p', { className: 'note' }, 'Stripped back to the brick. Nothing in it yet.'));
       if (!flat.enclosed) out.push(h('p', { className: 'note' }, 'Open to the weather: it needs walls and a ceiling all round.'));
       return out;

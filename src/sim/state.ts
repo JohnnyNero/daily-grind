@@ -52,7 +52,12 @@ export interface Furniture {
   broken?: number;
   /** Someone's asked you to mend it. */
   reported?: boolean;
+  /** Cheap or posh (standard if missing). Only pieces you use come in grades. */
+  grade?: Grade;
 }
+
+/** How good a piece of furniture is: dearer is nicer to have and lasts longer. */
+export type Grade = 'cheap' | 'standard' | 'posh';
 
 export type PawnKind = 'agent' | 'passerby' | 'tenant' | 'guest' | 'burglar';
 
@@ -259,6 +264,8 @@ export interface State {
   handover: Handover;
   /** Tales: what's happened worth talking about, newest last, and the next tale's number. */
   chronicle: { next: number; tales: Tale[] };
+  /** The day posh furniture opened up (it stays open). */
+  poshFrom?: number;
 }
 
 export type TaleKind =
