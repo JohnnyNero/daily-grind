@@ -9,6 +9,9 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, type ChatMessage, type Pawn } from './state';
 import { remember } from './thoughts';
 import { has } from './traits';
+import { happeningAct } from './events';
+import { crimeAct } from './crime';
+import { upkeepAct } from './upkeep';
 
 const MAX_MESSAGES = 150;
 
@@ -69,7 +72,8 @@ export function chatMorning(sim: Sim): void {
 function act(sim: Sim, text: string, fromId: number): void {
   const st = sim.state;
   const p = st.pawns.find((x) => x.id === fromId);
-  const [kind, arg] = text.split(':');
+  const [kind, arg, ...rest] = text.split(':');
+  if (happeningAct(sim, kind, arg, p) || crimeAct(sim, kind, [arg, ...rest], p) || upkeepAct(sim, kind, [arg, ...rest])) return;
   const everyone = tenants(sim);
   switch (kind) {
     case 'pet':

@@ -263,7 +263,16 @@ export class Renderer {
     }
     for (const f of st.furniture) {
       const d = furnitureDef(f.def);
-      drawFurniture(ctx, f.def, f.x * TILE, floorY(f.s) - d.h * TILE, f.flip);
+      const top = floorY(f.s) - d.h * TILE;
+      drawFurniture(ctx, f.def, f.x * TILE, top, f.flip);
+      // Broken: a red tag with a "!" on its top corner.
+      if (f.broken !== undefined) {
+        const tx = (f.x + d.w) * TILE - 7;
+        rect(ctx, tx, top - 3, 6, 9, PAL.outline);
+        rect(ctx, tx + 1, top - 2, 4, 7, '#d0452f');
+        rect(ctx, tx + 2, top - 1, 2, 3, '#fff4e0');
+        rect(ctx, tx + 2, top + 3, 2, 1, '#fff4e0');
+      }
     }
     this.layerVersion = this.sim.version;
     this.lightKey = '';

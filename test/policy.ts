@@ -6,6 +6,7 @@ import { choose } from '../src/sim/post';
 import { answer } from '../src/sim/chat';
 import { scoreFor } from '../src/sim/impressiveness';
 import type { Sim } from '../src/sim/sim';
+import { mend } from '../src/sim/upkeep';
 
 export type Policy = 'decent' | 'ruthless';
 
@@ -44,6 +45,8 @@ export function landlord(sim: Sim, policy: Policy): void {
     if (!l.choices || l.chosen !== undefined) continue;
     choose(sim, l.id, policy === 'decent' ? 0 : l.choices.length - 1);
   }
+  // Even the ruthless one mends what the council has told them to.
+  if (st.council.notice) for (const f of st.furniture) if (f.broken !== undefined) mend(sim, f.id);
   // Keep a cushion, overpay the rest.
   const cushion = 1500 * POUND;
   if (st.money > cushion + 1000 * POUND) overpay(sim, st.money - cushion);

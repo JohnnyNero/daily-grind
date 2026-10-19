@@ -7,11 +7,11 @@ import { scoreFor } from './impressiveness';
 import { FIRST, LAST } from './pawns';
 import { pick, randInt, random, type RngHolder } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type Lease, type Pawn } from './state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type Lease, type ListingStyle, type Pawn } from './state';
 import { moveIn, type Person } from './tenants';
 import { friendsLeaving } from './social';
 import { post } from './chat';
-import { likingTarget, rentThought, tierThought, type Thought } from './thoughts';
+import { likingTarget, rentThought, thoughtsOf, tierThought, type Thought } from './thoughts';
 import { rollTraits, traitDef, touchiness, has } from './traits';
 
 const JOBS: { title: string; leave: number; back: number }[] = [
@@ -32,6 +32,65 @@ const NO_JOBS = ['Retired', 'Student', 'Works from home', '"Between things"'];
 const MAX_WAITING = 3;
 /** How long an applicant waits for an answer. */
 const APPLICANT_DAYS = 2;
+
+// ------------------------------------------------------------------ listings
+
+export interface ListingDef {
+  name: string;
+  /** How it reads on the property site. */
+  blurb: string;
+  /** What it does, for the panel. */
+  does: string;
+  /** Hours between applicants, times this. */
+  pace: number;
+}
+
+export const LISTINGS: Record<ListingStyle, ListingDef> = {
+  plain: { name: 'Plain', blurb: 'Flat to let. Furnished. Rent weekly.', does: 'No surprises either way.', pace: 1 },
+  agent: { name: 'Estate agent', blurb: 'Bijou. Characterful. Moments from transport. Viewing essential!', does: "Lots of applicants. They'll feel short-changed when they see it.", pace: 0.6 },
+  honest: { name: 'Brutally honest', blurb: 'Small. Brown. The boiler has moods. Neighbours mostly fine.', does: 'Fewer applicants, pleasantly surprised ones.', pace: 1.6 },
+  professionals: { name: 'Professionals only', blurb: 'Would suit a working professional. No students, no bands, no exceptions.', does: 'Only people with jobs, and none of the noisy sort. Slower to let.', pace: 1.4 },
+  pets: { name: 'Pets considered', blurb: 'Pets considered. Within reason. Not a horse.', does: 'Pet owners come running.', pace: 0.85 },
+};
+
+// ------------------------------------------------------------------ reviews
+
+/** Your rating from the last few tenants to leave (null before anyone has). */
+export function landlordRating(sim: Sim): number | null {
+  const recent = sim.state.reviews.slice(-8);
+  if (recent.length === 0) return null;
+  return recent.reduce((n, r) => n + r.stars, 0) / recent.length;
+}
+
+/** Good reviews bring applicants quicker; bad ones put people off. */
+function ratingPace(sim: Sim): number {
+  const r = landlordRating(sim);
+  return r === null ? 1 : 1.45 - 0.15 * r;
+}
+
+const REVIEW_TEXT: Record<number, string[]> = {
+  1: ['Avoid. {straw}. The landlord could not care less.', 'Zero stars if I could. {straw}.', 'Lived here so you don\'t have to. {straw}.'],
+  2: ['{straw}. Wouldn\'t rush back.', 'Not the worst. Not far off. {straw}.'],
+  3: ['It was fine. {straw}, but fine.', 'Does the job. Bring a jumper.'],
+  4: ['Good place, decent landlord. {best}.', 'Would recommend. {best}.'],
+  5: ['Best flat I\'ve had. {best}. Sad to go.', 'Genuinely lovely. {best}. Ten out of ten landlord.'],
+};
+
+/** They're leaving: they say what they thought, for everyone to read. */
+function review(sim: Sim, flatId: string, people: Pawn[]): void {
+  if (people.length === 0) return;
+  const st = sim.state;
+  const liking = people.reduce((n, p) => n + p.life!.liking, 0) / people.length;
+  const stars = Math.max(1, Math.min(5, Math.round(liking / 20 + 0.5)));
+  const thoughts = thoughtsOf(sim, people[0]).filter((t) => t.value !== 0);
+  const worst = [...thoughts].sort((a, b) => a.value - b.value)[0];
+  const best = [...thoughts].sort((a, b) => b.value - a.value)[0];
+  const clean = (t: Thought | undefined, fallback: string) => (t ? t.label.replace(/ ×\d+$/, '').replace(/^Heard: /, '') : fallback);
+  const text = pick(st, REVIEW_TEXT[stars]).replace('{straw}', clean(worst, 'Everything')).replace('{best}', clean(best, 'Nice place'));
+  st.reviews.push({ day: sim.day, who: people.map((p) => p.name.split(' ')[0]).join(' & '), flat: sim.layout.flat(flatId)?.name ?? 'A flat', stars, text: text.charAt(0).toUpperCase() + text.slice(1) });
+  if (st.reviews.length > 40) st.reviews.splice(0, st.reviews.length - 40);
+  sim.notify(`${people[0].name.split(' ')[0]} left a ${stars}-star review.`);
+}
 
 // ------------------------------------------------------------------ people
 
@@ -61,7 +120,7 @@ export function applicantsHour(sim: Sim): void {
     // A flat without the basics (a bed, a loo, a wash, a kitchen) only draws the desperate, and rarely.
     const basics = scoreFor(sim, f.id, 1).has;
     const liveable = basics.bed && basics.toilet && basics.wash && basics.kitchen;
-    const meanHours = Math.max(3, Math.min(120, 14 * ratio ** 3)) * (liveable ? 1 : 4);
+    const meanHours = Math.max(3, Math.min(120, 14 * ratio ** 3)) * (liveable ? 1 : 4) * LISTINGS[info.style ?? 'plain'].pace * ratingPace(sim);
     info.nextApplicant = st.tick + Math.round(-Math.log(1 - random(st) * 0.999) * meanHours * TICKS_PER_HOUR);
     if (waiting < MAX_WAITING && ratio < 1.6) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
   }
@@ -77,7 +136,11 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   const surname = pick(st, LAST);
   const people: Person[] = [];
   for (let i = 0; i < size; i++) {
-    let person = makePerson(st, i === 0 || random(st) < 0.6 ? surname : undefined, i === 0 ? random(st) < 0.8 : random(st) < 0.5);
+    const professional = info.style === 'professionals';
+    let person = makePerson(st, i === 0 || random(st) < 0.6 ? surname : undefined, professional || (i === 0 ? random(st) < 0.8 : random(st) < 0.5));
+    if (professional) person.traits = person.traits.filter((t) => t !== 'partyAnimal' && t !== 'musician');
+    if (info.style === 'pets' && i === 0 && !person.traits.includes('petOwner') && random(st) < 0.6) person.traits = [...person.traits.slice(0, 2), 'petOwner'];
+    if (person.traits.length === 0) person.traits = ['easyGoing'];
     // Nobody shares a first name with someone they live with.
     for (let tries = 0; tries < 10 && people.some((o) => o.name.split(' ')[0] === person.name.split(' ')[0]); tries++) person = { ...person, name: `${pick(st, FIRST)} ${person.name.split(' ').slice(1).join(' ')}` };
     people.push(person);
@@ -133,6 +196,9 @@ export function accept(sim: Sim, applicantId: number): string | null {
   book(sim, `Deposit · ${flatName}`, lease.deposit);
   const pawns = moveIn(sim, a.flat, a.people, [a.shown]);
   for (const p of pawns) p.life!.memories.push({ id: 'newPlace', at: st.tick });
+  // What the listing promised colours the first week.
+  if (info.style === 'agent') for (const p of pawns) p.life!.memories.push({ id: 'notAsAdvertised', at: st.tick });
+  if (info.style === 'honest') for (const p of pawns) p.life!.memories.push({ id: 'betterThanExpected', at: st.tick });
   const greeter = st.pawns.find((p) => p.life && !p.life.leaving && !pawns.includes(p) && has(p.life, 'friendly'));
   if (greeter) post(sim, greeter, `Welcome to ${flatName}, ${pawns.map((p) => p.name.split(' ')[0]).join(' and ')}! Bins go out Sunday night. Don't ask about the boiler.`);
   if (a.desperate) for (const p of pawns) p.life!.desperate = true;
@@ -271,6 +337,7 @@ export function moveOut(sim: Sim, flatId: string): void {
   const back = lease.deposit - lease.owed;
   if (back > 0) book(sim, `Deposit back · ${name}`, -back);
   const leaving = st.pawns.filter((q) => q.life?.flat === flatId);
+  review(sim, flatId, leaving.filter((q) => !q.life!.leaving));
   friendsLeaving(sim, leaving);
   for (const p of leaving) {
     p.life!.leaving = true;

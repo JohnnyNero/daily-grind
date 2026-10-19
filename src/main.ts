@@ -58,6 +58,7 @@ function play(sim: Sim): void {
   };
   const card = new FurnitureCard(sim);
   const build = new BuildUi(sim, renderer, card);
+  card.onNotify = (text, bad) => hud.notify(text, bad);
   card.onMove = (id) => (build.active ? build.moveFromCard(id) : build.startMoving(id));
   card.onChange = () => {
     if (card.showing === null && !build.isMoving) renderer.build.selected = null;

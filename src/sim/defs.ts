@@ -35,6 +35,8 @@ export interface FurnitureDef {
   value: number;
   /** Counts as decoration (pictures, plants and so on). */
   decor?: boolean;
+  /** Worth a burglar's while. */
+  valuable?: boolean;
   /** Columns people use it from, counted from the left. */
   spots?: number[];
   offers?: Offer[];
@@ -49,8 +51,8 @@ export const FURNITURE: readonly FurnitureDef[] = [
   { id: 'armchair', name: 'Armchair', w: 1, h: 1, group: 'sit', value: 20, offers: [{ need: 'comfort', rate: 0.8, minutes: [20, 60], pose: 'sit', doing: 'Sitting in the armchair' }, { need: 'fun', rate: 0.5, minutes: [40, 90], pose: 'sit', also: { comfort: 0.6 }, needsNearby: 'tv', doing: 'Watching telly' }] },
   { id: 'table', name: 'Table', w: 2, h: 1, group: 'sit', value: 15 },
   { id: 'chair', name: 'Chair', w: 1, h: 1, group: 'sit', value: 8, offers: [{ need: 'comfort', rate: 0.4, minutes: [15, 40], pose: 'sit', doing: 'Sitting down' }] },
-  { id: 'desk', name: 'Desk', w: 2, h: 1, group: 'sit', value: 20, offers: [{ need: 'fun', rate: 0.45, minutes: [40, 120], pose: 'sit', also: { comfort: 0.2 }, doing: 'On the laptop' }] },
-  { id: 'tv', name: 'Telly', w: 2, h: 1, group: 'sit', value: 30 },
+  { id: 'desk', name: 'Desk', w: 2, h: 1, group: 'sit', value: 20, valuable: true, offers: [{ need: 'fun', rate: 0.45, minutes: [40, 120], pose: 'sit', also: { comfort: 0.2 }, doing: 'On the laptop' }] },
+  { id: 'tv', name: 'Telly', w: 2, h: 1, group: 'sit', value: 30, valuable: true },
   { id: 'counter', name: 'Kitchen counter', w: 1, h: 1, group: 'kitchen', value: 10 },
   { id: 'sink', name: 'Kitchen sink', w: 1, h: 1, group: 'kitchen', value: 15 },
   { id: 'cooker', name: 'Cooker', w: 1, h: 1, group: 'kitchen', value: 30, offers: [{ need: 'food', rate: 0, minutes: [20, 35], pose: 'stand', doing: 'Cooking' }] },

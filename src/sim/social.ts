@@ -16,6 +16,7 @@ import type { Sim } from './sim';
 import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
 import { MEMORIES, remember } from './thoughts';
 import { has } from './traits';
+import { maybeFight } from './events';
 
 export interface SocialDef {
   label: string;
@@ -36,6 +37,8 @@ export const SOCIAL: Record<string, SocialDef> = {
   noise: { label: 'Keeps me up at night', value: -4, hours: 168, stack: 5 },
   heardThings: { label: 'Heard things about them', value: -4, hours: 120, stack: 2 },
   brokeUp: { label: 'Broke up with me', value: -25, hours: 336, stack: 1 },
+  fight: { label: 'Had a fight', value: -30, hours: 336, stack: 1 },
+  cheatedOn: { label: 'Went behind my back', value: -35, hours: 600, stack: 1 },
 };
 
 /** Each extra copy counts this much of the one before. */
@@ -259,6 +262,7 @@ function row(sim: Sim, a: Pawn, b: Pawn): void {
   }
   a.doing = `Having a row with ${b.name.split(' ')[0]}`;
   b.doing = `Having a row with ${a.name.split(' ')[0]}`;
+  if (maybeFight(sim, a, b)) return;
   // Anyone nearby saw it.
   const seen = tenants(sim).filter((w) => w !== a && w !== b && !w.life!.away && Math.abs(w.s - a.s) < 0.1 && Math.abs(w.x - a.x) <= 6);
   for (const w of seen) remember(sim, w.life!, 'sawRow');

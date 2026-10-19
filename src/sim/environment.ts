@@ -10,6 +10,7 @@
 // gets through each pair of flats is worked out once when the building changes. Insulated
 // walls and floors let through about a sixth. Noise at night counts for more.
 
+import { happeningNoise } from './events';
 import type { Flat, Layout } from './layout';
 import type { Sim } from './sim';
 import { TICKS_PER_DAY, isDoor, key, type Pawn } from './state';
@@ -194,6 +195,8 @@ export function noiseOf(p: Pawn): number {
   if (d === 'Watching telly') return 2;
   if (d === 'Practising') return 6;
   if (d.startsWith('Having a row')) return 8;
+  if (d.startsWith('Fighting')) return 10;
+  if (d === 'At the party') return 2.5;
   if (d.startsWith('Chatting') || d.startsWith('Gossiping') || d.startsWith('Flirting')) return 1;
   if (d === 'Cooking') return 0.5;
   return 0;
@@ -214,6 +217,7 @@ export function noiseMade(sim: Sim): Map<string, number> {
     const where = whereIs(sim, work);
     made.set(where, (made.get(where) ?? 0) + BUILDER_NOISE);
   }
+  happeningNoise(sim, made);
   return made;
 }
 

@@ -14,7 +14,7 @@ export const TICKS_PER_MINUTE = 60;
 export const TICKS_PER_HOUR = 60 * TICKS_PER_MINUTE;
 export const TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
 
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 
 /**
  * What a cell holds. Walls hold things up and keep people, heat and noise out; a window is
@@ -46,9 +46,15 @@ export interface Furniture {
   s: number;
   /** Facing the other way. */
   flip?: boolean;
+  /** How worn out it is, 0 new to 1 worn out. It breaks at 1. */
+  wear?: number;
+  /** Broken (since this day): nobody can use it until it's mended. */
+  broken?: number;
+  /** Someone's asked you to mend it. */
+  reported?: boolean;
 }
 
-export type PawnKind = 'agent' | 'passerby' | 'tenant';
+export type PawnKind = 'agent' | 'passerby' | 'tenant' | 'guest' | 'burglar';
 
 export type NeedId = 'sleep' | 'food' | 'hygiene' | 'bladder' | 'fun' | 'comfort' | 'warmth' | 'quiet';
 
@@ -127,6 +133,8 @@ export interface Life {
   pet?: string;
   /** The day they last stopped for the post on the way in. */
   postDay?: number;
+  /** Seeing someone behind their partner's back (a pawn id). */
+  affair?: number;
 }
 
 export interface Pawn {
@@ -167,6 +175,8 @@ export interface Pawn {
   life?: Life;
   /** How they describe themselves: their job, or "Retired". */
   note?: string;
+  /** A burglar's night: how far they've got, and how they're getting in. */
+  burgle?: { stage: 'case' | 'try' | 'in' | 'out'; entry: 'door' | 'window'; until: number; at?: [number, number]; inside?: [number, number] };
 }
 
 export interface State {
@@ -212,6 +222,52 @@ export interface State {
   chat: ChatMessage[];
   /** Building work: your plans, and the job the builders are on. */
   works: Works;
+  /** What's going on: the storyteller's mood, its cooldowns and the happenings under way. */
+  story: Story;
+  /** Locks on the street door and ground-floor windows, and a burglar alarm. */
+  security: { locks: boolean; alarm: boolean };
+  /** What tenants said about you when they left, newest last. */
+  reviews: Review[];
+  /** How high you're allowed to build (the top row), and an application waiting on the council. */
+  planning: { top: number; applied?: { top: number; decideDay: number } };
+  /** The council: a visit booked, and an improvement notice to put right by a day. */
+  council: { visitDay?: number; notice?: { issues: string[]; byDay: number } };
+}
+
+/**
+ * The storyteller deals out happenings. It runs busy and quiet in turns, never has more than
+ * a couple going at once, won't repeat a kind of thing for a while (its tags cool down), and
+ * goes easier on you when you're struggling.
+ */
+export interface Story {
+  busy: boolean;
+  /** When the mood changes. */
+  until: number;
+  /** By tag: not again until this tick. */
+  cooldowns: Record<string, number>;
+  running: Happening[];
+}
+
+export interface Happening {
+  id: number;
+  kind: 'party' | 'fight' | 'affair' | 'burglary';
+  until: number;
+  /** The flat it's in, and who's in it. */
+  flat?: string;
+  pawns: number[];
+  /** Guests still to turn up, and when the next one does. */
+  queue?: number;
+  next?: number;
+  /** Something that's happened along the way (a complaint made, an alarm going off). */
+  flag?: string;
+}
+
+export interface Review {
+  day: number;
+  who: string;
+  flat: string;
+  stars: number;
+  text: string;
 }
 
 /**
@@ -286,7 +342,11 @@ export interface FlatInfo {
   belowSince?: number;
   lease: Lease | null;
   nextApplicant: number;
+  /** How the listing's written, which changes who applies and what they expect. */
+  style?: ListingStyle;
 }
+
+export type ListingStyle = 'plain' | 'agent' | 'honest' | 'professionals' | 'pets';
 
 /** Someone moving in: who they are, their job if they have one, and their traits. */
 export interface Person {

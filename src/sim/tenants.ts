@@ -4,6 +4,7 @@
 // means popping to the pub, no kitchen means chips. All of it turns into thoughts, and the
 // thoughts add up to how much they like living here.
 
+import { useUp } from './upkeep';
 import { furnitureDef, spotColumns, type Offer } from './defs';
 import { flatScore } from './impressiveness';
 import type { Flat } from './layout';
@@ -331,7 +332,7 @@ function choices(sim: Sim, p: Pawn, flat: Flat, match: (o: Offer, f: Furniture) 
   const inFlat = new Set(lay.flatCells(flat));
   const out: Choice[] = [];
   for (const f of sim.state.furniture) {
-    if (!inFlat.has(lay.node(f.x, f.s))) continue;
+    if (!inFlat.has(lay.node(f.x, f.s)) || f.broken !== undefined) continue;
     const def = furnitureDef(f.def);
     const room = lay.roomOf[lay.node(f.x, f.s)];
     def.offers?.forEach((o, i) => {
@@ -419,6 +420,8 @@ function stopUsing(sim: Sim, p: Pawn, finished: boolean): void {
   life.using = null;
   delete p.pose;
   if (!finished || !o) return;
+  const used = sim.state.furniture.find((x) => x.id === u.furniture);
+  if (used && u.offer >= 0) useUp(sim, used, p);
   if (o.memory) remember(sim, life, o.memory);
   if (o.doing === 'Cooking') life.meal = true;
   if (u.offer === -1) {

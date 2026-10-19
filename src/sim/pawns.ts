@@ -8,6 +8,8 @@ import type { Sim } from './sim';
 import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
 import { occupants } from './impressiveness';
 import { minuteOfLife, tenantReturns, tenantThink } from './tenants';
+import { guestThink } from './events';
+import { burglarThink } from './crime';
 
 /** Tiles per tick at a stroll: about two tiles a second at normal speed. */
 const WALK = 0.08;
@@ -22,6 +24,8 @@ const seenVersion = new WeakMap<Pawn, number>();
 
 export function keysOf(p: Pawn): Keys {
   if (p.kind === 'agent') return { all: true };
+  if (p.kind === 'guest') return p.flat ? { flats: [p.flat] } : {};
+  if (p.kind === 'burglar') return p.burgle?.stage === 'in' || (p.burgle?.stage === 'out' && p.burgle.entry === 'door') ? { all: true } : {};
   if (p.life) return { flats: [p.life.flat] };
   return {};
 }
@@ -62,7 +66,7 @@ function spawn(sim: Sim): void {
   }
 }
 
-function addPawn(sim: Sim, kind: Pawn['kind']): Pawn {
+export function addPawn(sim: Sim, kind: Pawn['kind']): Pawn {
   const st = sim.state;
   const from: 0 | 1 = random(st) < 0.5 ? 0 : 1;
   const x = from === 0 ? 0 : st.w - 1;
@@ -186,12 +190,14 @@ function think(sim: Sim, p: Pawn): void {
   const st = sim.state;
   const lay = sim.layout;
   const edge = p.exit === 0 ? 0 : st.w - 1;
+  if (p.kind === 'guest' && guestThink(sim, p)) return;
+  if (p.kind === 'burglar' && burglarThink(sim, p)) return;
   if (p.task === 'leave') {
     if (Math.round(p.x) === edge && Math.round(p.s) === 0) {
       removePawn(sim, p);
       return;
     }
-    p.doing = p.kind === 'agent' ? 'Off to the next viewing' : 'Walking past';
+    if (p.kind === 'agent' || p.kind === 'passerby') p.doing = p.kind === 'agent' ? 'Off to the next viewing' : 'Walking past';
     if (!setGoal(sim, p, [edge, 0])) {
       // Shut in: wait for a way out.
       p.doing = 'Stuck: no way out';

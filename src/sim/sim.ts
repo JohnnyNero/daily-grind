@@ -12,6 +12,10 @@ import { environmentHour, noiseMade } from './environment';
 import { forgetSocial, romanceHour, requestsHour, socialMinute } from './social';
 import { startingTenants } from './start';
 import { worksHour, worksMinute } from './works';
+import { eventsMinute, storyHour } from './events';
+import { crimeMinute } from './crime';
+import { councilMorning, upkeepHour } from './upkeep';
+import { planningMorning } from './planning';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
 
 export class Sim {
@@ -76,6 +80,8 @@ export class Sim {
     if (st.tick % TICKS_PER_MINUTE === 0) {
       socialMinute(this);
       worksMinute(this);
+      eventsMinute(this);
+      crimeMinute(this);
     }
     stepPawns(this);
   }
@@ -88,11 +94,15 @@ export class Sim {
       rentMorning(this);
       postMorning(this);
       chatMorning(this);
+      councilMorning(this);
+      planningMorning(this);
     }
     environmentHour(this);
     worksHour(this);
     romanceHour(this);
     requestsHour(this);
+    upkeepHour(this);
+    storyHour(this);
     if (hour === 4) for (const p of st.pawns) if (p.life) forgetSocial(this, p);
     // Mondays at nine: the mortgage and the bills.
     if (hour === 9 && (this.day - 1) % 7 === 0 && this.day > 1) {

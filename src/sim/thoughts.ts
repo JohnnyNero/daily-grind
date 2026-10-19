@@ -13,6 +13,8 @@ import { opinion } from './social';
 import type { Sim } from './sim';
 import { TICKS_PER_HOUR, type Life, type NeedId, type Pawn } from './state';
 import { has } from './traits';
+import { brokenIn } from './upkeep';
+import { furnitureDef } from './defs';
 
 export const BASELINE = 50;
 
@@ -63,6 +65,15 @@ export const MEMORIES: Record<string, MemoryDef> = {
   paysMore: { label: 'Pays more than next door', value: -6, hours: 7 * 24, stack: 1 },
   buildersIn: { label: 'Builders in the flat', value: -3, hours: 12, stack: 2 },
   doneUp: { label: 'Flat got done up', value: 6, hours: 5 * 24, stack: 1, gossip: true },
+  threwParty: { label: 'Threw a party', value: 6, hours: 2 * 24, stack: 1 },
+  partyShutDown: { label: 'Party got shut down', value: -6, hours: 3 * 24, stack: 1 },
+  sawFight: { label: 'Saw a fight on the stairs', value: -8, hours: 3 * 24, stack: 2, gossip: true },
+  attemptedBreakIn: { label: 'Someone tried to break in', value: -3, hours: 3 * 24, stack: 1, gossip: true },
+  burgled: { label: 'Got burgled', value: -15, hours: 10 * 24, stack: 1, gossip: true },
+  cheatedOn: { label: 'Got cheated on', value: -15, hours: 10 * 24, stack: 1 },
+  caughtOut: { label: 'Got found out', value: -6, hours: 4 * 24, stack: 1 },
+  notAsAdvertised: { label: 'Not what the listing said', value: -8, hours: 7 * 24, stack: 1 },
+  betterThanExpected: { label: 'Better than the listing said', value: 5, hours: 7 * 24, stack: 1 },
 };
 
 export interface Thought {
@@ -142,6 +153,7 @@ function placeThoughts(sim: Sim, life: Life, flatId: string): Thought[] {
   if (dirtOf(sim, SHARED) > 0.5) out.push({ label: 'Grubby stairwell', value: proud ? -5 : -3 });
   if (binsOverflowing(sim)) out.push({ label: 'Bins overflowing', value: -3 });
   if (life.pet && life.pet !== 'asked') out.push({ label: `Has ${life.pet}`, value: 3 });
+  for (const f of brokenIn(sim, flatId).slice(0, 3)) out.push({ label: `Broken ${furnitureDef(f.def).name.toLowerCase()}`, value: -3 });
   return out;
 }
 

@@ -48,6 +48,12 @@ function normalize(raw: Partial<State>): State {
   // Version 4 added the builders.
   st.works ??= noWorks();
   st.works.flats ??= [];
+  // Version 6 added the storyteller, crime, wear, reviews, planning and the council.
+  st.story ??= { busy: false, until: st.tick, cooldowns: {}, running: [] };
+  st.security ??= { locks: false, alarm: false };
+  st.reviews ??= [];
+  st.planning ??= { top: Math.max(0, ...Object.keys(st.cells).map((k) => Number(k.split(',')[1]))) };
+  st.council ??= {};
   for (const p of st.pawns) {
     if (!p.life) continue;
     p.life.social ??= [];

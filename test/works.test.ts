@@ -33,10 +33,12 @@ const paidBuilders = (st: State) => st.ledger.filter((l) => l.label.startsWith('
 describe('building work', () => {
   it('changes nothing and costs nothing while it is only plans', () => {
     const sim = Sim.create(3);
-    const before = JSON.stringify(partsOf(sim.state));
+    // The building itself, not how worn the furniture's getting.
+    const shape = () => JSON.stringify({ ...partsOf(sim.state), furniture: sim.state.furniture.map((f) => [f.id, f.def, f.x, f.s, f.flip]) });
+    const before = shape();
     plan(sim, insulateOverFlat1(sim, 2));
     sim.run(TICKS_PER_DAY);
-    expect(JSON.stringify(partsOf(sim.state))).toBe(before);
+    expect(shape()).toBe(before);
     expect(paidBuilders(sim.state)).toBe(0);
   });
 

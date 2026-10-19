@@ -7,6 +7,7 @@ import { resaleOf, sellFurniture, turnFurniture } from '../sim/furnish';
 import type { Sim } from '../sim/sim';
 import type { NeedId } from '../sim/state';
 import { el, h } from './dom';
+import { condition, mend, repairCost } from '../sim/upkeep';
 
 const FOR: Record<NeedId, string> = {
   sleep: 'sleeping',
@@ -40,6 +41,8 @@ export class FurnitureCard {
   private card = el('furn-card');
   private id: number | null = null;
   private selling = false;
+  /** Says how something went (a repair you couldn't afford). */
+  onNotify: (text: string, bad?: boolean) => void = () => {};
   /** Move was pressed. */
   onMove: (id: number) => void = () => {};
   /** It was turned or sold (or the card closed). */
@@ -83,6 +86,7 @@ export class FurnitureCard {
         h('button', { type: 'button', class: 'close', 'aria-label': 'Close', onclick: () => this.hide() }, '✕'),
       ),
       h('p', {}, `${useOf(f.def)}. Adds ${d.value} to how furnished the flat is.`),
+      d.offers ? h('p', { class: f.broken !== undefined ? 'cond bad' : 'cond' }, f.broken !== undefined ? `Broken since day ${f.broken}: nobody can use it.` : `Condition: ${condition(f)}.`) : '',
       h(
         'div',
         { class: 'actions' },
@@ -91,6 +95,14 @@ export class FurnitureCard {
           turnFurniture(this.sim, f.id);
           this.onChange();
         } }, 'Turn'),
+        d.offers && (f.broken !== undefined || (f.wear ?? 0) >= 0.5)
+          ? h('button', { type: 'button', class: f.broken !== undefined ? 'primary' : '', onclick: () => {
+              const problem = mend(this.sim, f.id);
+              if (problem) this.onNotify(problem, true);
+              this.render();
+              this.onChange();
+            } }, `${f.broken !== undefined ? 'Mend' : 'Service'} ${pounds(repairCost(f))}`)
+          : '',
         h('button', { type: 'button', class: this.selling ? 'danger' : '', onclick: () => {
           if (!this.selling) {
             this.selling = true;

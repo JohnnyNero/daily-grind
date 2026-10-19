@@ -9,12 +9,12 @@ import { BASELINE, likingTarget, thoughtsOf } from '../src/sim/thoughts';
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life);
 
 describe('tenants', () => {
-  it('the building comes with sitting tenants: a couple in Flat 1 and one person in Flat 4', () => {
+  it('the building comes with sitting tenants: one in Flat 1 and one in Flat 4', () => {
     const sim = Sim.create(4);
     const ts = tenants(sim);
-    expect(ts).toHaveLength(3);
+    expect(ts).toHaveLength(2);
     const flats = sim.layout.flats;
-    expect(ts.filter((p) => p.life!.flat === flats[0].id)).toHaveLength(2);
+    expect(ts.filter((p) => p.life!.flat === flats[0].id)).toHaveLength(1);
     expect(ts.filter((p) => p.life!.flat === flats[3].id)).toHaveLength(1);
     for (const p of ts) {
       expect(p.life!.traits.length).toBeGreaterThanOrEqual(2);

@@ -77,13 +77,15 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
   const inFlat = new Set(flat ? lay.flatCells(flat) : []);
   const furniture = sim.state.furniture.filter((f) => inFlat.has(lay.node(f.x, f.s)));
   const defs = furniture.map((f) => furnitureDef(f.def));
+  // Broken things don't count as having one.
+  const working = furniture.filter((f) => f.broken === undefined).map((f) => furnitureDef(f.def));
   const people = Math.max(1, peopleOverride ?? occupants(sim, flatId));
   const perPerson = nodes.length / people;
   const has = {
-    bed: defs.some((d) => d.id === 'bed' || d.id === 'doubleBed'),
-    toilet: defs.some((d) => d.id === 'toilet'),
-    wash: defs.some((d) => d.id === 'shower' || d.id === 'bath'),
-    kitchen: defs.some((d) => d.id === 'cooker' || d.id === 'fridge'),
+    bed: working.some((d) => d.id === 'bed' || d.id === 'doubleBed'),
+    toilet: working.some((d) => d.id === 'toilet'),
+    wash: working.some((d) => d.id === 'shower' || d.id === 'bath'),
+    kitchen: working.some((d) => d.id === 'cooker' || d.id === 'fridge'),
   };
   // Windows next to any of the flat's cells.
   let windows = 0;

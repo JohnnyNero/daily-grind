@@ -7,6 +7,8 @@
 // want, and nothing happens until you press Place (furniture goes in straight away then).
 // The chips at the top zoom straight to a flat. Everything can be undone.
 
+import { applyForPlanning, needsPlanning, topRow } from '../sim/planning';
+import { PLANNING_FEE } from '../sim/economy';
 import {
   FLIGHT,
   cellProblem,
@@ -334,15 +336,19 @@ export class BuildUi {
     }
     const cost = quote(piecesBetween(partsOf(st), plan)).cost;
     const red = this.unheld().length;
-    sign.textContent = `Sign off ${pounds(cost)}`;
-    sign.disabled = red > 0 || cost > st.money;
+    const planning = needsPlanning(this.sim, plan.cells);
+    const applied = st.planning.applied;
+    sign.textContent = planning && !applied ? `Apply for planning ${pounds(PLANNING_FEE)}` : `Sign off ${pounds(cost)}`;
+    sign.disabled = red > 0 || (planning ? applied !== undefined || st.money < PLANNING_FEE : cost > st.money);
     out.append(
       h('strong', {}, pounds(cost)),
       red > 0
         ? h('span', { class: 'down' }, `${red} cell${red === 1 ? " isn't" : "s aren't"} held up (in red)`)
-        : cost > st.money
-          ? h('span', { class: 'down' }, `You have ${pounds(st.money)}`)
-          : h('span', {}, 'Ready to build'),
+        : planning
+          ? h('span', { class: 'down' }, applied ? `Planning: the council decides on day ${applied.decideDay}` : 'Above the roofline: needs planning permission')
+          : cost > st.money
+            ? h('span', { class: 'down' }, `You have ${pounds(st.money)}`)
+            : h('span', {}, 'Ready to build'),
       h('button', { type: 'button', class: 'link', onclick: () => this.clearPlans() }, 'Clear'),
     );
   }
@@ -352,6 +358,12 @@ export class BuildUi {
     const st = this.sim.state;
     const plan = st.works.plan;
     if (!plan || this.unheld().length > 0) return;
+    if (needsPlanning(this.sim, plan.cells)) {
+      const problem = applyForPlanning(this.sim, topRow(plan.cells));
+      this.onNotify(problem ?? 'Planning application sent. The council will write.', problem !== null);
+      this.updateFooter();
+      return;
+    }
     const cost = quote(piecesBetween(partsOf(st), plan)).cost;
     if (cost > st.money) return;
     st.cells = { ...plan.cells };
@@ -390,7 +402,13 @@ export class BuildUi {
       this.draftChanged();
     }
     if (step.furniture) {
-      st.furniture.splice(0, st.furniture.length, ...(JSON.parse(step.furniture) as State['furniture']));
+      // Undo puts pieces back where they were, not as good as new: wear and breakages stay.
+      const now = new Map(st.furniture.map((f) => [f.id, f]));
+      const back = (JSON.parse(step.furniture) as State['furniture']).map((f) => {
+        const cur = now.get(f.id);
+        return cur ? { ...f, wear: cur.wear, broken: cur.broken, reported: cur.reported } : f;
+      });
+      st.furniture.splice(0, st.furniture.length, ...back);
       st.money = step.money!;
       st.ledger.length = Math.min(st.ledger.length, step.ledger!);
       this.sim.changed();

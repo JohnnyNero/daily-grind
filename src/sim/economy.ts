@@ -53,6 +53,15 @@ export const INSULATE_PRICE = 40 * POUND;
 /** What you get back for furniture you take out. */
 export const RESALE = 0.3;
 
+/** Security: new locks on the street door and ground-floor windows, and an alarm (fitted, then monitored weekly). */
+export const LOCKS_PRICE = 180 * POUND;
+export const ALARM_PRICE = 350 * POUND;
+export const ALARM_WEEKLY = 4 * POUND;
+/** Fine for an improvement notice not done in time, per problem, and the most for one visit. */
+export const COUNCIL_FINE = 150 * POUND;
+export const COUNCIL_FINE_CAP = 450 * POUND;
+export const PLANNING_FEE = 250 * POUND;
+
 export function furniturePrice(def: string): number {
   return Math.max(30, furnitureDef(def).value * 8) * POUND;
 }
@@ -139,7 +148,7 @@ export function morning(sim: Sim): void {
 export function billsDue(sim: Sim): number {
   const st = sim.state;
   const empty = sim.layout.flats.filter((f) => !flatInfo(sim, f.id).lease).length;
-  return BILLS.insurance + BILLS.lighting + BILLS.bins + BILLS.emptyFlatTax * empty + gasBill(sim) + (st.cleaner ? CLEANER_WEEKLY : 0);
+  return BILLS.insurance + BILLS.lighting + BILLS.bins + BILLS.emptyFlatTax * empty + gasBill(sim) + (st.cleaner ? CLEANER_WEEKLY : 0) + (st.security.alarm ? ALARM_WEEKLY : 0);
 }
 
 export function weeklyBills(sim: Sim): void {
@@ -152,6 +161,7 @@ export function weeklyBills(sim: Sim): void {
   const gas = gasBill(sim);
   if (gas > 0) book(sim, 'Gas for the central boiler', -gas);
   if (st.cleaner) book(sim, 'Cleaner for the stairs', -CLEANER_WEEKLY);
+  if (st.security.alarm) book(sim, 'Alarm monitoring', -ALARM_WEEKLY);
   if (st.money < 0) book(sim, 'Overdraft charge', -10 * POUND);
 }
 

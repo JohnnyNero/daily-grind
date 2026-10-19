@@ -390,3 +390,13 @@ body.building .furn-card { bottom: calc(var(--tab-h) + var(--buildbar-h, 0px) + 
 .place-bar .actions .primary { flex: 1.6; background: var(--accent); }
 .place-bar .actions button:disabled { opacity: 0.45; cursor: default; }
 body.placing .build-zoom { display: none; }
+
+/* Things breaking, the listing, reviews. */
+.cond { font-size: 12px; color: var(--muted, #6b5f50); }
+.cond.bad { color: var(--bad); font-weight: 700; }
+.warnline span { color: var(--bad); }
+.listing { font-style: italic; margin: 8px 0 2px; }
+.reviews { display: flex; flex-direction: column; gap: 10px; }
+.review { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.review b { color: #c58a14; letter-spacing: 1px; }
+.review small { color: var(--muted, #6b5f50); }

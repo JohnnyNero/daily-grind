@@ -7,10 +7,10 @@ import { placeFurniture } from './build';
 import { MORTGAGE, POUND, START_MONEY, TIER_RENT, flatInfo } from './economy';
 import { flatScore } from './impressiveness';
 import { makePerson, sittingTenants } from './leases';
-import { LAST } from './pawns';
-import { pick } from './rng';
 import type { Sim } from './sim';
-import { SAVE_VERSION, TICKS_PER_HOUR, isDoor, key, type CellKind, type State } from './state';
+import { furnitureDef } from './defs';
+import { random } from './rng';
+import { SAVE_VERSION, TICKS_PER_DAY, TICKS_PER_HOUR, isDoor, key, type CellKind, type State } from './state';
 
 const STREET = 10;
 const PLOT_W = 28;
@@ -44,13 +44,23 @@ export function newState(seed: number): State {
     noiseAvg: {},
     chat: [],
     works: { plan: null, job: null, progress: 0, waiting: false, flats: [] },
+    // A quiet first week, to get to know the place.
+    story: { busy: false, until: 7 * TICKS_PER_DAY, cooldowns: {}, running: [] },
+    security: { locks: false, alarm: false },
+    reviews: [],
+    planning: { top: 0 },
+    council: {},
   };
   buildShell(st);
+  // You can build up to the roof as it stands; above that needs planning permission.
+  st.planning.top = Math.max(...Object.keys(st.cells).map((k) => Number(k.split(',')[1])));
+  // It's a tired building: everything in it has seen some use.
+  for (const f of st.furniture) if (furnitureDef(f.def).offers) f.wear = 0.25 + random(st) * 0.5;
   return st;
 }
 
 /** Each storey is 4 rows: 3 of room and 1 of floor. */
-const STOREY = 4;
+export const STOREY = 4;
 
 function buildShell(st: State): void {
   const { x0, x1 } = st.plot;
@@ -125,14 +135,14 @@ function buildShell(st: State): void {
 }
 
 /**
- * The sitting tenants the building comes with, on old cheap rolling tenancies: a couple in
- * the ground-floor one-bed and someone retired in the top-floor studio.
+ * The sitting tenants the building comes with, on old cheap rolling tenancies: someone
+ * who works in the ground-floor one-bed and someone retired in the top-floor studio.
+ * The other three flats stand empty, so the first let comes early.
  */
 export function startingTenants(sim: Sim): void {
   const st = sim.state;
   const flats = sim.layout.flats;
-  const surname = pick(st, LAST);
-  if (flats[0]) sittingTenants(sim, flats[0].id, [makePerson(st, surname, true), makePerson(st, surname)], 70 * POUND);
+  if (flats[0]) sittingTenants(sim, flats[0].id, [makePerson(st, undefined, true)], 70 * POUND);
   if (flats[3]) sittingTenants(sim, flats[3].id, [makePerson(st, undefined, false)], 55 * POUND);
   // Going rates start from how the flats score with their tenants in.
   for (const f of flats) {
