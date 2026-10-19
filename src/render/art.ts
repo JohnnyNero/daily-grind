@@ -341,8 +341,9 @@ function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, wal
   const hair = HAIR[p.look.hair % HAIR.length];
   const top = p.kind === 'agent' ? '#2b3a5a' : TOPS[p.look.top % TOPS.length];
   const legs = LEGS[p.look.legs % LEGS.length];
-  const stride = walking ? (phase < 0.5 ? 1 : -1) : 0;
-  const bob = walking && phase % 0.5 < 0.25 ? -1 : 0;
+  const dancing = p.pose === 'dance';
+  const stride = walking || dancing ? (phase < 0.5 ? 1 : -1) : 0;
+  const bob = dancing ? (phase % 0.5 < 0.25 ? -2 : 0) : walking && phase % 0.5 < 0.25 ? -1 : 0;
   const sitting = p.pose === 'sit';
   if (sitting) {
     // On a seat: thighs forward, shins down.
@@ -354,10 +355,19 @@ function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, wal
   }
   const by = (sitting ? -15 : -11) + bob;
   r(-4, by, 8, 7, top);
-  r(-5, by + 1, 1, 4, top);
-  r(4, by + 1, 1, 4, top);
-  r(-5, by + 5, 1, 1, skin);
-  r(4, by + 5, 1, 1, skin);
+  if (dancing) {
+    // One arm in the air, then the other.
+    const up = phase < 0.5;
+    r(-5, up ? by - 3 : by + 1, 1, 4, top);
+    r(4, up ? by + 1 : by - 3, 1, 4, top);
+    r(-5, up ? by - 4 : by + 5, 1, 1, skin);
+    r(4, up ? by + 5 : by - 4, 1, 1, skin);
+  } else {
+    r(-5, by + 1, 1, 4, top);
+    r(4, by + 1, 1, 4, top);
+    r(-5, by + 5, 1, 1, skin);
+    r(4, by + 5, 1, 1, skin);
+  }
   if (p.kind === 'agent') {
     r(-1, by, 2, 4, '#efe7da');
     r(4, by + 3, 3, 4, '#6b4a32'); // clipboard

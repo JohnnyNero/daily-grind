@@ -179,7 +179,7 @@ export class Renderer {
         continue;
       }
       const walking = p.path.length > 0;
-      const phase = (Math.abs(p.x) * 1.6) % 1;
+      const phase = p.pose === 'dance' ? (this.sim.state.tick / 14) % 1 : (Math.abs(p.x) * 1.6) % 1;
       drawPerson(ctx, p, Math.round(px), Math.round(py), phase, walking);
       if (p.id === this.selectedPawn) {
         ctx.strokeStyle = '#f2c46d';

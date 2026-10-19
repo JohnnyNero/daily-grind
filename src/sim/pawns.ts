@@ -27,7 +27,7 @@ export function keysOf(p: Pawn): Keys {
   if (p.kind === 'agent') return { all: true };
   if (p.kind === 'guest') return p.flat ? { flats: [p.flat] } : {};
   if (p.kind === 'burglar') return p.burgle?.stage === 'in' || (p.burgle?.stage === 'out' && p.burgle.entry === 'door') ? { all: true } : {};
-  if (p.life) return { flats: [p.life.flat] };
+  if (p.life) return { flats: p.partyAt ? [p.life.flat, p.partyAt] : [p.life.flat] };
   return {};
 }
 
@@ -126,8 +126,8 @@ function step(sim: Sim, p: Pawn): void {
     return;
   }
   if (st.tick < p.waitUntil) return;
-  if (p.life) tenantThink(sim, p);
-  else think(sim, p);
+  if (!p.life) think(sim, p);
+  else if (!(p.partyAt && !p.life.using && guestThink(sim, p))) tenantThink(sim, p);
 }
 
 /** If the building changed under them (a wall where they stand, a floor taken away), find somewhere to stand. */
