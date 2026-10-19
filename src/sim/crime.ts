@@ -20,7 +20,8 @@ import { remember } from './thoughts';
 import type { Flat } from './layout';
 import { stat } from './stat';
 import { gradeOf } from './grades';
-import { BURGLARY as B, GRADES, RISK_WORDS } from './tuning';
+import { itemsIn, SHARED } from './environment';
+import { BURGLARY as B, GRADES, ITEMS, RISK_WORDS } from './tuning';
 
 const first = (p: Pawn) => p.name.split(' ')[0];
 /** What a thing would cost new, at its grade: what it's worth to a burglar. */
@@ -96,10 +97,11 @@ export function burglaryRisk(sim: Sim): number {
   for (const f of lay.flats) worth += valuables(sim, f).reduce((n, v) => n + GRADES.burglar[gradeOf(v)], 0) * B.perValuable + (household(sim, f.id).length > 0 ? B.occupied : 0);
   const ways = waysIn(sim);
   const windows = ways.filter((w) => w.entry === 'window').length;
-  const easy = (ways.some((w) => w.entry === 'door') ? B.door : 0) + Math.min(B.mostWindows, windows * B.window);
+  const easy = (ways.some((w) => w.entry === 'door') ? B.door * (itemsIn(sim, SHARED, 'intercom') > 0 ? ITEMS.intercomDoor : 1) : 0) + Math.min(B.mostWindows, windows * B.window);
   // How tempting, times how easy (never more than certain), then whatever's in the way.
   const tempting = Math.min(1, stat(B.base, [B.perWorth * worth], [B.easyBase + easy * B.perEasy]));
-  return stat(tempting, [], [st.security.locks ? B.locks : 1, st.security.alarm ? B.alarm : 1]);
+  const cameras = Math.min(ITEMS.mostCameras, itemsIn(sim, SHARED, 'cctv'));
+  return stat(tempting, [], [st.security.locks ? B.locks : 1, st.security.alarm ? B.alarm : 1, ITEMS.cctvRisk ** cameras]);
 }
 
 export function riskWord(risk: number): string {
@@ -203,11 +205,13 @@ export function crimeMinute(sim: Sim): void {
   if (!b || b.stage === 'out') return;
   const awake = (w: Pawn) => w.life && !w.life.away && w.pose !== 'sleep' && !w.life.leaving;
   if (b.stage === 'case' || b.stage === 'try') {
-    // From the lobby, or out on the street.
+    // From the lobby, or out on the street. Cameras help them be seen, and an intercom helps at the door.
+    const cameras = itemsIn(sim, SHARED, 'cctv') > 0 ? ITEMS.cctvSpotted : 1;
+    const bell = b.entry === 'door' && itemsIn(sim, SHARED, 'intercom') > 0 ? ITEMS.intercomSpotted : 1;
     for (const w of st.pawns) {
       if (w === p || Math.abs(w.x - p.x) > 6 || w.s > 2.5) continue;
-      if (w.kind === 'passerby' && random(st) < B.passerby) return flee(sim, p, 'passerby');
-      if (awake(w) && random(st) < B.spotted) return flee(sim, p, 'spotted', w);
+      if (w.kind === 'passerby' && random(st) < B.passerby * cameras) return flee(sim, p, 'passerby');
+      if (awake(w) && random(st) < B.spotted * cameras * bell) return flee(sim, p, 'spotted', w);
     }
     return;
   }

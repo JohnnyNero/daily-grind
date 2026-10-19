@@ -5,7 +5,7 @@
 
 import { post } from './chat';
 import { COUNCIL_FINE, COUNCIL_FINE_CAP, POUND, book, furniturePrice, letter, spend } from './economy';
-import { SHARED, dirtOf, tempOf } from './environment';
+import { SHARED, dirtOf, itemsIn, tempOf } from './environment';
 import { furnitureDef } from './defs';
 import { gradeOf, wearFactor } from './grades';
 import { scoreFor } from './impressiveness';
@@ -143,6 +143,7 @@ export function issues(sim: Sim): string[] {
     if (!s.has.wash) out.push(`${f.name} has nowhere working to wash`);
     if (!s.has.kitchen) out.push(`${f.name} has no working kitchen`);
     if (!f.enclosed) out.push(`${f.name} is open to the weather`);
+    if (itemsIn(sim, f.id, 'smokeAlarm') === 0) out.push(`${f.name} has no smoke alarm`);
     if (tempOf(sim, f.id) < COUNCIL.tooCold) out.push(`${f.name} is too cold to live in (${Math.round(tempOf(sim, f.id))}°)`);
     if (s.perPerson < COUNCIL.overcrowded) out.push(`${f.name} is overcrowded`);
     const longBroken = brokenIn(sim, f.id).filter((b) => sim.day - (b.broken ?? sim.day) >= COUNCIL.brokenDays);

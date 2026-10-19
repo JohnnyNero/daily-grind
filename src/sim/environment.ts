@@ -16,7 +16,7 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, isDoor, key, type Pawn } from './state';
 import { has } from './traits';
 import { BUILDER_NOISE, currentPiece, whereIs } from './works';
-import { DIRT, GAS_PER_RADIATOR, NOISE, WARMTH } from './tuning';
+import { DIRT, GAS_PER_RADIATOR, ITEMS, NOISE, WARMTH } from './tuning';
 
 // Heat, noise and dirt rates are in tuning.ts.
 export { CLEANER_WEEKLY, GAS_PER_RADIATOR } from './tuning';
@@ -135,9 +135,54 @@ function shapesOf(sim: Sim) {
   return out;
 }
 
-/** How much noise from one flat (or SHARED) reaches another. */
+/** How much noise from one flat (or SHARED) reaches another. Rugs in a flat soak up what goes down to the flat below. */
 export function noiseThrough(sim: Sim, from: string, to: string): number {
-  return Math.min(1, shapesOf(sim).through.get(from)?.get(to) ?? 0);
+  const base = Math.min(1, shapesOf(sim).through.get(from)?.get(to) ?? 0);
+  const rugs = Math.min(ITEMS.mostRugs, itemsIn(sim, from, 'rug'));
+  if (base === 0 || rugs === 0 || !isBelow(sim, to, from)) return base;
+  return base * ITEMS.rugBelow ** rugs;
+}
+
+// ------------------------------------------------------------------ what's where
+
+const kits = new WeakMap<Sim, { key: string; counts: Map<string, Map<string, number>>; rows: Map<string, number> }>();
+
+function kitOf(sim: Sim) {
+  const st = sim.state;
+  const key = `${sim.version}|${st.furniture.length}`;
+  const cached = kits.get(sim);
+  if (cached && cached.key === key) return cached;
+  const lay = sim.layout;
+  const counts = new Map<string, Map<string, number>>();
+  for (const f of st.furniture) {
+    if (f.broken !== undefined) continue;
+    const owner = ownerOf(lay, f.x, f.s);
+    if (!owner || owner === OUTSIDE) continue;
+    const m = counts.get(owner) ?? new Map<string, number>();
+    m.set(f.def, (m.get(f.def) ?? 0) + 1);
+    counts.set(owner, m);
+  }
+  const rows = new Map<string, number>();
+  for (const flat of lay.flats) {
+    const cells = lay.flatCells(flat);
+    if (cells.length > 0) rows.set(flat.id, cells.reduce((n, c) => n + lay.xs(c)[1], 0) / cells.length);
+  }
+  const out = { key, counts, rows };
+  kits.set(sim, out);
+  return out;
+}
+
+/** How many working pieces of one kind are in a flat (or the SHARED parts). */
+export function itemsIn(sim: Sim, where: string, def: string): number {
+  return kitOf(sim).counts.get(where)?.get(def) ?? 0;
+}
+
+/** Is the first flat on a lower storey than the second? */
+function isBelow(sim: Sim, lower: string, upper: string): boolean {
+  const { rows } = kitOf(sim);
+  const a = rows.get(lower);
+  const b = rows.get(upper);
+  return a !== undefined && b !== undefined && a < b - 1;
 }
 
 /** The flats and shared parts next to this one, for noise. */
@@ -192,6 +237,7 @@ export function warmthOf(temp: number): number {
 export function noiseOf(p: Pawn): number {
   const d = p.doing;
   if (d === 'Watching telly') return NOISE.telly;
+  if (d === 'Playing on the console') return ITEMS.consoleNoise;
   if (d === 'Practising') return NOISE.practising;
   if (d.startsWith('Having a row')) return NOISE.row;
   if (d.startsWith('Fighting')) return NOISE.fighting;
@@ -215,10 +261,21 @@ export function noiseMade(sim: Sim): Map<string, number> {
   const made = new Map<string, number>();
   for (const p of sim.state.pawns) {
     if (p.life?.away) continue;
-    const n = noiseOf(p);
+    let n = noiseOf(p);
     if (!n) continue;
     const where = ownerOf(sim.layout, Math.round(p.x), Math.round(p.s));
+    // A big telly is louder.
+    if (where && (p.doing === 'Watching telly' || p.doing === 'Playing on the console') && itemsIn(sim, where, 'bigTv') > 0) n *= ITEMS.bigTellyNoise;
     if (where) made.set(where, (made.get(where) ?? 0) + n);
+  }
+  // Dishwashers run after tea, in flats with someone home.
+  const m = sim.minuteOfDay;
+  if (m >= ITEMS.dishwasherFrom && m < ITEMS.dishwasherTo) {
+    for (const f of sim.state.furniture) {
+      if (f.def !== 'dishwasher' || f.broken !== undefined) continue;
+      const where = ownerOf(sim.layout, f.x, f.s);
+      if (where && where !== OUTSIDE && sim.state.pawns.some((p) => p.life?.flat === where && !p.life.away)) made.set(where, (made.get(where) ?? 0) + ITEMS.dishwasherNoise);
+    }
   }
   const work = currentPiece(sim);
   if (work) {
@@ -284,7 +341,7 @@ function dirtHour(sim: Sim): void {
     const people = tenants.filter((p) => p.life!.flat === f.id && !p.life!.away);
     if (people.length === 0) continue;
     const messy = people.filter((p) => has(p.life!, 'messy')).length;
-    addDirt(sim, f.id, DIRT.flat * (people.length + messy * DIRT.messyExtra));
+    addDirt(sim, f.id, DIRT.flat * (people.length + messy * DIRT.messyExtra) * (itemsIn(sim, f.id, 'dishwasher') > 0 ? ITEMS.dishwasherDirt : 1));
   }
 }
 

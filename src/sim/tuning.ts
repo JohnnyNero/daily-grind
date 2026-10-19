@@ -320,6 +320,9 @@ export const MEMORIES: Record<string, MemoryDef> = {
   cycledToWork: { label: 'Cycled to work', value: 2, hours: 6, stack: 1 },
   satOut: { label: 'Sat out in the sun', value: 2, hours: 10, stack: 1 },
   firedUpBbq: { label: 'Fired up the barbecue', value: 4, hours: 36, stack: 1 },
+  noWashUp: { label: 'Didn\'t have to wash up', value: 1.5, hours: 6, stack: 2 },
+  goodRead: { label: 'Had a good read', value: 2, hours: 8, stack: 1 },
+  darkBedroom: { label: 'Dark bedroom', value: 2, hours: 10, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -903,4 +906,39 @@ export const AMENITIES = {
   noWashing: -1,
   /** Added to the score of every flat in a building that has one. */
   score: { garden: 1, laundry: 1, bikes: 1 },
+};
+
+// ================================================================== in-flat items
+
+export const ITEMS = {
+  /** A dishwasher: this much of the usual dirt in the flat, and it runs (noisily) after tea, between these minutes of the day. */
+  dishwasherDirt: 0.6,
+  dishwasherNoise: 1.5,
+  dishwasherFrom: 20 * 60,
+  dishwasherTo: 21 * 60 + 30,
+  /** What playing on the console sounds like next door. */
+  consoleNoise: 2.5,
+  /** A big telly: fun comes this much faster, and it's this much louder. */
+  bigTellyFun: 1.4,
+  bigTellyNoise: 1.5,
+  /** Reading: tenants who are keen (these traits) feel a good read this much more. */
+  keenReaders: ['lightSleeper', 'easyGoing'] as string[],
+  keenReadingFeel: 2,
+  /** Each rug in a flat lets this much of its noise through to the flat below; only this many count. */
+  rugBelow: 0.7,
+  mostRugs: 2,
+  /** With curtains, a night's sleep counts as well-slept at this level (else 0.8). */
+  curtainsWell: 0.65,
+  sleptWell: 0.8,
+  /** Cameras (up to `mostCameras`) in the shared parts: burglary risk times this each, and burglars outside are this much likelier to be spotted. */
+  cctvRisk: 0.8,
+  cctvSpotted: 1.6,
+  mostCameras: 2,
+  /** An intercom: the street door counts for this much as a way in, and a burglar at it is this much likelier to be spotted. */
+  intercomDoor: 0.6,
+  intercomSpotted: 2,
+  /** What tenants think of them. */
+  intercomLikes: 1,
+  cctvBusybody: 2,
+  cctvKnowsRights: -2,
 };

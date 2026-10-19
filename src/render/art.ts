@@ -345,6 +345,104 @@ const PIECES: Record<string, Draw> = {
     box(c, 10, -17, 4, 5, PAL.glass);
     box(c, 19, -16, 4, 4, PAL.white);
   },
+  // New in-flat items.
+  dishwasher(c) {
+    box(c, 0, -16, 16, 16, '#cfd2d4');
+    box(c, 1, -15, 14, 4, '#5a6068');
+    rect(c, 3, -14, 2, 1, '#7fd37f');
+    rect(c, 7, -14, 5, 1, '#8a9096');
+    box(c, 2, -11, 12, 9, '#b4b9bd');
+    rect(c, 4, -10, 8, 1, PAL.white);
+    box(c, 4, -8, 8, 4, '#3b4a5a');
+    rect(c, 5, -7, 3, 1, light('#3b4a5a', 0.3));
+  },
+  console(c) {
+    box(c, 2, -4, 12, 4, '#2e3138');
+    rect(c, 3, -3, 7, 1, '#454955');
+    rect(c, 11, -2, 2, 1, '#6aa0ff');
+    box(c, 4, -8, 8, 4, '#4a4e57');
+    rect(c, 5, -7, 2, 1, PAL.fabricC);
+    rect(c, 9, -7, 2, 1, PAL.poster);
+    rect(c, 4, -4, 1, 1, PAL.outline);
+    rect(c, 11, -4, 1, 1, PAL.outline);
+  },
+  bigTv(c, W) {
+    box(c, W / 2 - 9, -6, 18, 6, PAL.woodDark);
+    box(c, 2, -31, W - 4, 25, '#25262b');
+    rect(c, 4, -29, W - 8, 21, PAL.screen);
+    rect(c, 6, -27, 9, 3, light(PAL.screen, 0.3));
+    rect(c, W - 14, -14, 8, 4, light(PAL.screen, 0.12));
+    rect(c, W / 2 - 1, -7, 3, 1, '#7fd37f');
+  },
+  bookshelf(c) {
+    box(c, 2, -31, 28, 31, PAL.wood);
+    rect(c, 4, -29, 24, 27, dark(PAL.wood, 0.4));
+    const books = [PAL.fabricC, PAL.fabricA, PAL.poster, PAL.fabricB, '#7a4b9a', light(PAL.fabricC, 0.2)];
+    for (let row = 0; row < 3; row++) {
+      const base = -3 - row * 9;
+      rect(c, 4, base, 24, 1, PAL.woodDark);
+      let x = 5;
+      for (let i = 0; i < 6; i++) {
+        const w = 2 + ((i + row) % 3);
+        const h = 5 + ((i * 2 + row) % 3);
+        if (x + w > 27) break;
+        box(c, x, base - h, w, h, books[(i + row * 2) % books.length]);
+        x += w + 1;
+      }
+    }
+  },
+  diningSet(c, W) {
+    box(c, 1, -18, 3, 18, PAL.woodDark);
+    box(c, 1, -9, 9, 3, PAL.wood);
+    rect(c, 8, -6, 2, 6, PAL.woodDark);
+    box(c, W - 4, -18, 3, 18, PAL.woodDark);
+    box(c, W - 10, -9, 9, 3, PAL.wood);
+    rect(c, W - 10, -6, 2, 6, PAL.woodDark);
+    box(c, 11, -13, W - 22, 3, PAL.wood);
+    box(c, 13, -10, 3, 10, PAL.woodDark);
+    box(c, W - 16, -10, 3, 10, PAL.woodDark);
+    box(c, 17, -16, 5, 3, PAL.white);
+    box(c, W - 22, -16, 5, 3, PAL.white);
+    box(c, W / 2 - 1, -19, 3, 6, PAL.plant);
+  },
+  rug(c, W) {
+    rect(c, 0, -3, W, 3, edge(PAL.fabricC));
+    rect(c, 1, -3, W - 2, 2, PAL.fabricC);
+    rect(c, 1, -3, W - 2, 1, light(PAL.fabricC, 0.2));
+    for (let x = 4; x < W - 4; x += 6) rect(c, x, -2, 2, 1, PAL.poster);
+    rect(c, 3, -2, 1, 1, dark(PAL.fabricC, 0.3));
+    rect(c, W - 4, -2, 1, 1, dark(PAL.fabricC, 0.3));
+  },
+  curtains(c) {
+    rect(c, 0, -31, 16, 2, PAL.woodDark);
+    rect(c, 0, -32, 2, 4, PAL.poster);
+    rect(c, 14, -32, 2, 4, PAL.poster);
+    const drape = '#5b7fa0';
+    box(c, 1, -29, 6, 28, drape);
+    box(c, 9, -29, 6, 28, drape);
+    for (const x of [3, 5, 11, 13]) rect(c, x, -27, 1, 24, dark(drape, 0.2));
+    rect(c, 1, -14, 6, 2, PAL.poster);
+    rect(c, 9, -14, 6, 2, PAL.poster);
+  },
+  smokeAlarm(c) {
+    box(c, 4, -13, 8, 4, '#efe7da');
+    rect(c, 6, -12, 4, 1, '#c9c1b3');
+    rect(c, 7, -10, 2, 1, '#d0452f');
+  },
+  cctv(c) {
+    rect(c, 2, -14, 3, 8, PAL.metal);
+    rect(c, 4, -12, 3, 2, PAL.metal);
+    box(c, 5, -13, 10, 5, '#3a3f4b');
+    rect(c, 13, -12, 2, 3, '#25262b');
+    rect(c, 6, -12, 1, 1, '#d0452f');
+  },
+  intercom(c) {
+    box(c, 5, -14, 6, 11, '#5a6068');
+    rect(c, 6, -13, 4, 3, '#1f2428');
+    rect(c, 7, -12, 2, 1, '#454955');
+    rect(c, 7, -8, 2, 1, PAL.poster);
+    rect(c, 7, -6, 2, 1, PAL.white);
+  },
 };
 
 function bed(c: Ctx, W: number, duvet: string): void {
@@ -437,7 +535,7 @@ function gradedSprite(def: string, grade: Grade): HTMLCanvasElement | null {
 }
 
 /** Furniture that gives off light in the evening, and its colour. */
-export const LIGHTS: Record<string, string> = { lamp: '#ffb85a', tv: '#6aa0ff', desk: '#8ab8ff' };
+export const LIGHTS: Record<string, string> = { lamp: '#ffb85a', tv: '#6aa0ff', bigTv: '#6aa0ff', desk: '#8ab8ff' };
 
 // ------------------------------------------------------------------ people
 

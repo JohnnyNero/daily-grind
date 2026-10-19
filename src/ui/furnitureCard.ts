@@ -31,6 +31,16 @@ function useOf(def: string): string {
   if (def === 'bikeRack') return 'Somewhere to keep the bike; working tenants sometimes cycle';
   if (def === 'bbq') return 'For barbecues: whoever fires it up, the neighbours come';
   if (def === 'doormat') return 'Keeps the muck off the floors';
+  if (def === 'dishwasher') return 'Less mess in the flat, and nobody washes up. Hums after tea';
+  if (def === 'console') return 'Strong fun, but only with a telly in the room. Loud, and worth nicking';
+  if (def === 'bigTv') return 'A telly for the sofa and armchair, with more fun in it. Louder, and worth nicking';
+  if (def === 'bookshelf') return 'Quiet fun: reading. Light sleepers and easy-going types love it; party animals won\'t touch it';
+  if (def === 'diningSet') return 'Somewhere to eat, table and chairs in one';
+  if (def === 'rug') return 'Soaks up noise going down to the flat below. Lies under other furniture';
+  if (def === 'curtains') return 'A darker bedroom, so better sleep. Does not change the light';
+  if (def === 'smokeAlarm') return 'The council checks every let flat has one';
+  if (def === 'cctv') return 'In the lobby or stairs: lowers burglary risk, and burglars are more likely to be seen. Some tenants have views';
+  if (def === 'intercom') return 'By the street door: burglars at the door are more likely to be spotted. Tenants like it';
   if (d.offers?.length) {
     const uses = d.offers.map((o) => (o.needsNearby ? `${FOR[o.need]} (with a ${furnitureDef(o.needsNearby).name.toLowerCase()})` : FOR[o.need]));
     return `For ${[...new Set(uses)].join(', ')}`;
@@ -101,7 +111,7 @@ export class FurnitureCard {
           turnFurniture(this.sim, f.id);
           this.onChange();
         } }, 'Turn'),
-        d.offers && (f.broken !== undefined || (f.wear ?? 0) >= 0.5)
+        (d.offers || f.broken !== undefined) && (f.broken !== undefined || (f.wear ?? 0) >= 0.5)
           ? h('button', { type: 'button', class: f.broken !== undefined ? 'primary' : '', onclick: () => {
               const problem = mend(this.sim, f.id);
               if (problem) this.onNotify(problem, true);

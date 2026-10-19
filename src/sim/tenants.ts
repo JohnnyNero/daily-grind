@@ -17,14 +17,14 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type Life, type NeedId, type Pawn, type Person } from './state';
 import { forget, likingTarget, remember, thoughtsOf } from './thoughts';
 import { has } from './traits';
-import { SHARED, dirtOf, isNight, outdoorTemp, noiseReaching, tempOf, tidy, warmthOf } from './environment';
+import { SHARED, dirtOf, isNight, itemsIn, outdoorTemp, noiseReaching, tempOf, tidy, warmthOf } from './environment';
 import { noticeTrait } from './outcomes';
 import { breakThink } from './breaks';
 import { post, recently } from './chat';
 import { rememberAbout } from './social';
 import { hhmm } from './time';
 import { stat } from './stat';
-import { DECAY, NEEDS, OUTINGS, SEEK, SHARED_USE, START_NEEDS } from './tuning';
+import { DECAY, ITEMS, NEEDS, OUTINGS, SEEK, SHARED_USE, START_NEEDS } from './tuning';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -110,7 +110,7 @@ export function minuteOfLife(sim: Sim, p: Pawn): void {
   for (const need of Object.keys(DECAY) as (keyof typeof DECAY)[]) {
     let rate: number;
     // Using something that meets this need (or another one along with it) sets the rate outright.
-    if (using?.need === need) rate = using.rate;
+    if (using?.need === need) rate = using.rate * (need === 'fun' && using.doing === 'Watching telly' && itemsIn(sim, life.flat, 'bigTv') > 0 ? ITEMS.bigTellyFun : 1);
     else if (using?.also?.[need] !== undefined) rate = using.also[need]!;
     // Otherwise it runs down: party animals get bored faster; at work or asleep, most things run down slower.
     else
@@ -340,7 +340,7 @@ export function choices(sim: Sim, p: Pawn, flat: Flat, match: (o: Offer, f: Furn
     const room = lay.roomOf[lay.node(f.x, f.s)];
     def.offers?.forEach((o, i) => {
       if (!match(o, f)) return;
-      if (o.needsNearby && !sim.state.furniture.some((g) => g.def === o.needsNearby && (inFlat.has(lay.node(g.x, g.s)) && (o.needsNearby === 'fridge' || lay.roomOf[lay.node(g.x, g.s)] === room)))) return;
+      if (o.needsNearby && !sim.state.furniture.some((g) => (g.def === o.needsNearby || furnitureDef(g.def).as === o.needsNearby) && (inFlat.has(lay.node(g.x, g.s)) && (o.needsNearby === 'fridge' || lay.roomOf[lay.node(g.x, g.s)] === room)))) return;
       spotColumns(def, f.x, f.flip).forEach((x, spot) => {
         if (!taken(sim, f, spot, p)) out.push({ f, spot, offer: i, at: [x, f.s] });
       });
@@ -352,8 +352,12 @@ export function choices(sim: Sim, p: Pawn, flat: Flat, match: (o: Offer, f: Furn
 /** Goes to the nearest thing that meets a need and starts walking there. False if there's nothing. */
 function tryUse(sim: Sim, p: Pawn, flat: Flat, need: NeedId): boolean {
   // Food means cooking if they can, else picking at the fridge.
-  const list = choices(sim, p, flat, (o) => o.need === need && !o.errand);
+  const life = p.life!;
+  // Party animals don't do books.
+  const list = choices(sim, p, flat, (o, f) => o.need === need && !o.errand && !(f.def === 'bookshelf' && has(life, 'partyAnimal')));
   if (need === 'food') list.sort((a, b) => Number(a.f.def !== 'cooker') - Number(b.f.def !== 'cooker'));
+  // Quiet types would sooner have a book than the telly.
+  if (need === 'fun' && ITEMS.keenReaders.some((t) => has(life, t))) list.sort((a, b) => Number(a.f.def !== 'bookshelf') - Number(b.f.def !== 'bookshelf'));
   // For fun, the telly comes first: a sofa with a telly beats the laptop.
   for (const c of list) {
     if (startUsing(sim, p, c.f.id, c.spot, c.offer, c.at)) return true;
@@ -439,14 +443,20 @@ function stopUsing(sim: Sim, p: Pawn, finished: boolean): void {
     life.meal = false;
     remember(sim, life, 'cookedMeal');
     const f = sim.state.furniture.find((x) => x.id === u.furniture);
-    if (f?.def === 'chair' && sim.state.furniture.some((g) => g.def === 'table' && g.s === f.s && Math.abs(g.x - f.x) <= 2)) remember(sim, life, 'ateAtTable');
+    if (f?.def === 'diningSet' || (f?.def === 'chair' && sim.state.furniture.some((g) => g.def === 'table' && g.s === f.s && Math.abs(g.x - f.x) <= 2))) remember(sim, life, 'ateAtTable');
+    if (itemsIn(sim, life.flat, 'dishwasher') > 0) remember(sim, life, 'noWashUp');
   }
   if (o.pose === 'sleep') {
     if (life.sleptOn === 'floor') remember(sim, life, 'sleptFloor');
     else if (life.sleptOn === 'sofa') remember(sim, life, 'sleptSofa');
     // A cheap mattress is lumpy however long you lie on it; a posh one is the best night going.
     else if (used && gradeOf(used) === 'cheap') remember(sim, life, 'lumpyMattress');
-    else if (life.needs.sleep > 0.8) remember(sim, life, used && gradeOf(used) === 'posh' ? 'sleptPosh' : 'sleptWell');
+    else {
+      // Curtains keep the morning sun off: a darker bedroom and an easier lie-in.
+      const curtained = itemsIn(sim, life.flat, 'curtains') > 0;
+      if (curtained && life.needs.sleep > ITEMS.curtainsWell) remember(sim, life, 'darkBedroom');
+      if (life.needs.sleep > (curtained ? ITEMS.curtainsWell : ITEMS.sleptWell)) remember(sim, life, used && gradeOf(used) === 'posh' ? 'sleptPosh' : 'sleptWell');
+    }
   }
 }
 
@@ -462,7 +472,7 @@ function goToSleep(sim: Sim, p: Pawn, flat: Flat): void {
 function eat(sim: Sim, p: Pawn, flat: Flat): void {
   // A chair by a table first, then anywhere to sit, else standing up.
   const seats = choices(sim, p, flat, (o) => o.pose === 'sit' && o.need === 'comfort' && !o.errand);
-  seats.sort((a, b) => Number(a.f.def !== 'chair') - Number(b.f.def !== 'chair'));
+  seats.sort((a, b) => Number(!['chair', 'diningSet'].includes(a.f.def)) - Number(!['chair', 'diningSet'].includes(b.f.def)));
   for (const c of seats) if (startUsing(sim, p, c.f.id, c.spot, -1, c.at)) return;
   const life = p.life!;
   life.meal = false;

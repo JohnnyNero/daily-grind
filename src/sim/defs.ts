@@ -51,6 +51,10 @@ export interface FurnitureDef {
   offers?: Offer[];
   /** Comes cheap, standard or posh. Left out, it does if it's a floor piece you use (see isGraded). */
   graded?: boolean;
+  /** Counts as this other piece for `needsNearby` (a big telly is a telly). */
+  as?: string;
+  /** Lies on the floor under other things (a rug): it may share a cell with floor furniture. */
+  underfoot?: boolean;
 }
 
 export const FURNITURE: readonly FurnitureDef[] = [
@@ -89,6 +93,17 @@ export const FURNITURE: readonly FurnitureDef[] = [
   { id: 'planter', name: 'Planter', w: 1, h: 1, group: 'shared', value: 10, space: 'garden', decor: true },
   { id: 'bbq', name: 'BBQ grill', w: 2, h: 1, group: 'shared', value: 25, space: 'garden', spots: [0, 1], offers: [{ need: 'fun', rate: 0.9, minutes: [30, 50], pose: 'stand', errand: true, doing: 'Firing up the barbecue', memory: 'firedUpBbq' }, { need: 'fun', rate: 0.8, minutes: [25, 45], pose: 'stand', errand: true, join: true, doing: 'At the barbecue', memory: 'gotBarbecue' }] },
   { id: 'parasolTable', name: 'Table and parasol', w: 2, h: 2, group: 'shared', value: 25, space: 'garden', spots: [0, 1], offers: [{ need: 'comfort', rate: 0.7, minutes: [30, 60], pose: 'sit', also: { fun: 0.4 }, errand: true, doing: 'Sitting out at the table', memory: 'satOut' }, { need: 'fun', rate: 0.8, minutes: [25, 45], pose: 'sit', errand: true, join: true, doing: 'At the barbecue', memory: 'gotBarbecue' }] },
+  // New in-flat items: each one touches a system (dirt, noise, sleep, the council, burglars).
+  { id: 'dishwasher', name: 'Dishwasher', w: 1, h: 1, group: 'kitchen', value: 30 },
+  { id: 'console', name: 'Games console', w: 1, h: 1, group: 'sit', value: 40, valuable: true, spots: [0], offers: [{ need: 'fun', rate: 0.9, minutes: [40, 120], pose: 'sit', also: { comfort: 0.3 }, needsNearby: 'tv', doing: 'Playing on the console' }] },
+  { id: 'bigTv', name: 'Big telly', w: 3, h: 1, group: 'sit', value: 70, valuable: true, as: 'tv' },
+  { id: 'bookshelf', name: 'Bookshelf', w: 2, h: 2, group: 'storage', value: 25, decor: true, spots: [0], offers: [{ need: 'fun', rate: 0.3, minutes: [30, 90], pose: 'stand', also: { comfort: 0.1 }, doing: 'Reading', memory: 'goodRead' }] },
+  { id: 'diningSet', name: 'Dining set', w: 3, h: 1, group: 'sit', value: 28, spots: [0, 2], offers: [{ need: 'comfort', rate: 0.4, minutes: [15, 40], pose: 'sit', doing: 'Sitting down' }] },
+  { id: 'rug', name: 'Rug', w: 2, h: 1, group: 'decor', value: 8, decor: true, underfoot: true },
+  { id: 'curtains', name: 'Curtains', w: 1, h: 2, wall: true, group: 'decor', value: 10, decor: true },
+  { id: 'smokeAlarm', name: 'Smoke alarm', w: 1, h: 1, wall: true, group: 'decor', value: 0 },
+  { id: 'cctv', name: 'CCTV camera', w: 1, h: 1, wall: true, group: 'decor', value: 20 },
+  { id: 'intercom', name: 'Door intercom', w: 1, h: 1, wall: true, group: 'decor', value: 15 },
 ];
 
 const byId = new Map(FURNITURE.map((d) => [d.id, d]));
