@@ -322,7 +322,6 @@ table.people { width: 100%; border-collapse: collapse; font-size: 12px; min-widt
 .build-actions button { flex: 1; min-height: 44px; border: 0; border-radius: 10px; background: #ece5d8; color: var(--sheet-ink); font-weight: 600; cursor: pointer; }
 .build-actions button:disabled { opacity: 0.4; cursor: default; }
 .build-actions button[hidden] { display: none; }
-.build-actions #build-sign { flex: 2; }
 .build-actions .primary { background: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

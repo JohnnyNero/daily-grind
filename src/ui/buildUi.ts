@@ -1,13 +1,11 @@
-// Build mode: draw plans for the building. Plans are free and change nothing until you sign
-// them off; then the builders come and do the work over the next few days, a piece at a
-// time. Furniture is different: it goes in, moves and sells straight away. Pick a group,
-// then a tool or a piece. Drag to build along a line or mark out a room. Picking a piece of
-// furniture (or Move on a piece's card) puts the bar away and shows the piece as a ghost:
-// tap or drag to put it where you want, and nothing happens until you press Place. The
-// chips at the top zoom straight to a flat. Everything can be undone.
+// Build mode: change the building. Everything goes in straight away and is paid for on the
+// spot. Pick a group, then a tool or a piece. Walls are drawn a cell at a time (drag to
+// draw a line) and erased the same way. Picking a piece of furniture (or Move on a piece's
+// card) puts the bar away and shows the piece as a ghost: tap or drag to put it where you
+// want, and nothing happens until you press Place. The chips at the top zoom straight to a
+// flat. Everything can be undone, with the money back.
 
 import {
-  buildRoom,
   FLIGHT,
   cellProblem,
   furnitureAt,
@@ -19,40 +17,37 @@ import {
   removeCell,
   removeProblem,
   stairsProblem,
-  type BuildParts,
 } from '../sim/build';
 import { FURNITURE, furnitureDef, type FurnitureGroup } from '../sim/defs';
-import { CELL_PRICE, DEMOLISH_PRICE, INSULATE_PRICE, TIER_RENT, furniturePrice, pounds } from '../sim/economy';
-import { flatScore, occupants, scoreFor } from '../sim/impressiveness';
-import { Sim } from '../sim/sim';
+import { CELL_PRICE, DEMOLISH_PRICE, INSULATE_PRICE, book, furniturePrice, pounds } from '../sim/economy';
+import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, TILE, isDoor, isSolid, key, type CellKind, type State } from '../sim/state';
-import { buyFurniture, sellFurniture, shiftFurniture, turnFurniture } from '../sim/furnish';
-import { BUILDERS, copyParts, howLong, jobPieces, partsOf, piecesBetween, plannedParts, quote, signOff, stopJob } from '../sim/works';
+import { buyFurniture, shiftFurniture, turnFurniture } from '../sim/furnish';
+import { partsOf, piecesBetween, quote } from '../sim/works';
 import { drawFurniture } from '../render/art';
 import { floorY, type Cell, type Renderer } from '../render/renderer';
 import { el, h } from './dom';
 import type { FurnitureCard } from './furnitureCard';
 
-type Tool = 'room' | CellKind | 'insulate' | 'demolish';
+type Tool = CellKind | 'insulate' | 'demolish';
 
 const TOOLS: Record<Tool, { name: string; hint: string }> = {
-  wall: { name: 'Wall', hint: 'Draw walls a cell at a time, anywhere. A wall with space over it is a floor.' },
-  room: { name: 'Room', hint: 'Drag a box: walls all round it, with the room inside.' },
+  wall: { name: 'Add', hint: 'Tap or drag to draw walls a cell at a time, anywhere. A wall with space over it is a floor.' },
   window: { name: 'Window', hint: 'Tap a gap in a wall (or a wall cell) to put a window in.' },
   insulate: { name: 'Insulate', hint: 'Tap or drag along walls: much less noise gets through, and the heat stays in.' },
   door: { name: 'Door', hint: 'Tap the bottom of a two-cell gap in a wall: an inside door, between rooms of one flat.' },
   flatDoor: { name: 'Flat door', hint: "Tap the bottom of a two-cell gap: a flat's front door. Everything behind it is that flat." },
   entrance: { name: 'Street door', hint: 'Tap the bottom of a two-cell gap on the ground: the way in from the street.' },
   stair: { name: 'Stairs', hint: 'Tap a floor: a flight goes straight up from it, one cell wide, through the floor above.' },
-  demolish: { name: 'Knock down', hint: 'Tap or drag to take out walls, windows, doors and stairs. Tap furniture to sell it.' },
+  demolish: { name: 'Erase', hint: 'Tap or drag to take out walls, windows, doors and stairs.' },
 };
 
 /** The groups along the top of the bar: building work first, then furniture. */
 const GROUPS: { id: string; name: string; tools?: Tool[]; furniture?: FurnitureGroup[] }[] = [
-  { id: 'walls', name: 'Walls', tools: ['wall', 'room', 'window', 'insulate'] },
-  { id: 'doors', name: 'Doors', tools: ['door', 'flatDoor', 'entrance'] },
+  { id: 'walls', name: 'Walls', tools: ['wall', 'demolish'] },
+  { id: 'doors', name: 'Doors & windows', tools: ['door', 'flatDoor', 'entrance', 'window'] },
   { id: 'stairs', name: 'Stairs', tools: ['stair'] },
-  { id: 'demolish', name: 'Knock down', tools: ['demolish'] },
+  { id: 'insulate', name: 'Insulation', tools: ['insulate'] },
   { id: 'sleep', name: 'Bedroom', furniture: ['sleep'] },
   { id: 'sit', name: 'Living', furniture: ['sit'] },
   { id: 'kitchen', name: 'Kitchen', furniture: ['kitchen'] },
@@ -75,7 +70,7 @@ export class BuildUi {
   /** Nothing's picked when build mode opens: no group, no tool. */
   private group: (typeof GROUPS)[number] | null = null;
   private tool: Tool | null = null;
-  /** Undo steps: the plans as they were, or the furniture (and the money) as it was. */
+  /** Undo steps: the building or the furniture as it was, and the money. */
   private undo: { plan?: string; furniture?: string; money?: number; ledger?: number }[] = [];
   /**
    * A piece being placed: what, where and which way round it would go, and (if it's
@@ -84,9 +79,6 @@ export class BuildUi {
   private pending: { def: string; x: number; s: number; flip: boolean; id?: number } | null = null;
   private placeBar = el('place-bar');
   private drag: { start: Cell; last: Cell; moved: boolean; furniture?: number } | null = null;
-  /** The plans being drawn: a copy of the state with the planned building in it. */
-  private draft!: State;
-  private draftSim!: Sim;
   private bar = el('buildbar');
   private hint = el('build-hint');
   private tools = el('build-tools');
@@ -104,7 +96,6 @@ export class BuildUi {
     el('place-flip').addEventListener('click', () => this.turn());
     el('place-ok').addEventListener('click', () => this.place());
     el('place-cancel').addEventListener('click', () => this.endPlacing());
-    el('build-sign').addEventListener('click', () => this.signOff());
     // A mouse shows where things would go before you click.
     const canvas = document.getElementById('view') as HTMLCanvasElement;
     canvas.addEventListener('pointermove', (e) => {
@@ -130,7 +121,8 @@ export class BuildUi {
     this.renderer.build.active = true;
     this.undo = [];
     this.pending = null;
-    this.loadDraft();
+    // Plans from before building went in straight away are dropped.
+    this.sim.state.works.plan = null;
     this.render();
   }
 
@@ -181,8 +173,7 @@ export class BuildUi {
   private pendingProblem(): string | null {
     const p = this.pending;
     if (!p) return null;
-    this.syncDraft();
-    const problem = furnitureProblem(this.sim.state, p.def, p.x, p.s, p.id) ?? furnitureProblem(this.draft, p.def, p.x, p.s, p.id);
+    const problem = furnitureProblem(this.sim.state, p.def, p.x, p.s, p.id);
     if (problem) return problem;
     if (p.id === undefined && this.sim.state.money < furniturePrice(p.def)) return `Can't afford it: you have ${pounds(this.sim.state.money)}`;
     return null;
@@ -213,11 +204,11 @@ export class BuildUi {
     const out = { problem: null as string | null };
     this.furnish(() => {
       if (p.id === undefined) {
-        const f = buyFurniture(this.sim, p.def, p.x, p.s, p.flip, this.draft);
+        const f = buyFurniture(this.sim, p.def, p.x, p.s, p.flip);
         if (typeof f === 'string') out.problem = f;
         return;
       }
-      out.problem = shiftFurniture(this.sim, p.id, p.x, p.s, this.draft);
+      out.problem = shiftFurniture(this.sim, p.id, p.x, p.s);
       const f = this.sim.state.furniture.find((o) => o.id === p.id);
       if (!out.problem && f && !!f.flip !== p.flip) turnFurniture(this.sim, p.id);
     });
@@ -249,36 +240,18 @@ export class BuildUi {
     Object.assign(this.renderer.build, { active: false, marks: [], ghost: null, selected: null });
     this.card.hide();
     this.bump();
-    if (this.sim.state.works.plan) this.onNotify('Your plans are kept. Sign them off in build mode to get the builders in.');
   }
 
   private bump(): void {
     this.renderer.build.version++;
   }
 
-  // ------------------------------------------------------------------ the plans
+  // ------------------------------------------------------------------ changes and undo
 
-  /** A copy of the state to draw plans on, starting from the plans so far (or the job, or the building). */
-  private loadDraft(): void {
+  /** The building (not the furniture) and the money, for undo. */
+  private buildingSnap(): (typeof this.undo)[number] {
     const st = this.sim.state;
-    this.draft = { ...st, ...copyParts(plannedParts(st)), furniture: st.furniture };
-    this.draftSim = new Sim(this.draft);
-  }
-
-  private draftParts(): BuildParts {
-    return partsOf(this.draft);
-  }
-
-  /** Brings the draft's copy of everything but the building up to date (people move in, ids get used). */
-  private syncDraft(): void {
-    const parts = this.draftParts();
-    Object.assign(this.draft, this.sim.state, parts, { furniture: this.sim.state.furniture });
-  }
-
-  /** The plans, without the furniture (which isn't planned), for undo. */
-  private planSnap(): string {
-    const d = this.draft;
-    return JSON.stringify({ cells: d.cells, insulated: d.insulated });
+    return { plan: JSON.stringify({ cells: st.cells, insulated: st.insulated }), money: st.money, ledger: st.ledger.length };
   }
 
   private furnitureSnap(): (typeof this.undo)[number] {
@@ -297,35 +270,30 @@ export class BuildUi {
     const before = this.furnitureSnap();
     fn();
     if (JSON.stringify(this.sim.state.furniture) !== before.furniture) this.pushUndo(before);
-    this.draftSim.changed();
     this.bump();
-    this.updateFooter();
   }
 
-  /** Stores the draft as the plans (or no plans, if it's no different from what's already happening). */
-  private savePlan(): void {
+  /**
+   * Runs a change to the building and pays for it there and then. If it can't be afforded,
+   * it's put back. `keepUndo` is false for each cell of a drag (the drag keeps one step).
+   */
+  private change(fn: () => unknown, keepUndo = true): string | null {
     const st = this.sim.state;
-    const base = st.works.job ?? partsOf(st);
-    const parts = this.draftParts();
-    st.works.plan = piecesBetween(base, parts).length > 0 ? copyParts(parts) : null;
-  }
-
-  /** Runs a change to the plans, keeping an undo step if anything changed. */
-  private change(fn: () => unknown): void {
-    this.syncDraft();
-    const before = this.planSnap();
+    const before = this.buildingSnap();
     fn();
-    this.sim.state.nextId = Math.max(this.sim.state.nextId, this.draft.nextId);
-    if (this.planSnap() === before) return;
-    this.pushUndo({ plan: before });
-    this.planChanged();
-  }
-
-  private planChanged(): void {
-    this.draftSim.changed();
-    this.savePlan();
+    const was = JSON.parse(before.plan!) as { cells: State['cells']; insulated: State['insulated'] };
+    if (JSON.stringify({ cells: st.cells, insulated: st.insulated }) === before.plan) return null;
+    const cost = quote(piecesBetween({ ...was, furniture: [] }, partsOf(st))).cost;
+    if (cost > st.money) {
+      Object.assign(st, was);
+      return `Can't afford that: it's ${pounds(cost)} and you have ${pounds(st.money)}`;
+    }
+    if (cost !== 0) book(this.sim, 'Building work', -cost);
+    if (keepUndo) this.pushUndo(before);
+    this.sim.changed();
     this.bump();
-    this.updateFooter();
+    this.renderZoom();
+    return null;
   }
 
   private doUndo(): void {
@@ -337,32 +305,13 @@ export class BuildUi {
 
   private restoreStep(step: (typeof this.undo)[number]): void {
     const st = this.sim.state;
-    if (step.plan) {
-      Object.assign(this.draft, JSON.parse(step.plan) as Partial<BuildParts>);
-      this.planChanged();
-    }
-    if (step.furniture) {
-      st.furniture.splice(0, st.furniture.length, ...(JSON.parse(step.furniture) as State['furniture']));
-      st.money = step.money!;
-      st.ledger.length = Math.min(st.ledger.length, step.ledger!);
-      this.sim.changed();
-      this.draftSim.changed();
-      this.bump();
-      this.updateFooter();
-    }
-  }
-
-  private signOff(): void {
-    const problem = signOff(this.sim);
-    if (problem) {
-      this.setHint(`Can't sign that off: ${problem.charAt(0).toLowerCase()}${problem.slice(1)}.`, true);
-      return;
-    }
-    this.undo = [];
-    this.loadDraft();
-    this.select(null);
+    if (step.plan) Object.assign(st, JSON.parse(step.plan) as Partial<State>);
+    if (step.furniture) st.furniture.splice(0, st.furniture.length, ...(JSON.parse(step.furniture) as State['furniture']));
+    st.money = step.money!;
+    st.ledger.length = Math.min(st.ledger.length, step.ledger!);
+    this.sim.changed();
     this.bump();
-    this.updateFooter();
+    this.renderZoom();
   }
 
   private turn(): void {
@@ -418,7 +367,6 @@ export class BuildUi {
     this.renderZoom();
     this.setHint(null);
     this.updateButtons();
-    this.updateFooter();
     document.body.style.setProperty('--buildbar-h', `${this.bar.offsetHeight}px`);
   }
 
@@ -443,74 +391,9 @@ export class BuildUi {
     (el('build-undo') as HTMLButtonElement).disabled = this.undo.length === 0;
   }
 
-  /** The cost of the plans, how long they'll take, and what they'll do for the flats. */
-  private updateFooter(): void {
-    const st = this.sim.state;
-    const out = el('build-quote');
-    const sign = el('build-sign') as HTMLButtonElement;
-    out.replaceChildren();
-    if (st.works.plan) {
-      const q = quote(piecesBetween(partsOf(st), st.works.plan));
-      sign.disabled = false;
-      sign.textContent = `Sign off ${pounds(q.cost)}`;
-      out.append(
-        h('strong', {}, `${pounds(q.cost)} · ${howLong(q.minutes)}`),
-        ...this.effects().map((e) => h('span', { class: e.up ? 'up' : 'down' }, e.text)),
-        h('button', { type: 'button', class: 'link', onclick: () => this.clearPlans() }, 'Clear plans'),
-      );
-    } else {
-      sign.disabled = true;
-      sign.textContent = 'Sign off';
-      const left = jobPieces(this.sim);
-      if (left.length > 0) {
-        const q = quote(left);
-        out.append(
-          h('span', {}, `${BUILDERS} are on it: ${q.pieces} job${q.pieces === 1 ? '' : 's'} left, ${pounds(q.cost)} to pay, ${howLong(q.minutes)}${st.works.waiting ? ' (waiting to be paid)' : ''}.`),
-          h('button', { type: 'button', class: 'link', onclick: () => this.stopBuilders() }, 'Stop them'),
-        );
-      } else out.append(h('span', {}, 'Plans are free. Nothing happens until you sign them off.'));
-    }
-  }
-
-  /** Flats whose tier the plans would change, and new flats the plans make. */
-  private effects(): { text: string; up: boolean }[] {
-    const ranks = Object.keys(TIER_RENT);
-    const live = this.sim.layout;
-    const out: { text: string; up: boolean }[] = [];
-    for (const f of this.draftSim.layout.flats) {
-      const people = occupants(this.sim, f.id);
-      const after = scoreFor(this.draftSim, f.id, people).tier;
-      const was = live.flat(f.id);
-      if (!was) {
-        out.push({ text: `New flat: ${after}, about ${pounds(TIER_RENT[after])}/wk`, up: true });
-        continue;
-      }
-      const before = flatScore(this.sim, f.id).tier;
-      if (before === after) continue;
-      const diff = TIER_RENT[after] - TIER_RENT[before];
-      out.push({ text: `${f.name || was.name}: ${before} → ${after} (${pounds(diff, true)}/wk)`, up: ranks.indexOf(after) > ranks.indexOf(before) });
-    }
-    for (const f of live.flats) if (!this.draftSim.layout.flat(f.id)) out.push({ text: `${f.name} would go`, up: false });
-    return out;
-  }
-
-  private clearPlans(): void {
-    this.sim.state.works.plan = null;
-    this.undo = [];
-    this.loadDraft();
-    this.select(null);
-    this.bump();
-    this.updateFooter();
-  }
-
-  private stopBuilders(): void {
-    stopJob(this.sim);
-    this.clearPlans();
-  }
-
   /** Chips to zoom straight to a flat, or back out to the whole building. */
   private renderZoom(): void {
-    const lay = this.draftSim.layout;
+    const lay = this.sim.layout;
     const chips = [h('button', { type: 'button', onclick: () => this.onFit() }, 'Whole building')];
     for (const f of lay.flats) {
       chips.push(h('button', { type: 'button', onclick: () => this.zoomTo(f.id) }, f.name || 'New flat'));
@@ -519,7 +402,7 @@ export class BuildUi {
   }
 
   private zoomTo(flatId: string): void {
-    const lay = this.draftSim.layout;
+    const lay = this.sim.layout;
     const f = lay.flat(flatId);
     if (!f) return;
     const cells = lay.flatCells(f).map((n) => lay.xs(n));
@@ -558,9 +441,9 @@ export class BuildUi {
       this.drag = { start: cell, last: cell, moved: false, furniture: this.pending.id ?? -1 };
       return true;
     }
-    this.syncDraft();
     this.drag = { start: cell, last: cell, moved: false };
-    if (this.tool !== 'room') this.pushUndo({ plan: this.planSnap() });
+    // A drag is one undo step, however many cells it paints.
+    this.pushUndo(this.buildingSnap());
     this.preview(cell);
     return true;
   }
@@ -593,8 +476,7 @@ export class BuildUi {
       this.showPending();
       return;
     }
-    if (this.tool === 'room') this.markRoom(d.start, cell);
-    else if (this.tool && PAINT.includes(this.tool)) {
+    if (this.tool && PAINT.includes(this.tool)) {
       // Every cell along the way, so a quick swipe doesn't leave gaps.
       for (const c of between(d.last, cell)) this.apply(c, false);
     }
@@ -610,13 +492,10 @@ export class BuildUi {
       if (!d.moved) this.tapFurniture(d.start);
       return;
     }
-    if (this.tool === 'room') {
-      if (Math.abs(d.last.x - d.start.x) < 2 || Math.abs(d.last.s - d.start.s) < 3) this.setHint('Make it at least 3 wide and 4 tall: people need two cells of headroom.', true);
-      else this.change(() => buildRoom(this.draft, d.start.x, d.start.s, d.last.x, d.last.s));
-    } else if (!d.moved) {
+    if (!d.moved) {
       this.undo.pop();
       this.apply(d.start, true);
-    } else if (this.undo[this.undo.length - 1]?.plan === this.planSnap()) {
+    } else if (this.undo[this.undo.length - 1]?.plan === this.buildingSnap().plan) {
       this.undo.pop();
     }
     this.renderer.build.marks = [];
@@ -627,7 +506,7 @@ export class BuildUi {
   dragCancel(): void {
     const d = this.drag;
     this.drag = null;
-    if (d && d.furniture === undefined && this.tool !== 'room') {
+    if (d && d.furniture === undefined) {
       const prev = this.undo.pop();
       if (prev) this.restoreStep(prev);
     }
@@ -637,36 +516,24 @@ export class BuildUi {
 
   /** Does the current tool at a cell. `single` is a tap (keeps its own undo step). */
   private apply(cell: Cell, single: boolean): void {
-    const st = this.draft;
+    const st = this.sim.state;
     if (this.pending || this.isFurniture() || !this.tool) {
       this.tapFurniture(cell);
       return;
     }
     let problem: string | null = null;
     const run = (fn: () => string | null | boolean) => {
-      const go = () => {
+      const why = this.change(() => {
         const out = fn();
         if (typeof out === 'string') problem = out;
-      };
-      if (single) this.change(go);
-      else {
-        go();
-        this.planChanged();
-      }
+      }, single);
+      if (why) problem = why;
     };
     const { x, s } = cell;
     switch (this.tool) {
-      case 'room':
-        if (single) problem = 'Drag across to mark out a room.';
+      case 'demolish':
+        run(() => removeCell(st, x, s));
         break;
-      case 'demolish': {
-        // Knocking down furniture sells it, there and then (only with a tap, not a drag).
-        const f = furnitureAt(this.sim.state, x, s);
-        if (f) {
-          if (single) this.furnish(() => sellFurniture(this.sim, f.id));
-        } else run(() => removeCell(st, x, s));
-        break;
-      }
       case 'insulate':
         run(() => insulate(st, key(x, s)));
         break;
@@ -732,23 +599,12 @@ export class BuildUi {
 
   /** Where a flight starts for a tapped cell: the floor at or just under the tap. */
   private stairFoot(x: number, s: number): number {
-    const st = this.draft;
+    const st = this.sim.state;
     const at = (r: number) => st.cells[key(x, r)];
     if (isSolid(at(s))) return s + 1;
     let foot = s;
     for (let i = 0; i < FLIGHT - 1 && foot > 0 && !isSolid(at(foot - 1)) && at(foot - 1) !== 'stair'; i++) foot--;
     return foot;
-  }
-
-  private markRoom(a: Cell, b: Cell): void {
-    const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
-    const [s0, s1] = [Math.min(a.s, b.s), Math.max(a.s, b.s)];
-    const ok = x1 - x0 >= 2 && s1 - s0 >= 3;
-    const m = this.renderer.build.marks;
-    m.length = 0;
-    m.push({ x: x0, s: s0, w: x1 - x0 + 1, h: 1, ok }, { x: x0, s: s1, w: x1 - x0 + 1, h: 1, ok });
-    if (s1 - s0 > 1) m.push({ x: x0, s: s0 + 1, w: 1, h: s1 - s0 - 1, ok }, { x: x1, s: s0 + 1, w: 1, h: s1 - s0 - 1, ok });
-    this.bump();
   }
 
   /** Shows where the tool or piece would go (mouse hover, and the start of a drag). */
@@ -765,7 +621,7 @@ export class BuildUi {
       this.bump();
       return;
     }
-    const st = this.draft;
+    const st = this.sim.state;
     if (this.isFurniture() || !this.tool) {
       // Nothing to show until a piece or a tool is picked.
     } else if (this.tool === 'stair') {
@@ -774,8 +630,8 @@ export class BuildUi {
     } else if (this.tool === 'insulate') {
       b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: insulateProblem(st, key(cell.x, cell.s)) === null });
     } else if (this.tool === 'demolish') {
-      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: removeProblem(st, cell.x, cell.s) === null || furnitureAt(this.sim.state, cell.x, cell.s) !== undefined });
-    } else if (this.tool !== 'room') {
+      b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: removeProblem(st, cell.x, cell.s) === null });
+    } else {
       const kind = this.tool as CellKind;
       b.marks.push({ x: cell.x, s: cell.s, w: 1, h: isDoor(kind) ? DOOR_ROWS : 1, ok: cellProblem(st, cell.x, cell.s, kind) === null });
     }
@@ -824,13 +680,6 @@ function toolIcon(t: Tool): HTMLCanvasElement {
     ctx.fillRect(x, y, w, hh);
   };
   switch (t) {
-    case 'room':
-      r(4, 20, 24, 3, '#77706a');
-      r(4, 2, 24, 3, '#77706a');
-      r(4, 5, 3, 15, '#9c5b45');
-      r(25, 5, 3, 15, '#9c5b45');
-      r(7, 5, 18, 15, '#d9b98f');
-      break;
     case 'wall':
       // A few cells of wall, the way you draw them.
       for (const [x, y] of [[4, 14], [12, 14], [20, 14], [20, 6]]) r(x, y, 8, 8, '#9c5b45');
@@ -867,7 +716,6 @@ function toolIcon(t: Tool): HTMLCanvasElement {
 // ------------------------------------------------------------------ prices
 
 function toolPrice(t: Tool): string {
-  if (t === 'room') return `${pounds(CELL_PRICE.wall)} a cell`;
   if (t === 'demolish') return `${pounds(DEMOLISH_PRICE)} a cell`;
   if (t === 'insulate') return `${pounds(INSULATE_PRICE)} a cell`;
   if (t === 'stair') return `${pounds(CELL_PRICE.stair * FLIGHT)} a flight`;
