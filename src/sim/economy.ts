@@ -173,13 +173,23 @@ export function mortgageDue(sim: Sim): void {
   const m = st.mortgage;
   if (m.paidOffDay !== undefined || st.repossessed !== undefined) return;
   m.balance += Math.round((m.balance * m.rate) / 52);
-  const due = Math.min(m.balance, m.payment + m.arrears);
-  if (st.money >= due) {
-    book(sim, 'Mortgage', -due);
-    m.balance -= due;
-    if (m.missed > 0) letter(sim, { from: 'Northfold Building Society', title: 'Payment received', body: 'Thank you for bringing your account up to date. We have removed the note from your file. The note remains in our hearts.' });
+  // This week's payment breaks a run of missed ones; arrears come off as well, as far as the money goes.
+  const payment = Math.min(m.balance, m.payment);
+  if (st.money >= payment) {
+    const extra = Math.max(0, Math.min(m.arrears, st.money - payment, m.balance - payment));
+    book(sim, 'Mortgage', -(payment + extra));
+    m.balance -= payment + extra;
+    m.arrears -= extra;
+    if (m.missed > 0) {
+      letter(sim, {
+        from: 'Northfold Building Society',
+        title: 'Payment received',
+        body: m.arrears > 0
+          ? `Thank you for this week's payment. You still owe ${pounds(m.arrears)} in arrears, which we will take as and when you have it. We will be watching.`
+          : 'Thank you for bringing your account up to date. We have removed the note from your file. The note remains in our hearts.',
+      });
+    }
     m.missed = 0;
-    m.arrears = 0;
     checkPaidOff(sim);
     return;
   }
