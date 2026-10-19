@@ -1,72 +1,58 @@
 // Money. Rent comes in every morning; the mortgage and the building's bills go out every
 // Monday. Miss four mortgage payments in a row and the bank takes the building; pay it off
-// and it's yours. All amounts are in pence. All the numbers to tune are at the top.
+// and it's yours. All amounts are in pence. The numbers to tune are in tuning.ts.
 
 import { furnitureDef } from './defs';
 import { flatScore, TIERS } from './impressiveness';
 import type { Sim } from './sim';
-import { CLEANER_WEEKLY, gasBill } from './environment';
+import { gasBill } from './environment';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type FlatInfo, type Letter, type CellKind } from './state';
 import { tale } from './tales';
+import {
+  ALARM_WEEKLY,
+  BILLS,
+  CELL_PRICES,
+  CLEANER_WEEKLY,
+  FURNITURE_LEAST_POUNDS,
+  FURNITURE_POUNDS_PER_VALUE,
+  LETTING,
+  MISSES_ALLOWED,
+  OVERDRAFT_CHARGE,
+  POUND,
+  TIER_GRACE_DAYS,
+  TIER_RENT,
+} from './tuning';
 
-export const POUND = 100;
-
-export const START_MONEY = 1500 * POUND;
-export const MORTGAGE = { balance: 30000 * POUND, payment: 250 * POUND, rate: 0.04 };
-/** Payments missed in a row before the bank takes the building. */
-export const MISSES_ALLOWED = 4;
-
-/** Weekly going rate for a flat in each tier. */
-export const TIER_RENT: Record<string, number> = {
-  Grim: 60 * POUND,
-  Shabby: 85 * POUND,
-  Plain: 110 * POUND,
-  Decent: 140 * POUND,
-  Nice: 175 * POUND,
-  Smart: 215 * POUND,
-  Impressive: 260 * POUND,
-};
-
-/** Days below a tier before a flat's going rate drops to the one below. */
-export const TIER_GRACE_DAYS = 3;
-
-/** The building's own weekly bills. */
-export const BILLS = { insurance: 25 * POUND, lighting: 8 * POUND, bins: 8 * POUND, emptyFlatTax: 20 * POUND };
-
-/** Weeks of rent taken as a deposit, and how long a fixed lease runs. */
-export const DEPOSIT_WEEKS = 4;
-export const LEASE_WEEKS = 6;
-/** Days' notice for a rent change, and before someone moves out. */
-export const RENT_NOTICE_DAYS = 7;
-export const MOVE_OUT_NOTICE_DAYS = 7;
+// The money numbers live in tuning.ts; the rest of the game still gets them from here.
+export {
+  ALARM_PRICE,
+  ALARM_WEEKLY,
+  BILLS,
+  COUNCIL_FINE,
+  COUNCIL_FINE_CAP,
+  DEMOLISH_PRICE,
+  DEPOSIT_WEEKS,
+  HANDOVER_ADVANCE,
+  INSULATE_PRICE,
+  LEASE_WEEKS,
+  LOCKS_PRICE,
+  MISSES_ALLOWED,
+  MORTGAGE,
+  MOVE_OUT_NOTICE_DAYS,
+  PLANNING_FEE,
+  POUND,
+  RENT_NOTICE_DAYS,
+  RESALE,
+  START_MONEY,
+  TIER_GRACE_DAYS,
+  TIER_RENT,
+} from './tuning';
 
 /** What each cell costs to put in. */
-export const CELL_PRICE: Record<CellKind, number> = {
-  wall: 25 * POUND,
-  window: 120 * POUND,
-  door: 120 * POUND,
-  flatDoor: 250 * POUND,
-  entrance: 400 * POUND,
-  stair: 200 * POUND,
-};
-export const DEMOLISH_PRICE = 10 * POUND;
-export const INSULATE_PRICE = 40 * POUND;
-/** What you get back for furniture you take out. */
-export const RESALE = 0.3;
-
-/** Security: new locks on the street door and ground-floor windows, and an alarm (fitted, then monitored weekly). */
-export const LOCKS_PRICE = 180 * POUND;
-export const ALARM_PRICE = 350 * POUND;
-export const ALARM_WEEKLY = 4 * POUND;
-/** Fine for an improvement notice not done in time, per problem, and the most for one visit. */
-export const COUNCIL_FINE = 150 * POUND;
-export const COUNCIL_FINE_CAP = 450 * POUND;
-export const PLANNING_FEE = 250 * POUND;
-/** What Denise will advance against a deposit if you're short in the first week. */
-export const HANDOVER_ADVANCE = 300 * POUND;
+export const CELL_PRICE: Record<CellKind, number> = CELL_PRICES;
 
 export function furniturePrice(def: string): number {
-  return Math.max(30, furnitureDef(def).value * 8) * POUND;
+  return Math.max(FURNITURE_LEAST_POUNDS, furnitureDef(def).value * FURNITURE_POUNDS_PER_VALUE) * POUND;
 }
 
 // ------------------------------------------------------------------ money in and out
@@ -108,7 +94,7 @@ export function flatInfo(sim: Sim, id: string): FlatInfo {
   let info = st.flats[id];
   if (!info) {
     const tier = flatScore(sim, id).tier;
-    info = { asking: TIER_RENT[tier], listed: true, tier, lease: null, nextApplicant: st.tick + 6 * TICKS_PER_HOUR };
+    info = { asking: TIER_RENT[tier], listed: true, tier, lease: null, nextApplicant: st.tick + LETTING.firstLookHours * TICKS_PER_HOUR };
     st.flats[id] = info;
   }
   return info;
@@ -165,7 +151,7 @@ export function weeklyBills(sim: Sim): void {
   if (gas > 0) book(sim, 'Gas for the central boiler', -gas);
   if (st.cleaner) book(sim, 'Cleaner for the stairs', -CLEANER_WEEKLY);
   if (st.security.alarm) book(sim, 'Alarm monitoring', -ALARM_WEEKLY);
-  if (st.money < 0) book(sim, 'Overdraft charge', -10 * POUND);
+  if (st.money < 0) book(sim, 'Overdraft charge', -OVERDRAFT_CHARGE);
 }
 
 export function mortgageDue(sim: Sim): void {

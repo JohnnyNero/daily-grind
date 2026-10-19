@@ -12,9 +12,10 @@ import { moveIn, type Person } from './tenants';
 import { friendsLeaving } from './social';
 import { post } from './chat';
 import { expectGrade, expectThought } from './expectations';
-import { likingTarget, rentThought, thoughtsOf, tierThought, type Thought } from './thoughts';
+import { likingTarget, missingThoughts, rentThought, thoughtsOf, tierThought, type Thought } from './thoughts';
 import { rollTraits, traitDef, touchiness, has } from './traits';
 import { tale } from './tales';
+import { EVICTION_ARREARS_WEEKS, EVICTION_NOTICE_DAYS, LETTING as L, LISTING_PACE, MEMORIES, RENT as R } from './tuning';
 
 const JOBS: { title: string; leave: number; back: number }[] = [
   { title: 'Office manager', leave: 8 * 60, back: 17 * 60 + 30 },
@@ -30,11 +31,6 @@ const JOBS: { title: string; leave: number; back: number }[] = [
 ];
 const NO_JOBS = ['Retired', 'Student', 'Works from home', '"Between things"'];
 
-/** Most applicants waiting for one flat at a time. */
-const MAX_WAITING = 3;
-/** How long an applicant waits for an answer. */
-const APPLICANT_DAYS = 2;
-
 // ------------------------------------------------------------------ listings
 
 export interface ListingDef {
@@ -48,18 +44,18 @@ export interface ListingDef {
 }
 
 export const LISTINGS: Record<ListingStyle, ListingDef> = {
-  plain: { name: 'Plain', blurb: 'Flat to let. Furnished. Rent weekly.', does: 'No surprises either way.', pace: 1 },
-  agent: { name: 'Estate agent', blurb: 'Bijou. Characterful. Moments from transport. Viewing essential!', does: "Lots of applicants. They'll feel short-changed when they see it.", pace: 0.6 },
-  honest: { name: 'Brutally honest', blurb: 'Small. Brown. The boiler has moods. Neighbours mostly fine.', does: 'Fewer applicants, pleasantly surprised ones.', pace: 1.6 },
-  professionals: { name: 'Professionals only', blurb: 'Would suit a working professional. No students, no bands, no exceptions.', does: 'Only people with jobs, and none of the noisy sort. Slower to let.', pace: 1.4 },
-  pets: { name: 'Pets considered', blurb: 'Pets considered. Within reason. Not a horse.', does: 'Pet owners come running.', pace: 0.85 },
+  plain: { name: 'Plain', blurb: 'Flat to let. Furnished. Rent weekly.', does: 'No surprises either way.', pace: LISTING_PACE.plain },
+  agent: { name: 'Estate agent', blurb: 'Bijou. Characterful. Moments from transport. Viewing essential!', does: "Lots of applicants. They'll feel short-changed when they see it.", pace: LISTING_PACE.agent },
+  honest: { name: 'Brutally honest', blurb: 'Small. Brown. The boiler has moods. Neighbours mostly fine.', does: 'Fewer applicants, pleasantly surprised ones.', pace: LISTING_PACE.honest },
+  professionals: { name: 'Professionals only', blurb: 'Would suit a working professional. No students, no bands, no exceptions.', does: 'Only people with jobs, and none of the noisy sort. Slower to let.', pace: LISTING_PACE.professionals },
+  pets: { name: 'Pets considered', blurb: 'Pets considered. Within reason. Not a horse.', does: 'Pet owners come running.', pace: LISTING_PACE.pets },
 };
 
 // ------------------------------------------------------------------ reviews
 
 /** Your rating from the last few tenants to leave (null before anyone has). */
 export function landlordRating(sim: Sim): number | null {
-  const recent = sim.state.reviews.slice(-8);
+  const recent = sim.state.reviews.slice(-L.reviewsCounted);
   if (recent.length === 0) return null;
   return recent.reduce((n, r) => n + r.stars, 0) / recent.length;
 }
@@ -67,7 +63,7 @@ export function landlordRating(sim: Sim): number | null {
 /** Good reviews bring applicants quicker; bad ones put people off. */
 function ratingPace(sim: Sim): number {
   const r = landlordRating(sim);
-  return r === null ? 1 : 1.45 - 0.15 * r;
+  return r === null ? 1 : L.ratingPaceBase - L.ratingPacePerStar * r;
 }
 
 const REVIEW_TEXT: Record<number, string[]> = {
@@ -97,7 +93,7 @@ function review(sim: Sim, flatId: string, people: Pawn[]): number | undefined {
 
 // ------------------------------------------------------------------ people
 
-export function makePerson(rng: RngHolder, surname?: string, working = random(rng) < 0.75): Person {
+export function makePerson(rng: RngHolder, surname?: string, working = random(rng) < L.working): Person {
   const job = working ? pick(rng, JOBS) : null;
   return {
     name: `${pick(rng, FIRST)} ${surname ?? pick(rng, LAST)}`,
@@ -123,9 +119,9 @@ export function applicantsHour(sim: Sim): void {
     // A flat without the basics (a bed, a loo, a wash, a kitchen) only draws the desperate, and rarely.
     const basics = scoreFor(sim, f.id, 1).has;
     const liveable = basics.bed && basics.toilet && basics.wash && basics.kitchen;
-    const meanHours = Math.max(3, Math.min(120, 14 * ratio ** 3)) * (liveable ? 1 : 4) * LISTINGS[info.style ?? 'plain'].pace * ratingPace(sim);
+    const meanHours = Math.max(L.fewestHours, Math.min(L.mostHours, L.meanHours * ratio ** 3)) * (liveable ? 1 : L.unliveableSlower) * LISTINGS[info.style ?? 'plain'].pace * ratingPace(sim);
     info.nextApplicant = st.tick + Math.round(-Math.log(1 - random(st) * 0.999) * meanHours * TICKS_PER_HOUR);
-    if (waiting < MAX_WAITING && ratio < 1.6 - 0.05 * expectGrade(sim)) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
+    if (waiting < L.maxWaiting && ratio < L.tooDear - L.tooDearPerGrade * expectGrade(sim)) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
   }
 }
 
@@ -134,15 +130,15 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   const lay = sim.layout;
   const flat = lay.flat(flatId)!;
   const info = flatInfo(sim, flatId);
-  const roomFor = Math.max(1, Math.min(3, Math.floor(flat.area / 5)));
-  const size = Math.min(roomFor, random(st) < 0.55 ? 1 : random(st) < 0.7 ? 2 : 3);
+  const roomFor = Math.max(1, Math.min(3, Math.floor(flat.area / L.tilesPerPerson)));
+  const size = Math.min(roomFor, random(st) < L.single ? 1 : random(st) < L.couple ? 2 : 3);
   const surname = pick(st, LAST);
   const people: Person[] = [];
   for (let i = 0; i < size; i++) {
     const professional = info.style === 'professionals';
-    let person = makePerson(st, i === 0 || random(st) < 0.6 ? surname : undefined, professional || (i === 0 ? random(st) < 0.8 : random(st) < 0.5));
+    let person = makePerson(st, i === 0 || random(st) < L.sameSurname ? surname : undefined, professional || (i === 0 ? random(st) < L.leadWorking : random(st) < L.othersWorking));
     if (professional) person.traits = person.traits.filter((t) => t !== 'partyAnimal' && t !== 'musician');
-    if (info.style === 'pets' && i === 0 && !person.traits.includes('petOwner') && random(st) < 0.6) person.traits = [...person.traits.slice(0, 2), 'petOwner'];
+    if (info.style === 'pets' && i === 0 && !person.traits.includes('petOwner') && random(st) < L.petsListing) person.traits = [...person.traits.slice(0, 2), 'petOwner'];
     if (person.traits.length === 0) person.traits = ['easyGoing'];
     // Nobody shares a first name with someone they live with.
     for (let tries = 0; tries < 10 && people.some((o) => o.name.split(' ')[0] === person.name.split(' ')[0]); tries++) person = { ...person, name: `${pick(st, FIRST)} ${person.name.split(' ').slice(1).join(' ')}` };
@@ -152,11 +148,11 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   const shown = pick(st, lead.traits);
   const hidden = lead.traits.filter((t) => t !== shown);
   const hints = hidden.slice(0, random(st) < 0.5 ? 1 : 2).map((t) => `Previous landlord: “${traitDef(t).hint}”`);
-  const desperate = mustBeDesperate || ((info.tier === 'Grim' || info.tier === 'Shabby') && random(st) < 0.2);
+  const desperate = mustBeDesperate || ((info.tier === 'Grim' || info.tier === 'Shabby') && random(st) < L.desperate);
   if (desperate) hints.push('Can move in today. Any flat, honestly.');
   if (friendOf) hints.unshift(`A friend of ${friendOf.name.split(' ')[0]}, who lives here already.`);
-  const offer = has(lead, 'haggler') ? Math.round((info.asking * 0.9) / (5 * POUND)) * 5 * POUND : info.asking;
-  return { id: st.nextId++, flat: flatId, people, traits: lead.traits, shown, hints, offer, until: st.tick + APPLICANT_DAYS * TICKS_PER_DAY, ...(desperate ? { desperate: true } : {}) };
+  const offer = has(lead, 'haggler') ? Math.round((info.asking * L.hagglerOffer) / (5 * POUND)) * 5 * POUND : info.asking;
+  return { id: st.nextId++, flat: flatId, people, traits: lead.traits, shown, hints, offer, until: st.tick + L.applicantDays * TICKS_PER_DAY, ...(desperate ? { desperate: true } : {}) };
 }
 
 /** Roughly how much an applicant would like the flat, from what you know: the flat, the rent, the basics. */
@@ -168,14 +164,10 @@ export function likelyLiking(sim: Sim, a: Applicant): number {
   const grade = expectGrade(sim);
   const hoped = expectThought(score.tier, grade);
   if (hoped) thoughts.push(hoped);
-  if (!score.has.bed) thoughts.push({ label: '', value: -12 });
-  if (!score.has.toilet) thoughts.push({ label: '', value: -15 });
-  if (!score.has.wash) thoughts.push({ label: '', value: -8 });
-  if (!score.has.kitchen) thoughts.push({ label: '', value: -6 });
-  if (score.perPerson < 5) thoughts.push({ label: '', value: -5 });
+  thoughts.push(...missingThoughts(score));
   const rent = rentThought(a.offer, TIER_RENT[score.tier], grade);
   if (rent) thoughts.push(rent);
-  thoughts.push({ label: '', value: 5 }); // new place
+  thoughts.push({ label: MEMORIES.newPlace.label, value: MEMORIES.newPlace.value });
   return Math.round(likingTarget(thoughts));
 }
 
@@ -210,7 +202,7 @@ export function accept(sim: Sim, applicantId: number): string | null {
   if (greeter) post(sim, greeter, `Welcome to ${flatName}, ${pawns.map((p) => p.name.split(' ')[0]).join(' and ')}! Bins go out Sunday night. Don't ask about the boiler.`);
   if (a.desperate) for (const p of pawns) p.life!.desperate = true;
   // Word gets round: fewer applicants for a while after someone moves in.
-  for (const f of Object.values(st.flats)) f.nextApplicant = Math.max(f.nextApplicant, st.tick + 18 * TICKS_PER_HOUR);
+  for (const f of Object.values(st.flats)) f.nextApplicant = Math.max(f.nextApplicant, st.tick + L.afterMoveInHours * TICKS_PER_HOUR);
   return null;
 }
 
@@ -250,8 +242,8 @@ export function rentMorning(sim: Sim): void {
     const daily = Math.round(lease.rent / 7);
     const liking = householdLiking(sim, id);
     const early = people.some((p) => has(p.life!, 'paysEarly'));
-    let lateChance = liking < 20 ? 0.4 : liking < 35 ? 0.15 : 0.03;
-    if (early) lateChance *= liking < 15 ? 0.5 : 0.1;
+    let lateChance = liking < R.lateUnhappy.under ? R.lateUnhappy.chance : liking < R.lateFedUp.under ? R.lateFedUp.chance : R.lateUsual;
+    if (early) lateChance *= liking < R.paysEarlyUnhappy.under ? R.paysEarlyUnhappy.factor : R.paysEarly;
     if (lease.prepaid && lease.prepaid > 0) {
       lease.prepaid--;
       lease.paid++;
@@ -260,7 +252,7 @@ export function rentMorning(sim: Sim): void {
       lease.late++;
     } else {
       // On time, and catching up a bit on anything owed.
-      const catchUp = lease.owed > 0 && liking >= 30 ? Math.min(lease.owed, daily) : 0;
+      const catchUp = lease.owed > 0 && liking >= R.catchUpLiking ? Math.min(lease.owed, daily) : 0;
       lease.owed -= catchUp;
       lease.paid++;
       book(sim, `Rent · ${name}`, daily + catchUp);
@@ -274,12 +266,12 @@ function leaseEnd(sim: Sim, id: string, lease: Lease, liking: number, people: Pa
   const name = sim.layout.flat(id)?.name ?? 'the flat';
   const touchy = people.reduce((n, p) => n + touchiness(p.life!), 0) / people.length;
   const lead = people[0];
-  if (liking >= 40 + touchy / 2) {
+  if (liking >= R.renewLiking + touchy / 2) {
     lease.endDay = sim.day + LEASE_WEEKS * 7;
     const haggler = people.find((p) => has(p.life!, 'haggler'));
     const going = goingRate(sim, id);
-    if (haggler && lease.rent > going * 0.95) {
-      const ask = Math.round((Math.min(lease.rent, going) * 0.9) / (5 * POUND)) * 5 * POUND;
+    if (haggler && lease.rent > going * R.renewHaggleAbove) {
+      const ask = Math.round((Math.min(lease.rent, going) * R.renewHaggleAsk) / (5 * POUND)) * 5 * POUND;
       letter(sim, {
         from: `${haggler.name}, ${name}`,
         title: 'About the renewal',
@@ -313,7 +305,7 @@ export function changeRent(sim: Sim, flatId: string, rent: number): void {
   lease.rise = { rent, from: sim.day + RENT_NOTICE_DAYS };
   const change = (rent - lease.rent) / lease.rent;
   for (const p of household(sim, flatId)) {
-    const id = change > 0.1 ? 'rentRiseBig' : change > 0 ? 'rentRiseSmall' : 'rentCut';
+    const id = change > R.bigRise ? 'rentRiseBig' : change > 0 ? 'rentRiseSmall' : 'rentCut';
     p.life!.memories.push({ id, at: sim.state.tick });
   }
 }
@@ -323,14 +315,14 @@ export function noticeProblem(sim: Sim, flatId: string): string | null {
   const lease = flatInfo(sim, flatId).lease;
   if (!lease) return 'Nobody lives there';
   if (lease.notice) return 'Notice has already been given';
-  if (lease.owed < lease.rent * 2) return 'You can only give notice for two weeks\' rent arrears';
+  if (lease.owed < lease.rent * EVICTION_ARREARS_WEEKS) return 'You can only give notice for two weeks\' rent arrears';
   return null;
 }
 
 export function giveNotice(sim: Sim, flatId: string): string | null {
   const problem = noticeProblem(sim, flatId);
   if (problem) return problem;
-  flatInfo(sim, flatId).lease!.notice = { by: 'landlord', why: 'Rent arrears', day: sim.day + 14 };
+  flatInfo(sim, flatId).lease!.notice = { by: 'landlord', why: 'Rent arrears', day: sim.day + EVICTION_NOTICE_DAYS };
   return null;
 }
 
@@ -358,7 +350,7 @@ export function moveOut(sim: Sim, flatId: string): void {
   info.lease = null;
   info.listed = true;
   info.asking = goingRate(sim, flatId);
-  info.nextApplicant = st.tick + 4 * TICKS_PER_HOUR;
+  info.nextApplicant = st.tick + L.relistHours * TICKS_PER_HOUR;
 }
 
 /** Sitting tenants: the ones the building came with, on an old, cheap rolling tenancy. */

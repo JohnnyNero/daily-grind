@@ -21,6 +21,8 @@ import { breakThink } from './breaks';
 import { post, recently } from './chat';
 import { rememberAbout } from './social';
 import { hhmm } from './time';
+import { stat } from './stat';
+import { DECAY, NEEDS, OUTINGS, SEEK, START_NEEDS } from './tuning';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -32,19 +34,6 @@ export const NEED_NAMES: Record<NeedId, string> = {
   warmth: 'Warmth',
   quiet: 'Quiet',
 };
-
-/** How fast each need runs down while awake, per game hour. Warmth and quiet come from the building instead. */
-const DECAY: Record<Exclude<NeedId, 'warmth' | 'quiet'>, number> = {
-  sleep: 1 / 17,
-  food: 1 / 7,
-  hygiene: 1 / 30,
-  bladder: 1 / 5,
-  fun: 1 / 10,
-  comfort: 1 / 8,
-};
-
-/** Below this, they go and do something about it. */
-const SEEK: Record<keyof typeof DECAY, number> = { sleep: 0.15, food: 0.4, hygiene: 0.3, bladder: 0.35, fun: 0.4, comfort: 0.35 };
 
 /** Eating a meal they've cooked: sitting down if there's a seat. */
 const EAT: Offer = { need: 'food', rate: 3, minutes: [15, 25], pose: 'sit', doing: 'Eating' };
@@ -71,7 +60,7 @@ export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: str
     const [x, s] = lay.xs(pick(st, nodes));
     const life: Life = {
       flat: flatId,
-      needs: { sleep: 0.8, food: 0.7, hygiene: 0.8, bladder: 0.8, fun: 0.6, comfort: 0.6, warmth: 1, quiet: 1 },
+      needs: { ...START_NEEDS },
       social: [],
       memories: [],
       liking: 50,
@@ -117,26 +106,24 @@ export function minuteOfLife(sim: Sim, p: Pawn): void {
   const per = 1 / 60;
   const using = life.using && life.using.until > 0 ? offerOf(sim, life.using) : null;
   for (const need of Object.keys(DECAY) as (keyof typeof DECAY)[]) {
-    let rate = -DECAY[need];
-    if (need === 'fun' && has(life, 'partyAnimal')) rate *= 1.4;
-    if (life.away) {
-      // At work: lunch and a loo are sorted; comfort is a desk chair.
-      if (need === 'food') rate *= 0.35;
-      if (need === 'bladder') rate = 0;
-      if (need === 'comfort') rate *= 0.5;
-    }
-    if (using) {
-      if (using.need === need) rate = using.rate;
-      else if (using.also?.[need] !== undefined) rate = using.also[need]!;
-      else if (using.pose === 'sleep') rate *= need === 'food' ? 0.3 : need === 'bladder' ? 0.25 : 0.5;
-      if (using.pose === 'sleep' && need === 'fun') rate = 0;
-    }
+    let rate: number;
+    // Using something that meets this need (or another one along with it) sets the rate outright.
+    if (using?.need === need) rate = using.rate;
+    else if (using?.also?.[need] !== undefined) rate = using.also[need]!;
+    // Otherwise it runs down: party animals get bored faster; at work or asleep, most things run down slower.
+    else
+      rate = stat(-DECAY[need], [], [
+        need === 'fun' && has(life, 'partyAnimal') ? NEEDS.partyAnimalFun : 1,
+        life.away ? (NEEDS.atWork[need] ?? 1) : 1,
+        using?.pose === 'sleep' ? (NEEDS.asleep[need] ?? NEEDS.asleepOther) : 1,
+      ]);
+    if (using?.pose === 'sleep' && need === 'fun') rate = 0;
     life.needs[need] = Math.max(0, Math.min(1, life.needs[need] + rate * per));
   }
   buildingNeeds(sim, p);
   // Liking eases towards what their thoughts add up to.
   const target = likingTarget(thoughtsOf(sim, p));
-  life.liking += (target - life.liking) * 0.02;
+  life.liking += (target - life.liking) * NEEDS.likingEase;
   if (sim.state.tick % TICKS_PER_HOUR === 0) forget(sim, life);
 }
 
@@ -148,14 +135,15 @@ function buildingNeeds(sim: Sim, p: Pawn): void {
   const life = p.life!;
   if (life.away) return;
   const warm = warmthOf(tempOf(sim, life.flat));
-  life.needs.warmth += (warm - life.needs.warmth) * 0.03;
+  life.needs.warmth += (warm - life.needs.warmth) * NEEDS.warmthEase;
   const { amount, loudest } = noiseReaching(sim, sim.noise(), life.flat);
   const night = isNight(sim);
-  const felt = amount * (has(life, 'lightSleeper') ? 2 : 1) * (night ? 1.5 : 1);
-  const quiet = 1 - Math.min(1, felt / 4);
-  life.needs.quiet += (quiet - life.needs.quiet) * (quiet < life.needs.quiet ? 0.15 : 0.03);
-  if (p.pose === 'sleep' && night && felt >= 1.5 && loudest) {
-    const recent = life.memories.some((m) => m.id === 'keptAwake' && sim.state.tick - m.at < 3 * TICKS_PER_HOUR);
+  // Noise felt: what gets through, more for light sleepers, more at night.
+  const felt = stat(amount, [], [has(life, 'lightSleeper') ? NEEDS.lightSleeper : 1, night ? NEEDS.night : 1]);
+  const quiet = 1 - Math.min(1, felt / NEEDS.quietGone);
+  life.needs.quiet += (quiet - life.needs.quiet) * (quiet < life.needs.quiet ? NEEDS.quietFalls : NEEDS.quietRises);
+  if (p.pose === 'sleep' && night && felt >= NEEDS.keptAwake && loudest) {
+    const recent = life.memories.some((m) => m.id === 'keptAwake' && sim.state.tick - m.at < NEEDS.keptAwakeHours * TICKS_PER_HOUR);
     if (recent) return;
     const from = loudest === SHARED ? 'the stairwell' : (sim.layout.flat(loudest)?.name ?? 'next door');
     life.memories.push({ id: 'keptAwake', at: sim.state.tick, note: `Kept awake by ${from}` });
@@ -272,10 +260,10 @@ export function tenantThink(sim: Sim, p: Pawn): void {
     return;
   }
   const morning = m >= wakeAt(sim, life) && m < wakeAt(sim, life) + 45;
-  if (needs.hygiene < SEEK.hygiene || (morning && needs.hygiene < 0.85)) {
+  if (needs.hygiene < SEEK.hygiene || (morning && needs.hygiene < NEEDS.morningWash)) {
     if (tryUse(sim, p, flat, 'hygiene')) return;
   }
-  const teatime = m >= 18 * 60 && m < 20 * 60 && needs.food < 0.7;
+  const teatime = m >= 18 * 60 && m < 20 * 60 && needs.food < NEEDS.teatime;
   if (needs.food < SEEK.food || teatime) {
     if (tryUse(sim, p, flat, 'food')) return;
     leaveFor(sim, p, 'Out for chips', m + 40);
@@ -291,17 +279,17 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   if (needs.comfort < SEEK.comfort && tryUse(sim, p, flat, 'comfort')) return;
   // Musicians practise in the evenings (night owls until gone midnight).
   const evening = has(life, 'nightOwl') ? m >= 18 * 60 || m < 30 : m >= 18 * 60 && m < 21 * 60 + 30;
-  if (has(life, 'musician') && evening && needs.fun < 0.85 && random(st) < 0.3) {
+  if (has(life, 'musician') && evening && needs.fun < NEEDS.practiseUnder && random(st) < NEEDS.practiseChance) {
     p.doing = 'Practising';
-    life.needs.fun = Math.min(1, needs.fun + 0.3);
+    life.needs.fun = Math.min(1, needs.fun + NEEDS.practiseFun);
     p.waitUntil = st.tick + randInt(st, 30, 60) * TICKS_PER_MINUTE;
     return;
   }
   // Tidying up, unless they're messy. House-proud tenants can't leave it.
   const dirt = dirtOf(sim, flat.id);
-  if (!has(life, 'messy') && dirt > (has(life, 'houseProud') ? 0.15 : 0.45)) {
+  if (!has(life, 'messy') && dirt > (has(life, 'houseProud') ? NEEDS.tidyAtHouseProud : NEEDS.tidyAt)) {
     p.doing = 'Tidying up';
-    tidy(sim, flat.id, 0.5);
+    tidy(sim, flat.id, NEEDS.tidyAmount);
     p.waitUntil = st.tick + randInt(st, 20, 40) * TICKS_PER_MINUTE;
     return;
   }
@@ -457,7 +445,7 @@ function eat(sim: Sim, p: Pawn, flat: Flat): void {
   for (const c of seats) if (startUsing(sim, p, c.f.id, c.spot, -1, c.at)) return;
   const life = p.life!;
   life.meal = false;
-  life.needs.food = Math.min(1, life.needs.food + 0.75);
+  life.needs.food = Math.min(1, life.needs.food + NEEDS.eatStanding);
   remember(sim, life, 'cookedMeal');
   remember(sim, life, 'ateStanding');
   p.doing = 'Eating standing up';
@@ -465,14 +453,6 @@ function eat(sim: Sim, p: Pawn, flat: Flat): void {
 }
 
 // ------------------------------------------------------------------ going out and coming home
-
-/** What being out sorts out, by where they went. */
-const OUTINGS: Record<string, Partial<Record<NeedId, number>>> = {
-  'Out for chips': { food: 1 },
-  'Popped to the pub for the loo': { bladder: 1 },
-  'Out at the pub': { fun: 0.6 },
-  'Out for a walk': { fun: 0.5 },
-};
 
 function leaveFor(sim: Sim, p: Pawn, why: string, untilMinute: number): void {
   const st = sim.state;
@@ -507,7 +487,7 @@ export function tenantReturns(sim: Sim, p: Pawn): void {
   const st = sim.state;
   const why = life.away?.why ?? '';
   if (why === 'At work') {
-    if (random(st) < 0.3) remember(sim, life, 'commute');
+    if (random(st) < NEEDS.commute) remember(sim, life, 'commute');
     life.needs.bladder = Math.min(life.needs.bladder, 0.5);
   }
   for (const [need, gain] of Object.entries(OUTINGS[why] ?? {}) as [NeedId, number][]) life.needs[need] = Math.min(1, life.needs[need] + gain);

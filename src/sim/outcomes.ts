@@ -17,13 +17,10 @@ import { TICKS_PER_DAY, TICKS_PER_HOUR, type Pawn } from './state';
 import { remember, thoughtsOf, type Thought } from './thoughts';
 import { has, reveal, touchiness, traitDef } from './traits';
 import { tale } from './tales';
+import { LINES, OUTCOME_ODDS as O } from './tuning';
 
-/** The three lines, before traits move them. */
-export const LINES = { minor: 35, major: 25, extreme: 15 };
-/** Hours below a line before anything can happen. */
-const WAIT_HOURS = 2;
-/** Average days between incidents while below each line. */
-const MEAN_DAYS = { minor: 3, major: 1.5, extreme: 1 };
+// The lines and the odds are in tuning.ts.
+export { LINES } from './tuning';
 
 type Level = keyof typeof LINES;
 
@@ -43,18 +40,18 @@ export function outcomesHour(sim: Sim, p: Pawn): void {
     life.under[level] = life.liking < lines[level] ? life.under[level] + TICKS_PER_HOUR : 0;
   }
   // Getting to know them: a hidden trait shows itself every week or so.
-  if (sim.day - life.since >= 3 && random(st) < 1 / (6 * 24)) {
+  if (sim.day - life.since >= O.revealAfterDays && random(st) < 1 / (O.revealDays * 24)) {
     const hidden = life.traits.filter((t) => !life.revealed.includes(t));
     if (hidden.length > 0) noticeTrait(sim, p, pick(st, hidden));
   }
   if (st.tick < life.calmUntil) return;
-  const level = (['extreme', 'major', 'minor'] as Level[]).find((l) => life.under[l] >= WAIT_HOURS * TICKS_PER_HOUR);
+  const level = (['extreme', 'major', 'minor'] as Level[]).find((l) => life.under[l] >= O.waitHours * TICKS_PER_HOUR);
   if (level) {
-    if (random(st) < 1 / (MEAN_DAYS[level] * 24)) kickOff(sim, p, level);
+    if (random(st) < 1 / (O.meanDays[level] * 24)) kickOff(sim, p, level);
     return;
   }
-  if (life.liking >= 65) {
-    const meanDays = 5 + ((100 - life.liking) / 35) * 15;
+  if (life.liking >= O.goodLiking) {
+    const meanDays = O.goodDaysBest + ((100 - life.liking) / (100 - O.goodLiking)) * O.goodDaysSpread;
     if (random(st) < 1 / (meanDays * 24)) goodTurn(sim, p);
   }
 }
@@ -117,7 +114,7 @@ const OUTCOMES: Outcome[] = [
     not: 'paysEarly',
     run(sim, p, straw) {
       const lease = flatInfo(sim, p.life!.flat).lease;
-      if (lease) lease.withholdUntil = sim.state.tick + 3 * TICKS_PER_DAY;
+      if (lease) lease.withholdUntil = sim.state.tick + O.withholdDays * TICKS_PER_DAY;
       letter(sim, { from: from(sim, p), title: 'Rent', body: `I'm holding back the rent until something's done. ${straw}. You know what you did. (Or didn't.)`, flat: p.life!.flat, pawn: p.id });
     },
   },
@@ -127,7 +124,7 @@ const OUTCOMES: Outcome[] = [
     run(sim, p, straw) {
       const lease = flatInfo(sim, p.life!.flat).lease;
       if (!lease) return;
-      const ask = Math.round((lease.rent * 0.85) / (5 * POUND)) * 5 * POUND;
+      const ask = Math.round((lease.rent * O.haggleAsk) / (5 * POUND)) * 5 * POUND;
       letter(sim, {
         from: from(sim, p),
         title: 'Money off',
@@ -187,7 +184,7 @@ function kickOff(sim: Sim, p: Pawn, level: Level): void {
     o.run(sim, p, straw);
     if (o.trait) noticeTrait(sim, p, o.trait);
     // Two days to calm down; a week after going to the council.
-    life.calmUntil = sim.state.tick + (o.trait === 'knowsRights' ? 7 : 2) * TICKS_PER_DAY;
+    life.calmUntil = sim.state.tick + (o.trait === 'knowsRights' ? O.calmDaysCouncil : O.calmDays) * TICKS_PER_DAY;
     remember(sim, life, 'letOffSteam');
     // And you can watch it: sulking, slamming doors, kicking the bins, boxes down the stairs.
     startBreak(sim, p, l, straw, flatInfo(sim, life.flat).lease?.notice?.by === 'tenant');

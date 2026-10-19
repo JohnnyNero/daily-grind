@@ -6,37 +6,13 @@
 import { letter, pounds } from './economy';
 import type { Sim } from './sim';
 import { TICKS_PER_DAY, type Pawn, type Tale, type TaleKind } from './state';
+import { INTEREST as TALE_INTEREST, MAX_TALES, RECAP_DAYS, RECAP_INTEREST, RECAP_SIZE, RETOLD } from './tuning';
 
-/** Most tales kept. */
-export const MAX_TALES = 200;
-/** Tales in a recap. */
-const RECAP_SIZE = 5;
-/** How far back a recap looks for news still worth repeating. */
-const RECAP_DAYS = 28;
-/** What a telling leaves of a tale's interest. */
-const RETOLD = 0.5;
+// How interesting each kind of thing is, and how fast it fades, is in tuning.ts.
+export { MAX_TALES } from './tuning';
 
 /** How much people talk about each kind of thing, to start with. */
-export const INTEREST: Record<TaleKind, number> = {
-  affair: 10,
-  repossessed: 10,
-  fight: 8,
-  burglary: 7,
-  councilFine: 6,
-  missedMortgage: 6,
-  breakup: 5,
-  partyShutDown: 5,
-  burglaryFoiled: 4,
-  couple: 4,
-  gaveNotice: 4,
-  councilNotice: 4,
-  partyDamage: 3,
-  party: 2.5,
-  moveIn: 3,
-  moveOut: 3,
-  grant: 2,
-  broken: 1,
-};
+export const INTEREST: Record<TaleKind, number> = TALE_INTEREST;
 
 /**
  * Words for each kind: {a}, {b} and {c} are first names, {flat} the flat, {what} whatever
@@ -138,7 +114,7 @@ export function recap(sim: Sim): void {
   }
   // The best of the week, and anything older that's still going round.
   const old = (sim.day - RECAP_DAYS) * TICKS_PER_DAY;
-  const pool = st.chronicle.tales.filter((t) => t.tick >= old && t.interest >= 2 && t.kind !== 'moveIn' && t.kind !== 'moveOut');
+  const pool = st.chronicle.tales.filter((t) => t.tick >= old && t.interest >= RECAP_INTEREST && t.kind !== 'moveIn' && t.kind !== 'moveOut');
   const best = [...pool].sort((a, b) => b.interest - a.interest || b.tick - a.tick).slice(0, RECAP_SIZE);
   if (best.length === 0) lines.push('Otherwise a quiet week. Nobody fought, nothing was stolen, and the boiler held. Make the most of it.');
   else {
