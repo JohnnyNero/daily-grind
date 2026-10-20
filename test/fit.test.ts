@@ -8,12 +8,17 @@ import { flatInfo, POUND } from '../src/sim/economy';
 import { applicantNeeds, fitFacts, flightsUp, livesChange, needsOf } from '../src/sim/fit';
 import { affordable, makePerson, newApplicant } from '../src/sim/leases';
 import { Sim } from '../src/sim/sim';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, type Pawn, type Person, type State } from '../src/sim/state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, key, type Pawn, type Person, type State } from '../src/sim/state';
 import { moveIn } from '../src/sim/tenants';
 import { thoughtsOf } from '../src/sim/thoughts';
 import { landlord } from './policy';
 
-/** The right-hand flat on a storey as a one-bed with a sofa and no telly. */
+/**
+ * The right-hand flat on a storey as a one-bed with no telly: a hall off the landing, the
+ * bedroom over the room below's living room, and a kitchen with an armchair beyond. Noise
+ * goes room by room (acoustics.ts), so it's the bedroom that has to be over the telly; the
+ * hall keeps the stairs out of it.
+ */
 function fitQuiet(st: State, storey: number): void {
   const at = (dx: number) => st.plot.x0 + dx;
   const row = 1 + storey * 4;
@@ -21,16 +26,19 @@ function fitQuiet(st: State, storey: number): void {
     const f = placeFurniture(st, def, at(dx), row + r);
     if (typeof f === 'string') throw new Error(`${def}: ${f}`);
   };
-  put('cooker', 14);
-  put('sofa', 15);
-  put('doubleBed', 21);
+  st.cells[key(at(15), row)] = 'door';
+  delete st.cells[key(at(15), row + 1)];
+  st.cells[key(at(15), row + 2)] = 'wall';
+  put('doubleBed', 16);
+  put('cooker', 21);
+  put('armchair', 22);
   put('toilet', 25);
   put('shower', 26);
   if (storey === 2) {
     put('radiator', 19, 1);
     put('radiator', 23, 1);
   }
-  put('smokeAlarm', 16, 2);
+  put('smokeAlarm', 17, 2);
 }
 
 function building(seed: number): { sim: Sim; flat3: string; flat5: string } {

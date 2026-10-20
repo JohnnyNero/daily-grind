@@ -10,16 +10,18 @@
 // Noise is made by what people are doing (the telly, practising, a row) and passes to the
 // flats next door, above and below, through each wall and floor tile they share. How much
 // gets through each pair of flats is worked out once when the building changes. Insulated
-// walls and floors let through about a sixth. Noise at night counts for more.
+// walls and floors let through about a sixth. How tenants hear it, room by room, is in
+// acoustics.ts.
 
 import { happeningNoise } from './events';
 import type { Flat, Layout } from './layout';
 import type { Sim } from './sim';
-import { TICKS_PER_DAY, isDoor, key, type Pawn } from './state';
+import { TICKS_PER_DAY, isDoor, key } from './state';
 import { has } from './traits';
 import { BUILDER_NOISE, currentPiece, whereIs } from './works';
 import { DIRT, GAS_PER_RADIATOR, ITEMS, NOISE, WARMTH } from './tuning';
 import { readFlags } from './flags';
+import { noiseOf, quietHour } from './acoustics';
 import { heatHour } from './heat';
 import { dampHour } from './damp';
 
@@ -226,28 +228,10 @@ export function warmthOf(temp: number): number {
 
 // ------------------------------------------------------------------ noise
 
-/** How much noise someone's making right now, by what they're doing. */
-export function noiseOf(p: Pawn): number {
-  const d = p.doing;
-  if (d === 'Watching telly') return NOISE.telly;
-  if (d === 'Playing on the console') return ITEMS.consoleNoise;
-  if (d === 'Practising') return NOISE.practising;
-  if (d.startsWith('Having a row')) return NOISE.row;
-  if (d.startsWith('Fighting')) return NOISE.fighting;
-  if (d === 'At the party') return NOISE.party;
-  if (d === 'Dancing at the party') return NOISE.dancing;
-  if (d === 'Mingling at the party' || d === 'Hosting the party' || d === 'Out on the landing') return NOISE.mingling;
-  if (d === 'Winding down at the party') return NOISE.windingDown;
-  if (d.startsWith('Chatting') || d.startsWith('Gossiping') || d.startsWith('Flirting')) return NOISE.chatting;
-  if (d === 'Cooking') return NOISE.cooking;
-  if (d === 'Slamming doors') return NOISE.slammingDoors;
-  if (d === 'Having a tantrum') return NOISE.tantrum;
-  if (d === 'Blasting music out of spite') return NOISE.spite;
-  if (d === 'Kicking the bins') return NOISE.kickingBins;
-  if (d === 'Carrying boxes out') return NOISE.carryingBoxes;
-  if (d === 'At the barbecue') return NOISE.barbecue;
-  return 0;
-}
+// What people make, and how it's heard room by room, is in acoustics.ts. What's here is the
+// older, flat-by-flat picture: what a flat is making, and what reaches it from next door
+// (a party's knock on the door, the next project, the tests).
+export { noiseOf } from './acoustics';
 
 /** Noise made in each flat (and the shared parts) this minute. */
 export function noiseMade(sim: Sim): Map<string, number> {
@@ -349,13 +333,8 @@ export function environmentHour(sim: Sim): void {
   warmthHour(sim);
   dirtHour(sim);
   if (Math.floor(sim.minuteOfDay / 60) === DIRT.cleanerHour) dirtMorning(sim);
-  // A rolling average of how noisy each flat has been, for how impressive it is.
-  const made = noiseMade(sim);
-  for (const f of sim.layout.flats) {
-    const got = noiseReaching(sim, made, f.id).amount;
-    const avg = sim.state.noiseAvg[f.id] ?? 0;
-    sim.state.noiseAvg[f.id] = avg + (got - avg) * NOISE.averageRate;
-  }
+  // A rolling average of how noisy each flat's bedrooms are at night, for how impressive it is.
+  quietHour(sim);
 }
 
 /** A tenant tidies up: their flat gets cleaner. */

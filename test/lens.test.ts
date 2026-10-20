@@ -3,8 +3,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { goingRate } from '../src/sim/economy';
-import { LENSES, readRoom, roomNoise, type Lens } from '../src/sim/lens';
-import { noiseReaching } from '../src/sim/environment';
+import { LENSES, readRoom, roomNoise, roomNoiseWhy, type Lens } from '../src/sim/lens';
+import { noiseReasons, roomNoise as noiseInRoom } from '../src/sim/acoustics';
 import { Sim } from '../src/sim/sim';
 
 describe('overlay lenses', () => {
@@ -27,11 +27,12 @@ describe('overlay lenses', () => {
     }
   });
 
-  it('falls back to the flat\'s own figures until the per-room ones are wired in', () => {
+  it('reads noise room by room, from acoustics.ts', () => {
     const sim = Sim.create(1);
-    const made = new Map([[sim.layout.flats[1].id, 6]]);
+    const made = sim.noise();
     for (const room of sim.layout.flats[0].rooms) {
-      expect(roomNoise(sim, made, room)).toBe(noiseReaching(sim, made, sim.layout.flats[0].id).amount);
+      expect(roomNoise(sim, made, room)).toBe(noiseInRoom(sim, room));
+      expect(roomNoiseWhy(sim, made, room)).toEqual(noiseReasons(sim, room));
     }
   });
 

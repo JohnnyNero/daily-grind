@@ -8,10 +8,11 @@
 // card and the map; how they take it is a labelled thought, like every other.
 //
 // What the layout is like (a telly through the wall, the stairs, how warm, how damp) is read
-// through `READINGS`, flat by flat today. Noise and heat by room (L2, L3) swap it at merge.
+// through `READINGS`, which reads the bedrooms room by room for noise (acoustics.ts); heat by room (L3) swaps in at merge.
 
 import { flatInfo } from './economy';
-import { SHARED, itemsIn, noiseThrough, tempOf } from './environment';
+import { roomThrough, roomsNextTo, sleepingRooms } from './acoustics';
+import { SHARED, tempOf } from './environment';
 import { hasFlag } from './flags';
 import { random, type RngHolder } from './rng';
 import { flatKind } from './rooms';
@@ -38,27 +39,40 @@ export const NEEDS: Record<FitNeed, { name: string; icon: string }> = {
 
 // ------------------------------------------------------------------ the seam
 
-/**
- * What a flat is like where it matters: flat by flat for now. When noise and heat go room by
- * room (L2, L3), these read the bedrooms instead; nothing else here changes.
- */
+/** The rooms next to a flat's bedrooms that get through to one of them at least `FIT.through` (acoustics.ts). */
+function heardByBedrooms(sim: Sim, flatId: string): number[] {
+  const out = new Set<number>();
+  for (const bed of sleepingRooms(sim, flatId)) {
+    for (const other of roomsNextTo(sim, bed)) {
+      if (sim.layout.rooms[other].flat === flatId) continue;
+      if (roomThrough(sim, other, bed) >= FIT.through) out.add(other);
+    }
+  }
+  return [...out];
+}
+
+/** What a flat is like where it matters: its bedrooms, room by room (noise from L2; heat to come with L3). */
 export const READINGS = {
-  /** The flat with a telly (or a console) through the wall, floor or ceiling, if any. */
+  /** The flat with a telly (or a console) in a room through a bedroom's wall, floor or ceiling, if any. */
   tellyThrough(sim: Sim, flatId: string): string | null {
-    for (const f of sim.layout.flats) {
-      if (f.id === flatId) continue;
-      if (noiseThrough(sim, f.id, flatId) < FIT.through) continue;
-      if (itemsIn(sim, f.id, 'tv') + itemsIn(sim, f.id, 'bigTv') + itemsIn(sim, f.id, 'console') > 0) return f.name;
+    const lay = sim.layout;
+    for (const room of heardByBedrooms(sim, flatId)) {
+      const flat = lay.rooms[room].flat;
+      if (!flat) continue;
+      const loud = sim.state.furniture.some((f) => (f.def === 'tv' || f.def === 'bigTv' || f.def === 'console') && f.broken === undefined && lay.roomOf[lay.node(f.x, f.s)] === room);
+      if (loud) return lay.flat(flat)?.name ?? null;
     }
     return null;
   },
-  /** The stairs heard through the wall. */
+  /** The stairs heard through a bedroom wall. */
   stairsThrough(sim: Sim, flatId: string): boolean {
-    return noiseThrough(sim, SHARED, flatId) >= FIT.through;
+    const lay = sim.layout;
+    return heardByBedrooms(sim, flatId).some((room) => lay.rooms[room].shared && lay.rooms[room].cells.some((n) => lay.stair(...lay.xs(n))));
   },
-  /** Let flats through the wall, floor or ceiling. */
+  /** Let flats with a room through a bedroom's wall, floor or ceiling. */
   neighbours(sim: Sim, flatId: string): number {
-    return sim.layout.flats.filter((f) => f.id !== flatId && flatInfo(sim, f.id).lease && noiseThrough(sim, flatId, f.id) >= FIT.through).length;
+    const flats = new Set(heardByBedrooms(sim, flatId).map((room) => sim.layout.rooms[room].flat).filter((f): f is string => !!f && !!flatInfo(sim, f).lease));
+    return flats.size;
   },
   /** Layout L3: the bedrooms' warmth (the flat's, if it has none). */
   temp(sim: Sim, flatId: string): number {

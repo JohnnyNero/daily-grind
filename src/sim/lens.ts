@@ -8,7 +8,8 @@
 // seven stubs marked STUB (L3 has filled its four).
 
 import { flatInfo, goingRate, pounds } from './economy';
-import { noiseReaching, warmthOf } from './environment';
+import { noiseReasons, roomNoise as noiseInRoom } from './acoustics';
+import { warmthOf } from './environment';
 import { flatKind, type RoomInfo } from './rooms';
 import type { Sim } from './sim';
 import { DAMP, LENS } from './tuning';
@@ -32,23 +33,14 @@ export interface RoomReading {
 
 // ------------------------------------------------------------------ STUBS for L2 and L3
 
-/**
- * STUB (L2): noise heard in this room right now, in the units of environment.ts's
- * noiseReaching().amount (per minute). `made` is sim.noise(). Fallback: the flat's figure.
- */
-export function roomNoise(sim: Sim, made: Map<string, number>, room: number): number {
-  const flat = sim.layout.rooms[room]?.flat;
-  return flat ? noiseReaching(sim, made, flat).amount : 0;
+/** Noise reaching this room right now, from the rooms round it (acoustics.ts). `made` isn't needed: rooms work out their own. */
+export function roomNoise(sim: Sim, _made: Map<string, number>, room: number): number {
+  return noiseInRoom(sim, room);
 }
 
-/** STUB (L2): up to three plain facts behind a room's noise ("Telly through the wall", "Stairs"). */
-export function roomNoiseWhy(sim: Sim, made: Map<string, number>, room: number): string[] {
-  const flat = sim.layout.rooms[room]?.flat;
-  if (!flat) return [];
-  const { amount, loudest } = noiseReaching(sim, made, flat);
-  if (amount < 0.1 || !loudest) return [];
-  const from = sim.layout.flat(loudest);
-  return from ? [`Noise from ${from.name}`] : [];
+/** Up to three plain facts behind a room's noise ("Telly through the wall", "Stairs"). */
+export function roomNoiseWhy(sim: Sim, _made: Map<string, number>, room: number): string[] {
+  return noiseReasons(sim, room);
 }
 
 /** Layout L3: degrees in this room (heat.ts). */
