@@ -49,6 +49,11 @@ export const FLAGS: Record<string, FlagDef> = {
   dumpingSpot: { about: 'The spot by the bins is a dumping spot: fly-tips likelier', readBy: ['card:mattress'], grudge: true },
   lobbySofa: { about: 'A sofa in the lobby: people sit and meet on the stairs', readBy: ['render', 'moments', 'dirt.shared'] },
   squatter: { about: 'Someone\'s been sleeping in an empty flat: wear and dirt creep up', subject: 'flat', readBy: ['upkeep.wear', 'card:pizza'] },
+  // --- added by chunk 2b ---
+  tired: { about: 'The plumber said this is next to go: the leak card picks it first', subject: 'furniture', readBy: ['render', 'card:ceilingDrip'] },
+  foxNight: { about: 'The fox has been at the bins: more dirt in the lobby and on the stairs', readBy: ['dirt.shared'] },
+  alarmChecked: { about: 'Someone has seen to this flat\'s smoke alarm lately', subject: 'flat', readBy: ['card:chirping'] },
+  batteryOut: { about: 'A smoke alarm with its battery out: the council counts it as broken', subject: 'flat', readBy: ['council.issues', 'card:chirping'], grudge: true },
 };
 
 // ------------------------------------------------------------------ the hooks
@@ -162,3 +167,13 @@ export function expireFlags(sim: Sim): void {
   const st = sim.state;
   if (st.drip.flags.some((f) => f.until !== undefined && f.until <= st.tick)) st.drip.flags = st.drip.flags.filter((f) => f.until === undefined || f.until > st.tick);
 }
+
+// --- added by chunk 2b ---
+// The two flags with a reader of their own (the others are read by the cards that set them).
+READERS.foxNight = { 'dirt.shared': (_sim, _flag, dirt) => dirt * 3 };
+READERS.batteryOut = {
+  'council.issues': (sim, flag, issues) => {
+    const flat = flag.subject ? sim.layout.flat(flag.subject) : undefined;
+    return flat ? [...issues, `${flat.name} has a smoke alarm with no battery`] : issues;
+  },
+};

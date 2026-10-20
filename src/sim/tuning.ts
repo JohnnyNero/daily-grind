@@ -361,6 +361,8 @@ export const MEMORIES: Record<string, MemoryDef> = {
   gotToPaint: { label: 'Got to paint the flat', value: 4, hours: 10 * 24, stack: 1 },
   noPaint: { label: 'Not allowed to paint', value: -3, hours: 5 * 24, stack: 1 },
   grubbyWindows: { label: 'Grubby windows', value: -1, hours: 2 * 24, stack: 1 },
+  // chunk 2b
+  crackedWindow: { label: 'Hole in the window', value: -6, hours: 3 * 24, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
