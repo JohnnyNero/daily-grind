@@ -20,6 +20,7 @@ import { tale } from './tales';
 import { flatKind, householdsFor } from './rooms';
 import { EVICTION_ARREARS_WEEKS, EVICTION_NOTICE_DAYS, LAYOUT, LETTING as L, LISTING_PACE, MEMORIES, RENT as R } from './tuning';
 import { readFlags } from './flags';
+import { applicantNeeds, budgetOf, fitFacts, livesChange, rollCircs } from './fit';
 
 // ------------------------------------------------------------------ listings
 
@@ -117,7 +118,8 @@ export function applicantsHour(sim: Sim): void {
     // Word that nobody answers the door gets round (flags.ts).
     const meanHours = readFlags(sim, 'letting.hours', Math.max(L.fewestHours, Math.min(L.mostHours, L.meanHours * ratio ** 3)) * (liveable ? 1 : L.unliveableSlower) * LISTINGS[info.style ?? 'plain'].pace * ratingPace(sim), { flat: f.id });
     info.nextApplicant = st.tick + Math.round(-Math.log(1 - random(st) * 0.999) * meanHours * TICKS_PER_HOUR);
-    if (waiting < L.maxWaiting && ratio < L.tooDear - L.tooDearPerGrade * expectGrade(sim)) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
+    // Nobody applies who couldn't pay it (fit.ts).
+    if (waiting < L.maxWaiting && ratio < L.tooDear - L.tooDearPerGrade * expectGrade(sim) && affordable(sim, f.id, info.asking).length > 0) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
   }
 }
 
@@ -128,7 +130,10 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   // one-bed, sharers and families once there are bedrooms for them.
   // (Dice are only rolled for a real choice, so a studio's applicants cost none.)
   const kind = flatKind(sim, flatId);
-  const options = householdsFor(kind, kind.bedrooms >= 2 && kind.double && kind.sleeps >= 4 && random(st) < LAYOUT.secondChild);
+  const all = householdsFor(kind, kind.bedrooms >= 2 && kind.double && kind.sleeps >= 4 && random(st) < LAYOUT.secondChild);
+  // Only those who could pay the asking rent (anyone, for a friend of a tenant's who'd come regardless).
+  const afford = all.filter((o) => budgetOf(o.kind, o.size) >= info.asking);
+  const options = afford.length > 0 ? afford : all;
   let roll = options.length > 1 ? random(st) * options.reduce((n, o) => n + o.weight, 0) : 0;
   const chosen = options.find((o) => (roll -= o.weight) < 0) ?? options[0] ?? { kind: 'single' as HouseholdKind, size: 1 };
   const household = chosen.kind;
@@ -160,7 +165,16 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   else if (have.laundry) hints.push('Pleased there is a laundry room. Said so twice.');
   if (friendOf) hints.unshift(`A friend of ${friendOf.name.split(' ')[0]}, who lives here already.`);
   const offer = has(lead, 'haggler') ? Math.round((info.asking * L.hagglerOffer) / (5 * POUND)) * 5 * POUND : info.asking;
-  return { id: st.nextId++, flat: flatId, household, people, traits: lead.traits, shown, hints, offer, until: st.tick + L.applicantDays * TICKS_PER_DAY, ...(desperate ? { desperate: true } : {}) };
+  const id = st.nextId++;
+  // A baby, bad knees, a dog (fit.ts): on their own dice.
+  const circs = rollCircs(sim, id, household, people, info.style === 'pets');
+  return { id, flat: flatId, household, people, traits: lead.traits, shown, hints, offer, until: st.tick + L.applicantDays * TICKS_PER_DAY, ...(desperate ? { desperate: true } : {}), ...(circs.length > 0 ? { circs } : {}) };
+}
+
+/** The households a flat could draw that could pay this much a week. */
+export function affordable(sim: Sim, flatId: string, asking: number): { kind: HouseholdKind; size: number }[] {
+  const kind = flatKind(sim, flatId);
+  return householdsFor(kind, kind.bedrooms >= 2 && kind.double && kind.sleeps >= 4).filter((o) => budgetOf(o.kind, o.size) >= asking);
 }
 
 /** Roughly how much an applicant would like the flat, from what you know: the flat, the rent, the basics. */
@@ -175,6 +189,8 @@ export function likelyLiking(sim: Sim, a: Applicant): number {
   thoughts.push(...missingThoughts(score));
   // Whether it suits them: enough bedrooms, somewhere to sit together.
   thoughts.push(...fitThoughts(flatKind(sim, a.flat), a.household, a.people.length));
+  // And what they've let on about their lives: the night shift, a baby, bad knees.
+  for (const f of fitFacts(sim, a.flat, applicantNeeds(a))) if (f.thought) thoughts.push(f.thought);
   const rent = rentThought(a.offer, rateFor(flatKind(sim, a.flat).type, score.tier), grade);
   if (rent) thoughts.push(rent);
   thoughts.push({ label: MEMORIES.newPlace.label, value: MEMORIES.newPlace.value });
@@ -203,6 +219,10 @@ export function accept(sim: Sim, applicantId: number): string | null {
   const flatName = sim.layout.flat(a.flat)?.name ?? 'the flat';
   book(sim, `Deposit · ${flatName}`, lease.deposit);
   const pawns = moveIn(sim, a.flat, a.people, [a.shown], a.household);
+  if (a.circs) {
+    for (const p of pawns) p.life!.circs = [...a.circs];
+    if (a.circs.includes('dog') && pawns[0] && pawns[0].life!.pet === undefined) pawns[0].life!.pet = 'a dog';
+  }
   tale(sim, 'moveIn', pawns, { flat: a.flat });
   for (const p of pawns) p.life!.memories.push({ id: 'newPlace', at: st.tick });
   // What the listing promised colours the first week.
@@ -269,6 +289,7 @@ export function rentMorning(sim: Sim): void {
     }
     leaseEnd(sim, id, lease, liking, people);
   }
+  livesChange(sim);
 }
 
 function leaseEnd(sim: Sim, id: string, lease: Lease, liking: number, people: Pawn[]): void {

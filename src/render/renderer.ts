@@ -8,9 +8,10 @@ import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, seconds, type Card, type CellKind, type Grade, type Pawn } from '../sim/state';
-import { SHARED, tempOf, warmthOf } from '../sim/environment';
-import { roomNoise } from '../sim/acoustics';
+import { SHARED } from '../sim/environment';
+import { readRoom, type Lens } from '../sim/lens';
 import { FLAT_WALLS, LIGHTS, PAL, box, dark, edge, drawAnimal, drawFurniture, drawIcon, drawPerson, drawSleeper, iconName, light, mix, pawnHeight, rect, PERSON_H } from './art';
+import { mapFit } from '../sim/fit';
 import { BUDGET } from '../sim/tuning';
 import { spacesOf } from '../sim/shared';
 import { flatKind } from '../sim/rooms';
@@ -212,7 +213,9 @@ export class Renderer {
   private lightMap: HTMLCanvasElement = document.createElement('canvas');
   private lightKey = '';
   /** A tint over each flat: noise getting in, warmth, or how much they like it. */
-  overlay: 'none' | 'noise' | 'warmth' | 'liking' = 'none';
+  overlay: Lens = 'none';
+  /** The room tapped while an overlay is on: outlined. */
+  lensRoom: number | null = null;
   /** How far open each door is, and which way it swings. */
   private doors = new Map<string, { open: number; dir: 1 | -1 }>();
   private dpr = 1;
@@ -724,47 +727,35 @@ export class Renderer {
   }
 
   private drawOverlay(ctx: CanvasRenderingContext2D): void {
-    if (this.overlay === 'noise') {
-      this.drawNoiseOverlay(ctx);
-      return;
-    }
     const sim = this.sim;
     const lay = sim.layout;
-    for (const f of lay.flats) {
-      let v: number;
-      if (this.overlay === 'warmth') v = warmthOf(tempOf(sim, f.id));
-      else {
-        const people = sim.state.pawns.filter((p) => p.life?.flat === f.id && !p.life.leaving);
-        if (people.length === 0) continue;
-        v = people.reduce((n, p) => n + p.life!.liking, 0) / people.length / 100;
-      }
+    const made = sim.noise();
+    for (const room of lay.rooms) {
+      const r = readRoom(sim, this.overlay, room.id, made);
+      if (!r) continue;
+      const v = r.good;
       const colour = v >= 0.6 ? '#5f9a4c' : v >= 0.4 ? '#d6a63c' : v >= 0.25 ? '#d9813a' : '#c4523f';
       ctx.globalAlpha = 0.45;
-      for (const r of f.rooms) {
-        for (const n of lay.rooms[r].cells) {
-          const [x, s] = lay.xs(n);
-          rect(ctx, x * TILE, floorY(s) - TILE, TILE, TILE, colour);
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  /** Noise, room by room (acoustics.ts): every room in a flat coloured by what reaches it now. */
-  private drawNoiseOverlay(ctx: CanvasRenderingContext2D): void {
-    const sim = this.sim;
-    const lay = sim.layout;
-    ctx.globalAlpha = 0.45;
-    for (const room of lay.rooms) {
-      if (room.flat === null) continue;
-      const v = 1 - Math.min(1, roomNoise(sim, room.id) / 2);
-      const colour = v >= 0.6 ? '#5f9a4c' : v >= 0.4 ? '#d6a63c' : v >= 0.25 ? '#d9813a' : '#c4523f';
       for (const n of room.cells) {
         const [x, s] = lay.xs(n);
         rect(ctx, x * TILE, floorY(s) - TILE, TILE, TILE, colour);
       }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
+    const sel = this.lensRoom !== null ? lay.rooms[this.lensRoom] : undefined;
+    if (sel) {
+      const mine = new Set(sel.cells);
+      for (const n of sel.cells) {
+        const [x, s] = lay.xs(n);
+        const px = x * TILE;
+        const py = floorY(s) - TILE;
+        const edge = (dx: number, ds: number) => !mine.has(lay.node(x + dx, s + ds));
+        if (edge(0, 1)) rect(ctx, px, py, TILE, 1, '#ffffffe6');
+        if (edge(0, -1)) rect(ctx, px, py + TILE - 1, TILE, 1, '#ffffffe6');
+        if (edge(-1, 0)) rect(ctx, px, py, 1, TILE, '#ffffffe6');
+        if (edge(1, 0)) rect(ctx, px + TILE - 1, py, 1, TILE, '#ffffffe6');
+      }
+    }
   }
 
   // ------------------------------------------------------------------ evening light
@@ -1218,6 +1209,17 @@ export class Renderer {
       ctx.fillRect(sx - w / 2, sy, w, size + 4);
       ctx.fillStyle = '#f3efe6';
       ctx.fillText(label, sx, sy + 2);
+      // layout L5: the household's need you know about, coloured by how the flat suits it.
+      const fit = mapFit(this.sim, f.id);
+      if (fit) {
+        const k = Math.max(1, Math.round((size + 4) / 10));
+        const bx = sx + w / 2 + 2;
+        ctx.fillStyle = fit.mood === 'good' ? '#4f944a' : fit.mood === 'bad' ? '#c4523f' : '#d9a21e';
+        ctx.fillRect(bx, sy, 8 * k + 6, size + 4);
+        ctx.fillStyle = '#f3efe6';
+        ctx.fillRect(bx + 2, sy + 2, 8 * k + 2, size);
+        drawIcon(ctx, fit.icon, bx + 3, Math.round(sy + (size + 4 - 8 * k) / 2), k);
+      }
     }
     // In build mode, what each room is for, on its floor.
     if (this.build.active) {

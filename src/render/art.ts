@@ -1061,6 +1061,9 @@ const ICON_GRIDS: Record<string, string[]> = {
   bins: ['.kkkkkk.', 'kggggggk', 'kkkkkkkk', '.kggggk.', '.kggggk.', '.kggggk.', '.kggggk.', '..kkkk..'],
   water: ['...k....', '...kk...', '..klbk..', '..kbbk..', '.klbbbk.', '.kbbbbk.', '..kbbk..', '...kk...'],
   bang: ['..rr....', '..rr....', '..rr....', '..rr....', '..rr....', '........', '..rr....', '..rr....'],
+  // layout L5: who lives where
+  pram: ['....kkk.', '...kbbbk', 'kkkkbbbk', 'kbbbbbbk', 'kbbbbbbk', '.kkkkkk.', '.k....k.', 'kkk..kkk'],
+  stairs: ['......kk', '......kk', '....kkkk', '....kkkk', '..kkkkkk', '..kkkkkk', 'kkkkkkkk', 'kkkkkkkk'],
 };
 
 /** Other names the sim, the cards and the moments use for the same icon. */

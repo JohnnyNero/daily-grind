@@ -12,7 +12,7 @@ import { warmthOf } from './environment';
 import { amenities, hasOwnWasher } from './shared';
 import { flatKind, scoredFor } from './rooms';
 import { curve } from './stat';
-import { AMENITIES, IMPRESSIVE, TIERS, WARMTH } from './tuning';
+import { AMENITIES, IMPRESSIVE, LAYOUT_L11, TIERS, WARMTH } from './tuning';
 
 export type FactorId = 'space' | 'furnishing' | 'basics' | 'light' | 'decor' | 'clean' | 'warmth' | 'quiet';
 
@@ -112,7 +112,7 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
     furnishing: Math.min(100, (value / Math.max(1, nodes.length)) * I.furnishing),
     basics: (Number(has.bed) + Number(has.toilet) + Number(has.wash) + Number(has.kitchen)) * 25,
     light: Math.min(100, I.light.base + windows * I.light.window + lamps * I.light.lamp),
-    decor: Math.min(100, defs.filter((d) => d.decor).length * I.decor),
+    decor: Math.min(100, decorPoints(sim, flat ? flat.rooms : [], furniture) * I.decor),
     clean: 100 * (1 - (sim.state.dirt[flatId] ?? 0)),
     warmth: 100 * warmthOf(sim.state.temps[flatId] ?? WARMTH.start),
     quiet: Math.max(0, 100 - (sim.state.noiseAvg[flatId] ?? 0) * I.quietPerNoise),
@@ -132,6 +132,27 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
   score = Math.round(Math.max(0, Math.min(100, score)));
   const weakest = (Object.keys(factors) as FactorId[]).reduce((a, b) => (factors[b] < factors[a] ? b : a));
   return { score, tier: tierOf(score), factors, weakest, perPerson, has };
+}
+
+/**
+ * Decorations counted for what they add: the first of a kind in a room counts whole, the
+ * second half, the third a quarter. A skip of pot plants in one room is still one room.
+ */
+function decorPoints(sim: Sim, rooms: number[], furniture: Sim['state']['furniture']): number {
+  const lay = sim.layout;
+  const roomOf = new Map<number, number>();
+  for (const r of rooms) for (const n of lay.rooms[r].nodes) roomOf.set(n, r);
+  const seen = new Map<string, number>();
+  let points = 0;
+  for (const f of furniture) {
+    const d = furnitureDef(f.def);
+    if (!d.decor) continue;
+    const k = `${roomOf.get(lay.node(f.x, f.s)) ?? -1}|${d.id}`;
+    const n = seen.get(k) ?? 0;
+    seen.set(k, n + 1);
+    points += LAYOUT_L11.repeat ** n;
+  }
+  return points;
 }
 
 export function tierOf(score: number): string {

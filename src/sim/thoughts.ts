@@ -19,6 +19,7 @@ import { furnitureDef } from './defs';
 import { poshGroups } from './grades';
 import { amenities, hasOwnWasher } from './shared';
 import { bedroomsWanted, flatKind, type FlatKind } from './rooms';
+import { needThoughts } from './fit';
 import { AMENITIES, BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, ITEMS, LAYOUT, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, POSH_PROUD, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
 
 // The memories, need bands and what each thought is worth are in tuning.ts.
@@ -81,6 +82,8 @@ function placeThoughts(sim: Sim, life: Life, flatId: string): Thought[] {
   }
   const mates = sim.state.pawns.filter((o) => o.life?.flat === flatId && !o.life.leaving).length;
   out.push(...fitThoughts(flatKind(sim, flatId), life.household, mates));
+  // layout L5: what the flat's like for their needs (the night shift, a baby, bad knees).
+  out.push(...needThoughts(sim, life, flatId));
   if (life.pet && life.pet !== 'asked') out.push({ label: `Has ${life.pet}`, value: LIVE.hasPet });
   for (const f of brokenIn(sim, flatId).slice(0, LIVE.broken.most)) out.push({ label: `Broken ${furnitureDef(f.def).name.toLowerCase()}`, value: LIVE.broken.value });
   if (proud) {
