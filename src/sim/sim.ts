@@ -20,6 +20,10 @@ import { expectationsMorning } from './expectations';
 import { gradesMorning } from './grades';
 import { handoverHour, startHandover } from './handover';
 import { talesHour } from './tales';
+import { dripHour, dripMinute, dripMorning } from './drip';
+import { momentsMinute } from './moments';
+import { schedulesMorning } from './schedules';
+import { visitorsHour } from './visitors';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type State } from './state';
 
 export class Sim {
@@ -87,6 +91,8 @@ export class Sim {
       worksMinute(this);
       eventsMinute(this);
       crimeMinute(this);
+      dripMinute(this);
+      momentsMinute(this);
     }
     stepPawns(this);
   }
@@ -95,6 +101,8 @@ export class Sim {
     const st = this.state;
     const hour = Math.floor(this.minuteOfDay / 60);
     if (hour === 7) {
+      dripMorning(this);
+      schedulesMorning(this);
       morning(this);
       expectationsMorning(this);
       gradesMorning(this);
@@ -112,6 +120,8 @@ export class Sim {
     handoverHour(this);
     storyHour(this);
     talesHour(this);
+    dripHour(this);
+    visitorsHour(this);
     if (hour === 4) for (const p of st.pawns) if (p.life) forgetSocial(this, p);
     // Mondays at nine: the mortgage and the bills.
     if (hour === 9 && (this.day - 1) % 7 === 0 && this.day > 1) {

@@ -96,10 +96,10 @@ describe('expectations', () => {
 });
 
 describe('pace', () => {
-  it('a day takes twenty-odd minutes at 1x', () => {
+  it('a day takes about seven minutes at 1x', () => {
     const minutes = TICKS_PER_DAY / BASE_TICKS_PER_SECOND / 60;
-    expect(minutes).toBeGreaterThan(18);
-    expect(minutes).toBeLessThan(26);
+    expect(minutes).toBeGreaterThan(6.5);
+    expect(minutes).toBeLessThan(7.5);
   });
 
   it('runs quiet nights faster, but not by day, and not when paused', () => {

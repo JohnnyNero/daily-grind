@@ -20,6 +20,8 @@ import { has } from './traits';
 import { SHARED, dirtOf, isNight, itemsIn, outdoorTemp, noiseReaching, tempOf, tidy, warmthOf } from './environment';
 import { noticeTrait } from './outcomes';
 import { breakThink } from './breaks';
+import { habitThink, scheduleFromJob } from './schedules';
+import { momentStep, momentThink } from './moments';
 import { post, recently } from './chat';
 import { rememberAbout } from './social';
 import { hhmm } from './time';
@@ -74,6 +76,8 @@ export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: str
       under: { minor: 0, major: 0, extreme: 0 },
       calmUntil: 0,
       since: sim.day,
+      schedule: person.schedule ?? scheduleFromJob(person.job),
+      habits: [],
     };
     const p: Pawn = {
       id: st.nextId++,
@@ -207,6 +211,8 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   // Kicking off (or a good turn) comes before everything but moving out.
   const base = home(sim, p);
   if (base && !life.leaving && breakThink(sim, p, base)) return;
+  // In the middle of an ambient moment (moments.ts): it carries on.
+  if (base && !life.leaving && momentStep(sim, p, base)) return;
   if (life.leaving && p.task !== 'leave') {
     life.outing = { why: 'Moved out', until: st.tick };
     p.task = 'leave';
@@ -304,6 +310,8 @@ export function tenantThink(sim: Sim, p: Pawn): void {
     p.waitUntil = st.tick + randInt(st, 20, 40) * TICKS_PER_MINUTE;
     return;
   }
+  // A habit if one's due (schedules.ts), else maybe a moment (moments.ts), else pottering.
+  if (habitThink(sim, p, flat) || momentThink(sim, p, flat)) return;
   potter(sim, p, flat);
 }
 

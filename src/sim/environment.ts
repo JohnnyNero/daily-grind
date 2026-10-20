@@ -17,6 +17,7 @@ import { TICKS_PER_DAY, isDoor, key, type Pawn } from './state';
 import { has } from './traits';
 import { BUILDER_NOISE, currentPiece, whereIs } from './works';
 import { DIRT, GAS_PER_RADIATOR, ITEMS, NOISE, WARMTH } from './tuning';
+import { readFlags } from './flags';
 
 // Heat, noise and dirt rates are in tuning.ts.
 export { CLEANER_WEEKLY, GAS_PER_RADIATOR } from './tuning';
@@ -200,7 +201,8 @@ export function radiators(sim: Sim, flat: Flat): number {
 
 export function gasBill(sim: Sim): number {
   const all = sim.state.furniture.filter((f) => f.def === 'radiator').length;
-  return all * sim.state.boiler * GAS_PER_RADIATOR;
+  // An estimated bill comes in high until the meter's read (flags.ts).
+  return readFlags(sim, 'bills.gas', all * sim.state.boiler * GAS_PER_RADIATOR);
 }
 
 /** Every game hour: each flat's temperature drifts towards what its walls and radiators allow. */
@@ -326,7 +328,8 @@ export function binsOverflowing(sim: Sim): boolean {
   const bins = sim.state.furniture.filter((f) => f.def === 'bins' && shared.has(lay.node(f.x, f.s))).length;
   const people = sim.state.pawns.filter((p) => p.life && !p.life.leaving).length;
   const weekday = (sim.day - 1) % 7;
-  return people > 0 && (bins === 0 || (people > bins * DIRT.binPeople && weekday >= 3));
+  // Bigger bins overflow less (flags.ts).
+  return readFlags(sim, 'bins.overflowing', people > 0 && (bins === 0 || (people > bins * DIRT.binPeople && weekday >= 3)));
 }
 
 function dirtHour(sim: Sim): void {
@@ -336,7 +339,7 @@ function dirtHour(sim: Sim): void {
   // People walk dirt in from the street; a doormat in the lobby halves it.
   const shared = new Set(lay.rooms.filter((r) => r.shared).flatMap((r) => r.cells));
   const mat = st.furniture.some((f) => f.def === 'doormat' && shared.has(lay.node(f.x, f.s)));
-  addDirt(sim, SHARED, DIRT.shared * tenants.length * (mat ? DIRT.doormat : 1));
+  addDirt(sim, SHARED, readFlags(sim, 'dirt.shared', DIRT.shared * tenants.length * (mat ? DIRT.doormat : 1)));
   for (const f of lay.flats) {
     const people = tenants.filter((p) => p.life!.flat === f.id && !p.life!.away);
     if (people.length === 0) continue;

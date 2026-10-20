@@ -12,6 +12,8 @@ import { makePerson, sittingTenants } from './leases';
 import type { Sim } from './sim';
 import { furnitureDef } from './defs';
 import { random } from './rng';
+import { emptyDrip } from './drip';
+import { BILL_SHOWER_WEAR } from './tuning';
 import { SAVE_VERSION, TICKS_PER_DAY, TICKS_PER_HOUR, isDoor, key, type CellKind, type Grade, type State } from './state';
 
 const STREET = 10;
@@ -55,6 +57,9 @@ export function newState(seed: number): State {
     expect: { level: EXPECT_START, good: 0 },
     handover: { stop: 0, cast: [], met: [], done: [] },
     chronicle: { next: 1, tales: [] },
+    drip: emptyDrip(),
+    visitors: { next: {} },
+    project: {},
   };
   buildShell(st);
   // You can build up to the roof as it stands; above that needs planning permission.
@@ -164,6 +169,11 @@ export function startingTenants(sim: Sim): void {
   bill.note = 'Retired';
   if (flats[0]) sittingTenants(sim, flats[0].id, [first], 70 * POUND);
   if (flats[3]) sittingTenants(sim, flats[3].id, [bill], 55 * POUND);
+  // Bill's shower has seen better days: the first leak (card 5) comes through the ceiling below.
+  const lay = sim.layout;
+  const billsFlat = flats[3] ? new Set(lay.flatCells(flats[3])) : new Set<number>();
+  const shower = st.furniture.find((f) => f.def === 'shower' && billsFlat.has(lay.node(f.x, f.s)));
+  if (shower) shower.wear = BILL_SHOWER_WEAR;
   // Going rates start from how the flats score with their tenants in. Only a flat with the
   // basics in it goes on the market; the bare ones wait until you've furnished them.
   for (const f of flats) {

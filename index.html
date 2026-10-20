@@ -33,6 +33,8 @@
   </button>
 
   <footer class="dock" id="dock">
+    <!-- The drip's cards (ui/cards.ts): at most two slim cards above the tenant bar; empty, it takes no space. -->
+    <section class="tray" id="tray" hidden aria-label="Decisions" aria-live="polite"></section>
     <div class="tenantbar" id="tenantbar" aria-label="Your tenants"></div>
     <nav class="tabbar" id="tabbar" aria-label="Main">
       <button type="button" data-tab="building" aria-current="page"><span class="ic" data-icon="building"></span>Building</button>
@@ -42,6 +44,10 @@
       <button type="button" data-tab="post"><span class="ic" data-icon="post"></span>Post<span class="badge" id="post-badge" hidden></span></button>
       <button type="button" data-tab="build"><span class="ic" data-icon="build"></span>Build</button>
     </nav>
+    <!-- The next thing to save for (ui/project.ts). -->
+    <button type="button" class="project-bar" id="project-bar" hidden></button>
+    <!-- Skip to morning (spec 0.2): shown on a quiet night, above the speed buttons. -->
+    <button type="button" class="skip-morning" id="skip-morning" hidden>Skip to morning</button>
     <div class="bar" id="statusbar">
       <div class="clock">
         <span id="day">Day 1 · Mon</span>

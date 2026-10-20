@@ -460,3 +460,14 @@ body.building .todo, body.panel-open .todo, body.building .say, body.panel-open 
 .build-needs small { padding: 4px 8px 1px; border-top: 1px solid var(--rule); color: var(--sheet-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
 .build-needs .list-it { min-height: 36px; border: 0; border-top: 2px solid var(--outline); background: var(--ok); color: #1d1f23; font: inherit; font-weight: 700; cursor: pointer; }
 .build-zoom button[aria-pressed="true"] { background: var(--accent); color: #1d1f23; border-color: var(--outline); }
+
+/* ---------- minute to minute: mount points (laid down by chunk 0; each chunk appends its own rules after these) ---------- */
+/* The card tray (ui/cards.ts): just above the tenant bar, 16px gutters, newest on top. Empty, it takes no space. */
+.tray { display: flex; flex-direction: column; gap: 4px; padding: 0 16px 4px; }
+.tray[hidden] { display: none; }
+/* The project bar (ui/project.ts): a slim line above the status bar. */
+.project-bar { display: block; width: 100%; min-height: 28px; padding: 4px 16px; border: 0; border-top: 1px solid #000; background: var(--bar); color: var(--muted); font-size: 12px; text-align: left; }
+.project-bar[hidden] { display: none; }
+/* Skip to morning: above the speed buttons, at the right, only on a quiet night. */
+.skip-morning { align-self: flex-end; margin: 0 10px 6px; min-height: 36px; padding: 0 14px; border: 2px solid var(--outline); border-radius: 10px; background: var(--accent); color: #1d1f23; font-weight: 700; }
+.skip-morning[hidden] { display: none; }

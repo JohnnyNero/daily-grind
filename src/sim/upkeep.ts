@@ -20,6 +20,7 @@ import { threat } from './events';
 import { tale } from './tales';
 import { stat } from './stat';
 import { COUNCIL, UPKEEP } from './tuning';
+import { readFlags } from './flags';
 
 /** Wear from one go on something: about 250 goes from new to broken. */
 export const WEAR_PER_USE = UPKEEP.wearPerUse;
@@ -28,7 +29,7 @@ export const WEAR_PER_USE = UPKEEP.wearPerUse;
 export function useUp(sim: Sim, f: Furniture, p: Pawn): void {
   if (f.broken) return;
   const life = p.life!;
-  const rate = stat(WEAR_PER_USE, [], [has(life, 'clumsy') ? UPKEEP.clumsy : 1, has(life, 'handy') ? UPKEEP.handy : 1, wearFactor(f)]);
+  const rate = readFlags(sim, 'upkeep.wear', stat(WEAR_PER_USE, [], [has(life, 'clumsy') ? UPKEEP.clumsy : 1, has(life, 'handy') ? UPKEEP.handy : 1, wearFactor(f)]), { flat: life.flat });
   f.wear = Math.min(1, (f.wear ?? 0) + rate);
   if (f.wear >= 1) {
     breakIt(sim, f);
@@ -150,7 +151,8 @@ export function issues(sim: Sim): string[] {
     if (longBroken.length > 0) out.push(`${f.name}: ${furnitureDef(longBroken[0].def).name.toLowerCase()} broken for over a week`);
   }
   if (dirtOf(sim, SHARED) > COUNCIL.filthy) out.push('The stairs and lobby are filthy');
-  return out;
+  // A smoke alarm with its battery out, a lodger nobody mentioned (flags.ts).
+  return readFlags(sim, 'council.issues', out);
 }
 
 /** The council will come round in a few days. */

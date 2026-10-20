@@ -13,12 +13,13 @@ import { post, recently, tenants, whoIs } from './chat';
 import { flatInfo, goingRate } from './economy';
 import { pick, random } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
+import { TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Pawn } from './state';
 import { MEMORIES, remember } from './thoughts';
 import { has } from './traits';
 import { maybeFight } from './events';
 import { tale } from './tales';
 import { GOSSIP, OPINION, REQUESTS, ROMANCE, SOCIAL, TALK } from './tuning';
+import { readFlags } from './flags';
 
 // What each social memory is worth, and the odds of each kind of talk, are in tuning.ts.
 export { SOCIAL, type SocialDef } from './tuning';
@@ -170,9 +171,10 @@ function talk(sim: Sim, a: Pawn, b: Pawn): void {
   const kind = (options.find(([, w]) => (r -= w) < 0) ?? options[0])[0];
   a.life!.lastTalk = st.tick;
   b.life!.lastTalk = st.tick;
-  const minutes = kind === 'deepTalk' ? 6 : 3;
+  // Timed in real seconds, so a talk reads the same whatever the clock does.
+  const length = seconds(kind === 'deepTalk' ? 5 : 3);
   for (const p of [a, b]) {
-    const until = st.tick + minutes * TICKS_PER_MINUTE;
+    const until = st.tick + length;
     p.bubble = { text: BUBBLE[kind], until };
     // People on the move stop to talk; people sitting down stay put.
     if (!p.life!.using || p.life!.using.until === 0) p.talkUntil = until;
@@ -232,7 +234,7 @@ function row(sim: Sim, a: Pawn, b: Pawn): void {
   rememberAbout(sim, a, 'row', b);
   rememberAbout(sim, b, 'row', a);
   for (const p of [a, b]) {
-    p.talkUntil = st.tick + 8 * TICKS_PER_MINUTE;
+    p.talkUntil = st.tick + seconds(7);
     p.bubble = { text: '!', until: p.talkUntil };
   }
   a.doing = `Having a row with ${b.name.split(' ')[0]}`;
@@ -282,7 +284,7 @@ export function romanceHour(sim: Sim): void {
       delete life.partner;
       continue;
     }
-    if (Math.min(opinion(sim, a, b), opinion(sim, b, a)) - OPINION.partner >= 0 || random(st) > ROMANCE.splitPerHour) continue;
+    if (Math.min(opinion(sim, a, b), opinion(sim, b, a)) - OPINION.partner >= 0 || random(st) > readFlags(sim, 'story.split', ROMANCE.splitPerHour, { pawn: a, other: b })) continue;
     delete life.partner;
     delete b.life.partner;
     life.exes = [...(life.exes ?? []), b.id];

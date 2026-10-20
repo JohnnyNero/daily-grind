@@ -323,6 +323,44 @@ export const MEMORIES: Record<string, MemoryDef> = {
   noWashUp: { label: 'Didn\'t have to wash up', value: 1.5, hours: 6, stack: 2 },
   goodRead: { label: 'Had a good read', value: 2, hours: 8, stack: 1 },
   darkBedroom: { label: 'Dark bedroom', value: 2, hours: 10, stack: 1 },
+  // The drip's cards (1.4). Small for most; promises, lockouts, deposits and the pets precedent count for more.
+  tookParcel: { label: 'Landlord took a parcel in for me', value: 3, hours: 5 * 24, stack: 2, gossip: true },
+  missedParcel: { label: 'Missed a parcel', value: -2, hours: 3 * 24, stack: 1 },
+  parcelNicked: { label: 'Parcel got nicked from the lobby', value: -4, hours: 5 * 24, stack: 1, gossip: true },
+  leftToIt: { label: 'Left to sort it out myself', value: -4, hours: 5 * 24, stack: 2, gossip: true },
+  keptWaiting: { label: 'Kept waiting for an answer', value: -2, hours: 3 * 24, stack: 3 },
+  buildingCat: { label: 'There\'s a cat in the building', value: 3, hours: 7 * 24, stack: 1 },
+  shooedCat: { label: 'Landlord shooed the cat out', value: -3, hours: 5 * 24, stack: 1, gossip: true },
+  catHair: { label: 'Cat hair on the stairs', value: -2, hours: 3 * 24, stack: 1 },
+  noPetButCat: { label: 'No pets, but the cat\'s allowed', value: -7, hours: 7 * 24, stack: 1, gossip: true },
+  helpedLockout: { label: 'Landlord let me in when I was locked out', value: 7, hours: 7 * 24, stack: 1, gossip: true },
+  nosyLandlord: { label: 'Landlord poked their nose in', value: -4, hours: 5 * 24, stack: 1, gossip: true },
+  itchy: { label: 'Fleas', value: -4, hours: 4 * 24, stack: 1 },
+  mumApproved: { label: 'Mum approved of the flat', value: 4, hours: 7 * 24, stack: 1 },
+  mumWorried: { label: 'Mum worries about the flat', value: -4, hours: 7 * 24, stack: 1 },
+  brokePromise: { label: 'Landlord broke a promise', value: -8, hours: 10 * 24, stack: 2, gossip: true },
+  keptPromise: { label: 'Landlord kept their word', value: 4, hours: 7 * 24, stack: 2, gossip: true },
+  itsYourJob: { label: 'Landlord did what they\'re meant to', value: 2, hours: 4 * 24, stack: 1 },
+  scaffolding: { label: 'Scaffolding outside the window', value: -3, hours: 2 * 24, stack: 1 },
+  landlordGossiped: { label: 'Landlord\'s been talking about me', value: -4, hours: 7 * 24, stack: 1, gossip: true },
+  keptMyBusiness: { label: 'Landlord kept my business to themselves', value: 3, hours: 7 * 24, stack: 1 },
+  brushedOff: { label: 'Landlord brushed me off', value: -2, hours: 3 * 24, stack: 1 },
+  tapedWindow: { label: 'Window held together with tape', value: -3, hours: 2 * 24, stack: 1 },
+  barsOnWindow: { label: 'Bars on the window', value: -2, hours: 3 * 24, stack: 1 },
+  sadAboutKitten: { label: 'Couldn\'t keep a kitten', value: -3, hours: 5 * 24, stack: 1 },
+  freePizza: { label: 'Got a free pizza', value: 2, hours: 2 * 24, stack: 1 },
+  waitedForRepair: { label: 'Waiting for something to be fixed', value: -3, hours: 3 * 24, stack: 1 },
+  notTrusted: { label: 'Landlord didn\'t trust me with it', value: -3, hours: 5 * 24, stack: 1 },
+  askedToHelp: { label: 'Landlord asked me for a hand', value: 2, hours: 4 * 24, stack: 1 },
+  keptAnEye: { label: 'Kept an eye on a stranger', value: 3, hours: 4 * 24, stack: 1 },
+  wholeDeposit: { label: 'Got the whole deposit back', value: 4, hours: 7 * 24, stack: 1, gossip: true },
+  keptDeposit: { label: 'Landlord kept some of the deposit', value: -7, hours: 10 * 24, stack: 1, gossip: true },
+  accused: { label: 'Accused of something I didn\'t do', value: -4, hours: 7 * 24, stack: 1, gossip: true },
+  openedPost: { label: 'Landlord opened someone else\'s post', value: -4, hours: 7 * 24, stack: 1, gossip: true },
+  noKeyForFamily: { label: 'No key for the family', value: -4, hours: 7 * 24, stack: 1, gossip: true },
+  gotToPaint: { label: 'Got to paint the flat', value: 4, hours: 10 * 24, stack: 1 },
+  noPaint: { label: 'Not allowed to paint', value: -3, hours: 5 * 24, stack: 1 },
+  grubbyWindows: { label: 'Grubby windows', value: -1, hours: 2 * 24, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -415,6 +453,8 @@ export const SOCIAL: Record<string, SocialDef> = {
   fight: { label: 'Had a fight', value: -30, hours: 336, stack: 1 },
   cheatedOn: { label: 'Went behind my back', value: -35, hours: 600, stack: 1 },
   goodNight: { label: 'Threw a good night', value: 8, hours: 240, stack: 2 },
+  // The drip's cards (1.4).
+  leakedOnMe: { label: 'Their shower came through my ceiling', value: -6, hours: 168, stack: 2 },
 };
 
 export const OPINION = {
@@ -803,8 +843,8 @@ export const EXPECT = {
 
 // ================================================================== pace
 
-/** Real seconds per game minute at 1x (a day is 24 * 60 of these: about 21 minutes). */
-export const SECONDS_PER_GAME_MINUTE = 0.9;
+/** Real seconds per game minute at 1x (a day is 24 * 60 of these: about 7 minutes). Must match TICKS_PER_SECOND in state.ts. */
+export const SECONDS_PER_GAME_MINUTE = 0.3;
 /** A quiet night runs this many times faster than the speed you picked. */
 export const NIGHT_BOOST = 4;
 /** Night is from this hour to this one. */
@@ -844,6 +884,19 @@ export const INTEREST = {
   moveOut: 3,
   grant: 2,
   broken: 1,
+  // From the drip's cards: low, except the cat, the kittens and the squatter, which people talk about for weeks.
+  parcelNicked: 1.5,
+  lockout: 1.5,
+  cowboy: 2,
+  leak: 1.5,
+  cat: 4,
+  kittens: 4,
+  brokePromise: 2,
+  pritchard: 2,
+  fakeMeterMan: 2,
+  deposit: 1.5,
+  squatter: 4,
+  badTurn: 2,
 };
 
 // ================================================================== furniture grades
@@ -941,4 +994,116 @@ export const ITEMS = {
   intercomLikes: 1,
   cctvBusybody: 2,
   cctvKnowsRights: -2,
+};
+
+// ================================================================== the drip (chunk 1 tunes)
+
+/** The little decisions: nought to two a day, each worth having (spec 1.2). Times in game minutes. */
+export const DRIP = {
+  /** Cards a day before anything takes one off, and the most open at once. */
+  perDay: 2,
+  maxOpen: 2,
+  /** Waking hours, when the drip tries every `tryEvery` minutes with this chance (doubled after `lateFrom` if nothing's come). */
+  wakeFrom: 7 * 60,
+  wakeTo: 23 * 60,
+  tryEvery: 30,
+  tryChance: 0.08,
+  lateFrom: 15 * 60,
+  /** Least time between two cards on the same day. */
+  minGap: 240,
+  /** Night cards: the chance an hour, between `wakeTo` and `wakeFrom`. */
+  nightChance: 0.04,
+  /** Days before the same person is the subject of another card. */
+  perPerson: 2,
+  /** How long cards last: a moment at the door, any other moment, and a tenant's ask (three steps of `askStep`). */
+  life: { door: 120, moment: 240, askStep: 480, askSteps: 3 },
+  /** Never resolved before this many real seconds after it appears, whatever the speed (1.1). */
+  floorSeconds: 10,
+  /** Ignored in a row before a card comes off each day's budget. */
+  ignoredRun: 3,
+  /** Follow-ups (threads and promises) at once, and over the budget in a day. */
+  maxThreads: 3,
+  overBudget: 1,
+  /** Flags kept at once. */
+  maxFlags: 16,
+  /** Cards resolved, kept for the recap and the tests. */
+  logSize: 50,
+  /** Money from cards in the first week, at most. */
+  firstWeekIncome: 150 * POUND,
+};
+
+/** How worn Bill's shower is at the start, so the first leak (card 5) has something to go on. */
+export const BILL_SHOWER_WEAR = 0.85;
+
+// ================================================================== schedules and habits (chunk 3 tunes)
+
+/** Who's home when (spec 2.1): each schedule's share of new tenants, and its weekday hours away (minutes of the day). */
+export const SCHEDULES = {
+  share: { office: 0.35, early: 0.15, late: 0.1, nights: 0.05, home: 0.15, student: 0.1, retired: 0.1 },
+  away: {
+    office: { leave: 8 * 60, back: 18 * 60 },
+    early: { leave: 6 * 60, back: 15 * 60 },
+    late: { leave: 13 * 60 + 30, back: 22 * 60 + 30 },
+    nights: { leave: 20 * 60 + 30, back: 7 * 60 + 30 },
+    student: { leave: 10 * 60, back: 13 * 60 },
+  } as Record<string, { leave: number; back: number }>,
+  /** Students are out on these weekdays only (0 is Monday). */
+  studentDays: [1, 3],
+};
+
+/** Habits (spec 2.1): one or two each, at about the same time every day. */
+export const HABITS = {
+  /** Most habits a tenant has, and the chance of a second. */
+  most: 2,
+  second: 0.5,
+  /** How far either side of its time a habit can start, in game minutes. */
+  slack: 20,
+};
+
+// ================================================================== visitors (chunk 4 tunes)
+
+/** People from outside (spec 2.2). Times in minutes of the day; counts a day. */
+export const VISITORS = {
+  /** Most on the map at once (not counting party guests and applicants with Denise), and passers-by. */
+  most: 3,
+  mostPassersBy: 3,
+  /** Sandra the postie, every morning about now. */
+  postie: 9 * 60 + 30,
+  /** Couriers a day, and when they come. */
+  couriers: [2, 4] as [number, number],
+  courierFrom: 9 * 60,
+  courierTo: 20 * 60,
+  /** Lorraine does the stairs at this time, if you pay the cleaner. */
+  cleaner: 8 * 60,
+};
+
+// ================================================================== ambient moments (chunk 5 tunes)
+
+/** Little scenes that cost nothing to watch (spec 2.3). */
+export const MOMENTS = {
+  /** Most running at once. */
+  most: 2,
+  /** Game minutes between one starting and the next, in waking hours. */
+  gap: [50, 100] as [number, number],
+  /** How long one runs, in real seconds. */
+  seconds: [5, 30] as [number, number],
+};
+
+// ================================================================== what's on screen (chunk 6 tunes)
+
+/** Keeping the building readable on a phone (spec 2.5). */
+export const BUDGET = {
+  /** Most bubbles drawn at once, and the least real time one stays up (the sim's `until` is a minimum). */
+  bubbles: 4,
+  bubbleSeconds: 1.5,
+  /** One thing in each hand. */
+  propsPerPerson: 1,
+};
+
+// ================================================================== the next project (chunk 7 tunes)
+
+/** Something to save for (spec 4). */
+export const PROJECT = {
+  /** Weeks of this week's rent less the bills the guess looks ahead. */
+  horizonWeeks: 12,
 };

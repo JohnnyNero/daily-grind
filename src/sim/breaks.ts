@@ -18,7 +18,7 @@ import { choices } from './tenants';
 import { setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_MINUTE, type BreakKind, type BreakState, type Furniture, type Pawn } from './state';
+import { TICKS_PER_MINUTE, seconds, type BreakKind, type BreakState, type Furniture, type Pawn } from './state';
 import { remember } from './thoughts';
 import { has } from './traits';
 import { rememberAbout } from './social';
@@ -26,7 +26,13 @@ import { rememberAbout } from './social';
 type Level = 'minor' | 'major' | 'extreme';
 
 const first = (p: Pawn) => p.name.split(' ')[0];
+/** How long a break or a good turn goes on, and each step of it, is game time: a sulk lasts so many game minutes. */
 const minutes = (n: number) => n * TICKS_PER_MINUTE;
+/**
+ * Its bubbles are timed in real time, so they stay readable: n is n × 0.9 real seconds at 1x
+ * (what a game minute took before the clock went three times faster), whatever the clock does.
+ */
+const beats = (n: number) => seconds(n * 0.9);
 
 // ------------------------------------------------------------------ places
 
@@ -175,7 +181,7 @@ function finish(sim: Sim, p: Pawn, b: BreakState): void {
 type Step = (sim: Sim, p: Pawn, flat: Flat, b: BreakState) => void;
 
 const say = (sim: Sim, p: Pawn, text: string, mins: number) => {
-  p.bubble = { text, until: sim.state.tick + minutes(mins) };
+  p.bubble = { text, until: sim.state.tick + beats(mins) };
 };
 
 /** Heads for a spot. 'there' once they're on it; 'going' while on the way; 'stuck' (and the break is over) if there's no way. */

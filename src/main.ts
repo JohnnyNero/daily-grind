@@ -11,6 +11,8 @@ import { FurnitureCard } from './ui/furnitureCard';
 import { furnitureAt } from './sim/build';
 import { spaceAt } from './sim/shared';
 import { HandoverUi } from './ui/handover';
+import { CardTray } from './ui/cards';
+import { ProjectBar } from './ui/project';
 
 const AUTOSAVE_MS = 30_000;
 const SAVE_KEY = 'landlord:save';
@@ -113,6 +115,15 @@ function play(sim: Sim): void {
   };
   handover.update();
   el('recentre').addEventListener('click', fitView);
+  // The drip's tray (ui/cards.ts) and the next thing to save for (ui/project.ts).
+  const tray = new CardTray(sim, el('tray'));
+  tray.onNotify = (text) => hud.notify(text);
+  const project = new ProjectBar(sim, el('project-bar'));
+  project.onOpen = (flat) => {
+    panels.close();
+    if (flat) build.guide(flat);
+    else build.start();
+  };
 
   attachInput(canvas, renderer.camera, {
     onDragStart: (x, y) => build.dragStart(x, y),
@@ -238,6 +249,8 @@ function play(sim: Sim): void {
     if (ticks > 0 || view !== lastView) renderer.draw();
     lastView = view;
     hud.update(now);
+    tray.update(now);
+    project.update();
     handover.update();
     build.updateNeeds();
     requestAnimationFrame(frame);

@@ -83,16 +83,18 @@ faster.** At 1x a game day goes from 21.6 real minutes to about 7.2.
 
 How: **`TICKS_PER_MINUTE` 60 → 20**, with ticks per real second unchanged (66.7 at 1x:
 `SECONDS_PER_GAME_MINUTE` 0.9 → 0.3). A walk takes the same ticks and the same real time,
-so it takes a third of the game minutes it did. Everything measured in game time (needs per
+so it takes three times the game minutes it did (corrected in chunk 0: this said "a third";
+from the top floor to the end of the street is now about 25 game minutes). Everything measured in game time (needs per
 hour, durations in game minutes, schedules, cooldowns in days, rent every morning) stays in
 game units and so happens three times sooner in real time.
 
 Knock-on effects to check (chunk 0 does the change and its fixes; chunk 8 retunes):
 
-- **Walks against schedules.** Getting to work, the shops or the pub now costs a third of
-  the game minutes, so tenants arrive early and have more spare game time. Schedules stay
-  as written; check nobody misses a habit's slot or turns up at work at 07:10 for 08:00.
-- **Needs per hour.** A trip to the loo or the fridge now costs fewer game minutes for the
+- **Walks against schedules.** Getting to work, the shops or the pub now costs three times
+  the game minutes (corrected in chunk 0: this said a third), so tenants set off at the old
+  time and arrive later, with less spare game time. Check nobody misses a habit's slot or
+  turns up at work at 08:25 for 08:00.
+- **Needs per hour.** A trip to the loo or the fridge now costs more game minutes for the
   same need restored: check needs stay in their bands (the neighbours and landlord soaks).
 - **Things you watch, timed in game minutes.** Bubbles, talks, poses and moments set as
   `n * TICKS_PER_MINUTE` would last a third of the real time (a 3-minute bubble: under a

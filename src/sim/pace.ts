@@ -1,5 +1,5 @@
-// How fast the clock runs. At 1x a game minute takes under a second of real time, so a
-// day is about twenty-odd minutes. Quiet nights go faster on their own.
+// How fast the clock runs. At 1x a game minute takes 0.3 real seconds, so a day is about
+// seven minutes. Quiet nights go faster on their own.
 
 import type { Sim } from './sim';
 import { TICKS_PER_MINUTE } from './state';

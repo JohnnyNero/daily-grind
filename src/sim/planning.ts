@@ -6,6 +6,7 @@ import { PLANNING_FEE, POUND, letter, spend } from './economy';
 import { pick, random } from './rng';
 import type { Sim } from './sim';
 import { STOREY } from './start';
+import { readFlags } from './flags';
 
 const DECISION_DAYS = 3;
 
@@ -60,7 +61,8 @@ export function planningMorning(sim: Sim): void {
   delete p.applied;
   const storeys = Math.ceil((top - p.top) / STOREY);
   const from = 'Harrowgate City Council, Planning';
-  if (random(st) < Math.max(0.3, 0.9 - 0.15 * storeys)) {
+  // Next door's mood counts for something (flags.ts).
+  if (random(st) < readFlags(sim, 'planning.chance', Math.max(0.3, 0.9 - 0.15 * storeys))) {
     p.top = top;
     letter(sim, { from, title: 'Planning permission granted', body: `Permission is granted to build up to ${storeys} storey${storeys > 1 ? 's' : ''} above your current roof. Please be considerate of the neighbours. They have asked us to say that.` });
   } else {

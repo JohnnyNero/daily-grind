@@ -28,7 +28,7 @@ import { FURNITURE, furnitureDef, isGraded, type FurnitureGroup } from '../sim/d
 import { CELL_PRICE, DEMOLISH_PRICE, INSULATE_PRICE, book, furniturePrice, pounds } from '../sim/economy';
 import { GRADE_NAMES, GRADE_ORDER, gradeOf, gradeProblem, gradedName, poshLockedWhy, poshUnlocked } from '../sim/grades';
 import type { Sim } from '../sim/sim';
-import { DOOR_ROWS, TILE, isDoor, isSolid, key, type CellKind, type Grade, type State } from '../sim/state';
+import { DOOR_ROWS, TICKS_PER_HOUR, TILE, isDoor, isSolid, key, type CellKind, type Grade, type State } from '../sim/state';
 import { buyFurniture, shiftFurniture, turnFurniture } from '../sim/furnish';
 import { partsOf, piecesBetween, quote } from '../sim/works';
 import { drawFurniture } from '../render/art';
@@ -279,7 +279,7 @@ export class BuildUi {
     const flat = this.needsFlat ? this.sim.layout.flat(this.needsFlat) : undefined;
     const show = this.active && !this.pending && flat !== undefined;
     const st = this.sim.state;
-    const key = show ? `${flat!.id}|${this.sim.version}|${st.furniture.length}|${this.renderer.build.version}|${Math.floor(st.tick / 3600)}|${this.needsFolded}` : '';
+    const key = show ? `${flat!.id}|${this.sim.version}|${st.furniture.length}|${this.renderer.build.version}|${Math.floor(st.tick / TICKS_PER_HOUR)}|${this.needsFolded}` : '';
     if (key === this.needsKey) return;
     this.needsKey = key;
     this.needs.hidden = !show;

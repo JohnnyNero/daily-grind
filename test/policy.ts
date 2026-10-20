@@ -10,10 +10,11 @@ import { itemsIn } from '../src/sim/environment';
 import { scoreFor } from '../src/sim/impressiveness';
 import type { Sim } from '../src/sim/sim';
 import { mend } from '../src/sim/upkeep';
+import { answerCard, openCards } from '../src/sim/drip';
 
 export type Policy = 'decent' | 'ruthless';
 
-/** Called once a game hour: sets rents, picks applicants, answers letters. */
+/** Called once a game hour: sets rents, picks applicants, answers letters and cards. */
 export function landlord(sim: Sim, policy: Policy): void {
   const st = sim.state;
   for (const f of sim.layout.flats) {
@@ -48,6 +49,8 @@ export function landlord(sim: Sim, policy: Policy): void {
     if (!l.choices || l.chosen !== undefined) continue;
     choose(sim, l.id, policy === 'decent' ? 0 : l.choices.length - 1);
   }
+  // The drip's cards: the decent one takes the first button, the ruthless one the second.
+  for (const c of [...openCards(sim)]) answerCard(sim, c.id, policy === 'decent' ? 0 : 1);
   // Both furnish a bare flat with the basics once they can afford it (cheapest first).
   for (const f of sim.layout.flats) {
     if (flatInfo(sim, f.id).lease) continue;

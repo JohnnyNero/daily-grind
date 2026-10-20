@@ -4,7 +4,7 @@ import { running, startFight, startParty } from '../src/sim/events';
 import { makePerson } from '../src/sim/leases';
 import { Sim } from '../src/sim/sim';
 import { opinion, rememberAbout } from '../src/sim/social';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from '../src/sim/state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Pawn } from '../src/sim/state';
 import { moveIn } from '../src/sim/tenants';
 
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life && !p.life.leaving);
@@ -131,7 +131,8 @@ describe('a party as a group', () => {
       h.next = sim.state.tick;
       while (sim.state.tick < h.until && !h.flag) sim.run(TICKS_PER_MINUTE);
       if (h.flag === 'knocking') knocked++;
-      sim.run(30 * TICKS_PER_MINUTE);
+      // Time for the walk to their door, which takes real time, not game time.
+      sim.run(seconds(30));
       if (h.volume === 0.5) turnedDown++;
       expect(h.knock).toBeUndefined();
     }
@@ -186,7 +187,8 @@ describe('a fight with onlookers', () => {
       stepped++;
       expect(s.w.life!.memories.some((m) => m.id === 'brokeItUp')).toBe(true);
       expect(s.a.life!.social.some((m) => m.id === 'favour' && m.about === s.w.id)).toBe(true);
-      s.sim.run(5 * TICKS_PER_MINUTE);
+      // Stepping in stops it within a few real seconds (it's timed on screen, not in game minutes).
+      s.sim.run(seconds(5));
       expect(running(s.sim, 'fight')).toBeUndefined();
     }
     expect(stepped).toBeGreaterThan(0);

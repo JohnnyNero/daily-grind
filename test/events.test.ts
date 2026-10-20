@@ -8,7 +8,7 @@ import { landlordRating, makePerson, moveOut } from '../src/sim/leases';
 import { applyForPlanning, needsPlanning } from '../src/sim/planning';
 import { Sim } from '../src/sim/sim';
 import { opinion } from '../src/sim/social';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from '../src/sim/state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, seconds, type Pawn } from '../src/sim/state';
 import { moveIn } from '../src/sim/tenants';
 import { bookInspection, breakIt, mend, useUp } from '../src/sim/upkeep';
 import { landlord } from './policy';
@@ -85,7 +85,8 @@ describe('fights and affairs', () => {
     startFight(sim, a, b);
     expect(opinion(sim, a, b)).toBeLessThanOrEqual(-30);
     expect(running(sim, 'fight')).toBeDefined();
-    sim.run(30 * TICKS_PER_MINUTE);
+    // A fight lasts about twenty real seconds: it's timed on screen, not in game minutes.
+    sim.run(seconds(30));
     expect(running(sim, 'fight')).toBeUndefined();
   });
 
