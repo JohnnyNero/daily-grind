@@ -1276,3 +1276,9 @@ export const LAYOUT = {
   /** Sharers or a family (people who don't share a bed) with nowhere to sit but the beds. */
   nowhereToSit: -3,
 };
+
+// --- layout L11 ---
+export const LAYOUT_L11 = {
+  /** Each repeat of the same decoration in a room counts this much of the one before (1, then half, then a quarter). */
+  repeat: 0.5,
+};
