@@ -146,8 +146,9 @@ export function dripMinute(sim: Sim): void {
   else if (d.cooldowns.script === sim.day && !scriptActive(sim)) setBudget(sim);
   for (const c of [...d.open]) {
     const def = cardDefOf(c.def);
-    // Someone who's gone can't be answered about.
-    if (!def || (c.pawn !== undefined && !st.pawns.some((p) => p.id === c.pawn))) {
+    // Someone who's gone can't be answered about: the card's subject, or anyone else it names.
+    const gone = (id: unknown) => typeof id === 'number' && !st.pawns.some((p) => p.id === id);
+    if (!def || gone(c.pawn) || PAWN_KEYS.some((k) => gone(c.data?.[k]))) {
       d.open = d.open.filter((x) => x !== c);
       continue;
     }
@@ -169,6 +170,9 @@ export function dripMinute(sim: Sim): void {
   d.cooldowns.dealt = d.cooldowns.dealtDay === sim.day ? (d.cooldowns.dealt ?? 0) + 1 : 1;
   d.cooldowns.dealtDay = sim.day;
 }
+
+/** Keys in a card's data that name another person (cards/*.ts). */
+const PAWN_KEYS = ['noisy', 'tenant', 'partner', 'about', 'bill', 'host'];
 
 /** Room in the tray, and long enough since the last card. */
 function roomFor(sim: Sim): boolean {

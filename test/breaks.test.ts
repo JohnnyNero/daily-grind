@@ -71,7 +71,7 @@ describe('breaks you can see', () => {
 
   it('an easy-going tenant sulks or sleeps it off, never smashes things', () => {
     const sim = morning(4, true);
-    const p = tenants(sim)[0];
+    const p = homeAndAwake(sim, tenants(sim)[0]);
     p.life!.traits = ['easyGoing', 'friendly'];
     const seen = new Set<string>();
     for (let i = 0; i < 40; i++) {
@@ -151,6 +151,15 @@ describe('breaks you can see', () => {
 });
 
 describe('inspirations', () => {
+  /** Saturday morning, with the first tenant (and a neighbour, as a guest) in and up, whoever the dice had out. */
+  function happyMorning(): Sim {
+    const sim = morning(4, true);
+    const [p, ...rest] = tenants(sim);
+    homeAndAwake(sim, p);
+    const o = rest.find((x) => x.life!.flat !== p.life!.flat);
+    if (o) homeAndAwake(sim, o);
+    return sim;
+  }
   /** Runs option `i` on a copy of the building. */
   function tryOption(base: Sim, i: number) {
     const sim = deserialize(serialize(base));
@@ -161,14 +170,14 @@ describe('inspirations', () => {
   const count = (base: Sim) => inspirations(base, tenants(base)[0]).length;
 
   it('a happy tenant has good turns to choose from, by day only', () => {
-    const sim = morning(4, true);
+    const sim = happyMorning();
     expect(count(sim)).toBeGreaterThanOrEqual(3);
     while (sim.minuteOfDay !== 23 * 60) sim.run(TICKS_PER_MINUTE);
     expect(count(sim)).toBe(0);
   });
 
   it('tidying the stairwell clears shared dirt', () => {
-    const base = morning(4, true);
+    const base = happyMorning();
     base.state.dirt[SHARED] = 0.6;
     const r = [...Array(count(base)).keys()].map((i) => tryOption(base, i)).find((x) => x.kind === 'tidy')!;
     expect(r).toBeDefined();
@@ -178,7 +187,7 @@ describe('inspirations', () => {
   });
 
   it('a barbecue brings guests, who get a good memory and a friend', () => {
-    const base = morning(4, true);
+    const base = happyMorning();
     const r = [...Array(count(base)).keys()].map((i) => tryOption(base, i)).find((x) => x.kind === 'bbq')!;
     expect(r).toBeDefined();
     const { sim, p } = r;
@@ -193,7 +202,7 @@ describe('inspirations', () => {
   });
 
   it('painting gives everyone a good thought; a plant stays in the lobby', () => {
-    const base = morning(4, true);
+    const base = happyMorning();
     const kinds = new Set<string>();
     for (let i = 0; i < count(base); i++) {
       const { sim, p, kind } = tryOption(base, i);
@@ -215,7 +224,7 @@ describe('inspirations', () => {
   });
 
   it('a handy tenant mends a neighbour\'s broken thing', () => {
-    const base = morning(4, true);
+    const base = happyMorning();
     const [a, b] = tenants(base);
     a.life!.traits = ['handy', 'friendly'];
     const theirs = base.state.furniture.find((f) => base.layout.flatAt(f.x, f.s)?.id === b.life!.flat && !f.broken)!;

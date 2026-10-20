@@ -56,12 +56,15 @@ describe('a party as a group', () => {
     const flat = sim.layout.flats[0].id;
     const h = startParty(sim, flat)!;
     h.queue = 6;
-    // Everyone turns up at once, so the evening is in full swing straight away and stays so for hours.
+    // Everyone turns up at once, so the evening is in full swing straight away and stays so for
+    // hours: eight of them, as the walk down to the pavement for a smoke now takes three times the
+    // game minutes it did, so each guest gets round to fewer things an hour.
+    h.until = sim.state.tick + 9 * TICKS_PER_HOUR;
     let landing = 0;
     let dancing = 0;
     let smoking = 0;
     let hosted = 0;
-    for (let i = 0; i < 4 * 60 && running(sim, 'party', flat); i++) {
+    for (let i = 0; i < 8 * 60 && running(sim, 'party', flat); i++) {
       h.next = sim.state.tick;
       sim.run(TICKS_PER_MINUTE);
       if (running(sim, 'party', flat)?.phase !== 'swing') continue;

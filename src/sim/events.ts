@@ -363,8 +363,9 @@ function pickAct(sim: Sim, p: Pawn, h: Happening): string {
     return random(st) < 0.35 ? 'dance' : 'mingle';
   }
   const phase = h.phase ?? 'swing';
-  // One guest is always the smoker.
-  if (!p.life && p.id === h.pawns[0] && phase !== 'arriving' && random(st) < 0.45) return 'smoke';
+  // One guest is always the smoker: the first who came from outside (an invited neighbour isn't).
+  const smoker = h.pawns.find((id) => st.pawns.some((o) => o.id === id && !o.life));
+  if (!p.life && p.id === smoker && phase !== 'arriving' && random(st) < 0.45) return 'smoke';
   const r = random(st);
   const dance = phase === 'swing' ? 0.45 : phase === 'arriving' ? 0.2 : 0.12;
   const out = phase === 'swing' ? 0.2 : 0.12;

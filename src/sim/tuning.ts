@@ -249,8 +249,8 @@ export const OUT_FOR_FUN: [number, number] = [30, 120];
 export const OUTINGS: Record<string, Record<string, number>> = {
   'Out for chips': { food: 1 },
   'Popped to the pub for the loo': { bladder: 1 },
-  'Out at the pub': { fun: 0.6 },
-  'Out for a walk': { fun: 0.5 },
+  'Out at the pub': { fun: 1 },
+  'Out for a walk': { fun: 0.8 },
 };
 
 // ================================================================== thoughts and memories
@@ -296,7 +296,7 @@ export const MEMORIES: Record<string, MemoryDef> = {
   letOffSteam: { label: 'Let off steam', value: 8, hours: 2 * 24, stack: 1 },
   landlordListened: { label: 'Landlord listened', value: 4, hours: 5 * 24, stack: 2, gossip: true },
   landlordShrugged: { label: 'Landlord couldn\'t care less', value: -4, hours: 5 * 24, stack: 2, gossip: true },
-  ignored: { label: 'Landlord ignored the chat', value: -5, hours: 5 * 24, stack: 2, gossip: true },
+  ignored: { label: 'Landlord ignored the chat', value: -5, hours: 7 * 24, stack: 2, gossip: true },
   wearAJumper: { label: 'Told to wear a jumper', value: -6, hours: 5 * 24, stack: 1, gossip: true },
   toldOff: { label: 'Landlord had a word about the noise', value: -5, hours: 5 * 24, stack: 1 },
   gotPet: { label: 'Got a pet', value: 8, hours: 10 * 24, stack: 1 },
@@ -338,7 +338,7 @@ export const MEMORIES: Record<string, MemoryDef> = {
   tookParcel: { label: 'Landlord took a parcel in for me', value: 3, hours: 5 * 24, stack: 2, gossip: true },
   missedParcel: { label: 'Missed a parcel', value: -2, hours: 3 * 24, stack: 1 },
   parcelNicked: { label: 'Parcel got nicked from the lobby', value: -4, hours: 5 * 24, stack: 1, gossip: true },
-  leftToIt: { label: 'Left to sort it out myself', value: -4, hours: 5 * 24, stack: 2, gossip: true },
+  leftToIt: { label: 'Left to sort it out myself', value: -4, hours: 7 * 24, stack: 2, gossip: true },
   keptWaiting: { label: 'Kept waiting for an answer', value: -2, hours: 3 * 24, stack: 3 },
   buildingCat: { label: 'There\'s a cat in the building', value: 3, hours: 7 * 24, stack: 1 },
   shooedCat: { label: 'Landlord shooed the cat out', value: -3, hours: 5 * 24, stack: 1, gossip: true },
