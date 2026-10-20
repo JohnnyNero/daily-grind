@@ -405,7 +405,8 @@ export const MEMORIES: Record<string, MemoryDef> = {
   // layout L4
   riserLeak: { label: 'Water down the wall', value: -4, hours: 3 * 24, stack: 1, gossip: true },
   // layout L8
-  firstNight: { label: 'First night in the new place', value: 3, hours: 20, stack: 1 },
+  // A small lift for the evening the takeaway comes, gone by the next late morning (it's what keeps them up late, schedules.ts).
+  firstNight: { label: 'First night in the new place', value: 2, hours: 16, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -1488,14 +1489,18 @@ export const MOVING_IN = {
   shutSeconds: [2, 3] as [number, number],
   /** How long after the van goes a tenant has to find a moment to sit down, in game hours. */
   settleHours: 18,
-  /** Real seconds a moving-in moment may run, and how long they sit with their first cup of tea. */
-  settleSeconds: 45,
-  sitSeconds: 10,
-  teaSeconds: 4,
+  /**
+   * Real seconds a moving-in moment may run (the longest any moment runs, MOMENTS.seconds), and
+   * how long they sit down (as long as the longest held beat, dancing in the kitchen) and then
+   * stand by the kettle (as long as knocking for sugar).
+   */
+  settleSeconds: 30,
+  sitSeconds: 8,
+  teaSeconds: 3,
   /** The first night's takeaway comes in this window (minutes of the day); after the last, there isn't one. */
   takeawayFrom: 19 * 60,
   takeawayTo: 20 * 60 + 30,
   takeawayLast: 21 * 60,
-  /** Minutes later than usual they go to bed on the first night. */
-  lateBy: 90,
+  /** Minutes later than usual they go to bed on the first night: an hour, as on a Friday. */
+  lateBy: 60,
 };

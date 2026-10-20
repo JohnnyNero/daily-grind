@@ -20,7 +20,7 @@ import { findPath, type Flat } from './layout';
 import { furnitureDef } from './defs';
 import { keysOf, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
-import { awayToday, freeFor, homeAndAwake } from './schedules';
+import { awayToday, bedtime, freeFor, homeAndAwake } from './schedules';
 import type { Sim } from './sim';
 import { opinion, rememberAbout } from './social';
 import { TICKS_PER_MINUTE, seconds, type Life, type Pawn, type Pose, type State } from './state';
@@ -592,7 +592,9 @@ export function momentsRunning(sim: Sim): number {
  */
 export function settleIn(sim: Sim, p: Pawn): boolean {
   const def = BY_ID.get('settlingIn')!;
-  if (!free(sim, p)) return false;
+  // As with any other moment, nobody is kept from work by it; nor sent to bed halfway to the sofa.
+  const runs = runsFor(def) + SCHEDULES.spare;
+  if (!free(sim, p) || !freeFor(sim, p, runs) || sim.minuteOfDay + runs > bedtime(sim, p.life!)) return false;
   if (!def.beats(sim, p, undefined, 0).every((b, k) => canGet(sim, p, spotFor(sim, b.to, p, undefined, k)))) return false;
   begin(sim, def, [p]);
   return true;
