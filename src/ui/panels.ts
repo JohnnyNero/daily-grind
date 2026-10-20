@@ -14,6 +14,7 @@ import { gradedName } from '../sim/grades';
 import { spaceAt, type Space } from '../sim/shared';
 import { POUND, billsDue, flatInfo, goingRate, overpay, pounds, MISSES_ALLOWED, MORTGAGE, LOCKS_PRICE, ALARM_PRICE, ALARM_WEEKLY } from '../sim/economy';
 import { CLEANER_WEEKLY, flatClimate, gasBill, outdoorTemp, seasonName } from '../sim/environment';
+import { dampLine } from '../sim/damp';
 import { answer } from '../sim/chat';
 import { opinionParts, relationships } from '../sim/social';
 import { FACTOR_NAMES, flatScore, scoreFor, type FactorId } from '../sim/impressiveness';
@@ -191,6 +192,8 @@ export class Panels {
             h('div', { className: 'line' }, h('span', {}, 'Noise from next door', h('small', {}, 'Lately, on average')), h('b', {}, cl.noise < 0.3 ? 'Quiet' : cl.noise < 1 ? 'Some' : cl.noise < 2 ? 'Noisy' : 'Very noisy')),
             h('div', { className: 'line' }, h('span', {}, 'Insulated', h('small', {}, 'Outside walls, roof and floor')), h('b', {}, `${Math.round(cl.insulated)} of ${Math.round(cl.outside)}`)),
             h('div', { className: 'line' }, h('span', {}, 'Dirt'), h('b', {}, cl.dirt < 0.2 ? 'Clean' : cl.dirt < 0.5 ? 'A bit grubby' : 'A tip')),
+            // Layout L3: the wettest room, and why.
+            ((d) => h('div', { className: 'line' }, h('span', {}, 'Damp', ...(d.where ? [h('small', {}, d.where)] : [])), h('b', {}, d.word)))(dampLine(sim, id)),
           ),
           ...brokenIn(sim, id).map((f) =>
             h('div', { className: 'line warnline' }, h('span', {}, `Broken ${furnitureDef(f.def).name.toLowerCase()}`, h('small', {}, `Since day ${f.broken}`)), h('button', { type: 'button', className: 'btn', onclick: () => { const p = mend(sim, f.id); this.notify(p ?? `Mended the ${furnitureDef(f.def).name.toLowerCase()}.`, p !== null); this.rerender(); } }, `Mend ${pounds(repairCost(f))}`)),

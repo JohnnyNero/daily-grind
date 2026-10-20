@@ -297,6 +297,9 @@ export interface State {
   dirt: Record<string, number>;
   /** Each flat's temperature, in degrees. */
   temps: Record<string, number>;
+  /** Layout L3: each room's temperature and damp (0 to 1), by the room's first cell "x,s" (heat.ts, damp.ts). */
+  roomTemps?: Record<string, number>;
+  damp?: Record<string, number>;
   /** How noisy each flat has been lately (0 to about 10), for its impressiveness. */
   noiseAvg: Record<string, number>;
   /** The building group chat. */

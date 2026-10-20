@@ -5,15 +5,16 @@
 // Noise, warmth and damp are worked out per room by other chunks (L2 noise, L3 heat and
 // damp). Until they land, the `room*` and `*Why` functions below fall back to today's
 // per-flat values, so every room in a flat reads the same. Wire the real ones in at the
-// seven stubs marked STUB.
+// seven stubs marked STUB (L3 has filled its four).
 
 import { flatInfo, goingRate, pounds } from './economy';
 import { noiseReasons, roomNoise as noiseInRoom } from './acoustics';
-import { flatClimate, tempOf, warmthOf } from './environment';
-import { hasFlag } from './flags';
+import { warmthOf } from './environment';
 import { flatKind, type RoomInfo } from './rooms';
 import type { Sim } from './sim';
-import { LENS } from './tuning';
+import { DAMP, LENS } from './tuning';
+import { roomTemp as heatRoomTemp, warmthReasons } from './heat';
+import { dampReasons, roomDamp as dampRoomDamp } from './damp';
 
 export type Lens = 'none' | 'noise' | 'warmth' | 'damp' | 'rent';
 export const LENSES: readonly Lens[] = ['none', 'noise', 'warmth', 'damp', 'rent'];
@@ -42,33 +43,26 @@ export function roomNoiseWhy(sim: Sim, _made: Map<string, number>, room: number)
   return noiseReasons(sim, room);
 }
 
-/** STUB (L3): degrees in this room. Fallback: the flat's. */
+/** Layout L3: degrees in this room (heat.ts). */
 export function roomTemp(sim: Sim, room: number): number {
-  const flat = sim.layout.rooms[room]?.flat;
-  return flat ? tempOf(sim, flat) : 0;
+  return heatRoomTemp(sim, room);
 }
 
-/** STUB (L3): up to three plain facts behind a room's warmth ("Cold roof", "Radiator"). */
+/** Layout L3: up to three plain facts behind a room's warmth ("Cold roof", "Radiator"). */
 export function roomTempWhy(sim: Sim, room: number): string[] {
-  const flat = sim.layout.rooms[room]?.flat;
-  if (!flat) return [];
-  const c = flatClimate(sim, flat);
-  const out: string[] = [];
-  out.push(c.radiators > 0 ? (c.radiators === 1 ? 'One radiator in the flat' : `${c.radiators} radiators in the flat`) : 'No radiators in the flat');
-  if (c.outside > 0) out.push(c.insulated >= c.outside * 0.5 ? 'Outside walls are lagged' : 'Outside walls are bare');
-  return out;
+  return warmthReasons(sim, room);
 }
 
-/** STUB (L3): damp in this room, 0 (dry) to 1 (running with it). Fallback: the flat's mould flag. */
+/** Layout L3: damp in this room, 0 (dry) to 1, scaled so the mould line reads as "Damp" and over it "Mouldy". */
 export function roomDamp(sim: Sim, room: number): number {
-  const flat = sim.layout.rooms[room]?.flat;
-  return flat && hasFlag(sim, 'mould', flat) ? 1 : 0;
+  return Math.min(1, (dampRoomDamp(sim, room) * LENS_MOULD) / DAMP.mould);
 }
+/** Where the mould line sits on the lens's 0 to 1. */
+const LENS_MOULD = 0.75;
 
-/** STUB (L3): up to three plain facts behind a room's damp ("Leaking shower above", "No extractor"). */
+/** Layout L3: up to three plain facts behind a room's damp ("No window or fan", "Leak from above"). */
 export function roomDampWhy(sim: Sim, room: number): string[] {
-  const flat = sim.layout.rooms[room]?.flat;
-  return flat && hasFlag(sim, 'mould', flat) ? ['Damp and mould'] : [];
+  return dampReasons(sim, room);
 }
 
 // ------------------------------------------------------------------ the readings

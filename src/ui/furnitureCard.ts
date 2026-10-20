@@ -41,6 +41,7 @@ function useOf(def: string): string {
   if (def === 'smokeAlarm') return 'The council checks every let flat has one';
   if (def === 'cctv') return 'A camera on the lobby or stairs';
   if (def === 'intercom') return 'By the street door, so tenants can see who\'s buzzing';
+  if (def === 'extractorFan') return 'Takes the steam out of a bathroom or kitchen, and the smell of tea';
   if (d.offers?.length) {
     const uses = d.offers.map((o) => (o.needsNearby ? `${FOR[o.need]} (with a ${furnitureDef(o.needsNearby).name.toLowerCase()})` : FOR[o.need]));
     return `For ${[...new Set(uses)].join(', ')}`;

@@ -21,7 +21,9 @@ import type { Sim } from './sim';
 import { BASE, STOREY } from './start';
 import { TICKS_PER_HOUR, type Applicant, type Circ, type HouseholdKind, type Life, type Person, type Schedule } from './state';
 import type { Thought } from './thoughts';
-import { FIT, NEEDS as NEED_RATES, SCHEDULES } from './tuning';
+import { DAMP, FIT, NEEDS as NEED_RATES, SCHEDULES } from './tuning';
+import { roomTemp as roomTempL3 } from './heat';
+import { roomDamp as roomDampL3 } from './damp';
 
 export type FitNeed = 'nights' | 'musician' | 'baby' | 'wontClimb' | 'lightSleeper' | 'dog';
 
@@ -72,11 +74,14 @@ export const READINGS = {
     const flats = new Set(heardByBedrooms(sim, flatId).map((room) => sim.layout.rooms[room].flat).filter((f): f is string => !!f && !!flatInfo(sim, f).lease));
     return flats.size;
   },
+  /** Layout L3: the bedrooms' warmth (the flat's, if it has none). */
   temp(sim: Sim, flatId: string): number {
-    return tempOf(sim, flatId);
+    const beds = flatKind(sim, flatId).rooms.filter((r) => r.uses.includes('sleep'));
+    return beds.length > 0 ? beds.reduce((n, r) => n + roomTempL3(sim, r.room), 0) / beds.length : tempOf(sim, flatId);
   },
+  /** Layout L3: a bedroom damp enough to notice, or mould in the flat. */
   damp(sim: Sim, flatId: string): boolean {
-    return hasFlag(sim, 'mould', flatId);
+    return hasFlag(sim, 'mould', flatId) || flatKind(sim, flatId).rooms.some((r) => r.uses.includes('sleep') && roomDampL3(sim, r.room) >= DAMP.damp);
   },
 };
 
