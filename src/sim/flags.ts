@@ -7,14 +7,16 @@
 // flags set (or no readers), the value comes back untouched, so the hooks cost nothing and
 // change nothing until a card sets a flag.
 //
-// Chunk 0 laid down the hooks, the flag list and the helpers. Chunk 1 (the drip) owns this file
-// after that and fills in READERS: what each flag does at each hook. A card chunk that needs a
+// Chunk 0 laid down the hooks, the flag list and the helpers; chunk 1 (the drip) filled in
+// READERS: what each flag does at each hook. A card chunk that needs a
 // new flag adds it to FLAGS here, with what reads it, and says so when it hands back.
 //
-// This file imports only types, so any system can import it without a cycle.
+// This file imports only types and tuning.ts (which imports nothing), so any system can
+// import it without a cycle.
 
 import type { Sim } from './sim';
 import type { Flag, Pawn } from './state';
+import { BURGLARY, DRIP, FLAG_EFFECTS as FX } from './tuning';
 
 // ------------------------------------------------------------------ the flags
 
@@ -104,13 +106,57 @@ export interface FlagContext {
 export type FlagReader<H extends FlagHook> = (sim: Sim, flag: Flag, value: FlagHooks[H], ctx: FlagContext) => FlagHooks[H];
 
 /**
- * What each flag does at each hook. Chunk 1 fills this in, for example:
- *   keyUnderMat: { 'crime.risk': (sim, flag, risk) => Math.min(1, risk * 1.5) },
- *   slowLet: { 'letting.hours': (sim, flag, hours, ctx) => (flag.subject === ctx.flat ? hours + 24 : hours) },
- * `risk:<kind>` effects can be stored as flags too (id `risk:burglary`, `risk:fight`...), with
- * readers on the story hooks.
+ * What each flag does at each hook. A flag whose readBy names only a card's `when`, the
+ * renderer or moments has no entry here: those read it with `hasFlag`. `risk:<kind>` flags
+ * are the `risk` effect's (drip.ts): their subject is the steps, and for a fight or a break-up
+ * `<steps>@<pawn>`, so it moves only that person's chances.
  */
-export const READERS: Record<string, { [H in FlagHook]?: FlagReader<H> }> = {};
+export const READERS: Record<string, { [H in FlagHook]?: FlagReader<H> }> = {
+  slowLet: { 'letting.hours': (_sim, f, hours, ctx) => (f.subject === undefined || f.subject === ctx.flat ? hours + FX.slowLetHours : hours) },
+  nextDoorFriendly: { 'planning.chance': (_sim, _f, chance) => Math.min(1, chance + FX.friendlyPlanning) },
+  nextDoorSore: { 'planning.chance': (_sim, _f, chance) => Math.max(0, chance - FX.sorePlanning) },
+  // The key's there for anyone: the locks count for nothing, and it's a step easier on top.
+  keyUnderMat: { 'crime.risk': (sim, _f, risk) => Math.min(1, (sim.state.security.locks ? risk / BURGLARY.locks : risk) + FX.keyUnderMat * DRIP.riskStep.burglary) },
+  bigBins: { 'bins.overflowing': (sim, _f, over) => over && sim.day % 2 === 0 },
+  owes: { 'outcomes.goodDays': (_sim, f, days, ctx) => (ctx.pawn && String(ctx.pawn.id) === f.subject ? days * FX.owesSooner : days) },
+  estimated: { 'bills.gas': (_sim, _f, pence) => Math.round(pence * FX.estimatedGas) },
+  noEarly: { 'outcomes.payEarly': (_sim, f, early, ctx) => (ctx.pawn && String(ctx.pawn.id) === f.subject ? false : early) },
+  familyKey: { 'crime.risk': (_sim, _f, risk) => Math.min(1, risk + FX.familyKey * DRIP.riskStep.burglary) },
+  strayKey: { 'crime.risk': (_sim, _f, risk) => Math.min(1, risk + FX.strayKey * DRIP.riskStep.burglary) },
+  bars: { 'crime.ways': (_sim, f, ways) => ways.filter((w) => !(w.entry === 'window' && (f.subject === undefined || w.flat === f.subject))) },
+  tape: { 'crime.risk': (_sim, _f, risk) => Math.min(1, risk + FX.tape * DRIP.riskStep.burglary) },
+  lobbySofa: { 'dirt.shared': (_sim, _f, dirt) => dirt * FX.lobbySofaDirt },
+  squatter: { 'upkeep.wear': (_sim, f, wear, ctx) => (f.subject === ctx.flat ? wear * FX.squatterWear : wear) },
+  // The `risk` effect (drip.ts): a step up (or down) for some days.
+  'risk:burglary': { 'crime.risk': (_sim, f, risk) => Math.max(0, Math.min(1, risk + riskSteps(f) * DRIP.riskStep.burglary)) },
+  'risk:fight': { 'story.fight': (_sim, f, chance, ctx) => (riskAbout(f, ctx) ? storyStep(chance, riskSteps(f)) : chance) },
+  'risk:breakup': { 'story.split': (_sim, f, chance, ctx) => (riskAbout(f, ctx) ? storyStep(chance, riskSteps(f)) : chance) },
+  'risk:party': { 'story.party': (_sim, f, chance, ctx) => (riskAbout(f, ctx) ? storyStep(chance, riskSteps(f)) : chance) },
+};
+
+/** The steps in a `risk:` flag's subject ("2", or "1@42"). */
+export function riskSteps(f: Flag): number {
+  return Number((f.subject ?? '1').split('@')[0]) || 0;
+}
+
+/** A `risk:` flag about one person (or one flat) counts only for them; one about nobody counts for everyone. */
+function riskAbout(f: Flag, ctx: FlagContext): boolean {
+  const who = f.subject?.split('@')[1];
+  if (who === undefined) return true;
+  return String(ctx.pawn?.id) === who || String(ctx.other?.id) === who || ctx.flat === who;
+}
+
+/** A share more (or less) a step, never above certain. */
+function storyStep(chance: number, steps: number): number {
+  return Math.max(0, Math.min(1, chance * (1 + steps * DRIP.riskStep.story)));
+}
+
+/** The hooks a flag says it's read at (the rest of readBy is cards, the renderer and moments). */
+export function hooksOf(def: FlagDef): string[] {
+  return def.readBy.filter((r) => HOOK_NAMES.includes(r as FlagHook));
+}
+
+export const HOOK_NAMES: FlagHook[] = ['crime.risk', 'crime.ways', 'council.issues', 'upkeep.wear', 'planning.chance', 'letting.hours', 'outcomes.goodDays', 'outcomes.payEarly', 'expect.target', 'bills.gas', 'bins.overflowing', 'dirt.shared', 'story.weights', 'story.fight', 'story.party', 'story.split'];
 
 /** The value a system should use, after any live flags have had their say. */
 export function readFlags<H extends FlagHook>(sim: Sim, hook: H, value: FlagHooks[H], ctx: FlagContext = {}): FlagHooks[H] {

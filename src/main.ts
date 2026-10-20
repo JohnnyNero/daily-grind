@@ -1,7 +1,7 @@
 import { Renderer } from './render/renderer';
 import { deserialize, serialize } from './sim/save';
 import { Sim } from './sim/sim';
-import { planTicks, quietNight } from './sim/pace';
+import { planTicks, quietNight, skipToMorning } from './sim/pace';
 import { BuildUi } from './ui/buildUi';
 import { el } from './ui/dom';
 import { Hud } from './ui/hud';
@@ -11,7 +11,8 @@ import { FurnitureCard } from './ui/furnitureCard';
 import { furnitureAt } from './sim/build';
 import { spaceAt } from './sim/shared';
 import { HandoverUi } from './ui/handover';
-import { CardTray } from './ui/cards';
+import { CardTray, markerOf } from './ui/cards';
+import { openCards } from './sim/drip';
 import { ProjectBar } from './ui/project';
 
 const AUTOSAVE_MS = 30_000;
@@ -46,6 +47,8 @@ function play(sim: Sim): void {
   const renderer = new Renderer(canvas, sim);
   let speed = 1;
   let resetting = false;
+  /** Skip to morning is running (spec 0.2). The speed you picked is untouched and carries on after. */
+  let skipping = false;
 
   const panels = new Panels(sim, (text, bad) => hud.notify(text, bad));
   const hud = new Hud(sim, panels, (s) => {
@@ -53,6 +56,9 @@ function play(sim: Sim): void {
     hud.showSpeed(speed);
   });
   hud.showSpeed(speed);
+  hud.onSkip = () => {
+    skipping = true;
+  };
   panels.onClose = () => {
     renderer.selectedPawn = null;
   };
@@ -117,7 +123,38 @@ function play(sim: Sim): void {
   el('recentre').addEventListener('click', fitView);
   // The drip's tray (ui/cards.ts) and the next thing to save for (ui/project.ts).
   const tray = new CardTray(sim, el('tray'));
-  tray.onNotify = (text) => hud.notify(text);
+  tray.onNotify = (text) => hud.notify(text, true);
+  // Opening a card pans the camera to what it's about, once the open card has taken its room.
+  let focusCard: number | null = null;
+  let pan: { from: { scale: number; ox: number; oy: number }; to: { scale: number; ox: number; oy: number }; start: number } | null = null;
+  tray.onFocus = (id) => {
+    focusCard = id;
+  };
+  /** The alerts column, which edge chips keep clear of. */
+  const alertsBox = () => {
+    const r = el('alerts').getBoundingClientRect();
+    return { x: r.left, y: r.top, w: r.width, h: r.height };
+  };
+  function startPan(id: number, now: number): void {
+    const c = openCards(sim).find((x) => x.id === id);
+    const m = c ? markerOf(sim, c) : null;
+    if (!c || !m) return;
+    const cam = renderer.camera;
+    const from = { ...cam };
+    const box = viewBox();
+    const p = c.pawn !== undefined ? sim.state.pawns.find((x) => x.id === c.pawn) : undefined;
+    const flat = sim.layout.flat(c.flat ?? p?.life?.flat ?? '');
+    if (cam.scale < 2 && flat) {
+      // Zoomed right out: zoom to the flat.
+      const cells = sim.layout.flatCells(flat).map((n) => sim.layout.xs(n));
+      const xs = cells.map(([x]) => x);
+      const ss = cells.map(([, s]) => s);
+      renderer.focus(Math.min(...xs), Math.max(...xs), Math.min(...ss), Math.max(...ss), box);
+    }
+    const to = { scale: cam.scale, ox: box.x + box.w / 2 - m.wx * cam.scale, oy: box.y + box.h / 2 - (m.wy + 20) * cam.scale };
+    Object.assign(cam, from);
+    pan = { from, to, start: now };
+  }
   const project = new ProjectBar(sim, el('project-bar'));
   project.onOpen = (flat) => {
     panels.close();
@@ -136,6 +173,8 @@ function play(sim: Sim): void {
         build.tap(x, y);
         return;
       }
+      // A card's `!` or edge chip opens it; with a card open, a tap on the building folds it.
+      if (tray.tap(renderer.camera, x, y, viewBox(), alertsBox())) return;
       const p = renderer.pawnAt(x, y);
       const was = card.showing;
       card.hide();
@@ -231,18 +270,41 @@ function play(sim: Sim): void {
   function frame(now: number): void {
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
-    // Quiet nights (everyone asleep or out, nothing happening) run faster until something stirs.
-    const quiet = quietNight(sim);
-    const plan = planTicks(dt, speed, quiet, carry);
-    carry = plan.carry;
-    const ticks = plan.ticks;
-    sim.run(ticks);
-    hud.showNight(quiet && speed > 0);
+    let ticks = 0;
+    if (skipping) {
+      // Skip to morning: the same ticks, as many as fit in a frame, until 07:00 or something stirs.
+      const before = sim.state.tick;
+      const start = performance.now();
+      let result: 'morning' | 'woke' | 'more';
+      do result = skipToMorning(sim, 2000);
+      while (result === 'more' && performance.now() - start < 12);
+      ticks = sim.state.tick - before;
+      carry = 0;
+      if (result !== 'more') {
+        skipping = false;
+        if (result === 'woke') hud.notify('Something stirred, so the night stopped skipping.');
+      }
+    } else {
+      const plan = planTicks(dt, speed, carry);
+      carry = plan.carry;
+      ticks = plan.ticks;
+      sim.run(ticks);
+    }
+    hud.showSkip(skipping ? 'skipping' : quietNight(sim) ? 'offer' : 'off');
     if (sim.state.repossessed !== undefined && el('endscreen').hidden) {
       el('endscreen').hidden = false;
       el('end-body').textContent = `Four missed mortgage payments, and on day ${sim.state.repossessed} Northfold Building Society took the building. The tenants have been told. Some of them are pleased.`;
       speed = 0;
       hud.showSpeed(speed);
+    }
+    if (pan) {
+      const t = Math.min(1, (now - pan.start) / 400);
+      const e = t * (2 - t);
+      const cam = renderer.camera;
+      cam.scale = pan.from.scale + (pan.to.scale - pan.from.scale) * e;
+      cam.ox = pan.from.ox + (pan.to.ox - pan.from.ox) * e;
+      cam.oy = pan.from.oy + (pan.to.oy - pan.from.oy) * e;
+      if (t >= 1) pan = null;
     }
     const c = renderer.camera;
     const view = `${c.ox}|${c.oy}|${c.scale}|${renderer.selectedPawn}|${renderer.build.version}|${sim.version}|${renderer.overlay}`;
@@ -250,6 +312,10 @@ function play(sim: Sim): void {
     lastView = view;
     hud.update(now);
     tray.update(now);
+    if (focusCard !== null) {
+      startPan(focusCard, now);
+      focusCard = null;
+    }
     project.update();
     handover.update();
     build.updateNeeds();

@@ -6,6 +6,7 @@ import { linesFor } from '../sim/outcomes';
 import type { Sim } from '../sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE } from '../sim/state';
 import { el, h, hhmm } from './dom';
+import { cardsWaiting } from './cards';
 import { dayName, face, likingColour, type Panels, type Showing } from './panels';
 
 interface Alert {
@@ -20,8 +21,9 @@ interface Alert {
 export class Hud {
   private dayEl = el('day');
   private timeEl = el('time');
-  /** Skipping a quiet night. */
-  private night = false;
+  /** The Skip to morning button (spec 0.2): off, offered on a quiet night, or skipping. */
+  private skip: 'off' | 'offer' | 'skipping' = 'off';
+  private skipEl = el<HTMLButtonElement>('skip-morning');
   private moneyEl = el('money');
   private changeEl = el('money-change');
   private moneyPop = el('money-pop');
@@ -33,6 +35,8 @@ export class Hud {
   private lastAlerts = '';
   private lastSlow = 0;
   onBuild: () => void = () => {};
+  /** Skip to morning was tapped. */
+  onSkip: () => void = () => {};
 
   constructor(private readonly sim: Sim, private readonly panels: Panels, private readonly setSpeed: (s: number) => void) {
     // The dock's height changes (tenants come and go, it shrinks while a tab is open), and
@@ -44,6 +48,9 @@ export class Hud {
     for (const b of document.querySelectorAll<HTMLButtonElement>('.speeds [data-speed]')) {
       b.addEventListener('click', () => this.setSpeed(Number(b.dataset.speed)));
     }
+    this.skipEl.addEventListener('click', () => {
+      if (this.skip === 'offer') this.onSkip();
+    });
     this.toastEl.addEventListener('click', () => {
       this.toastEl.hidden = true;
       this.toastUntil = 0;
@@ -100,8 +107,13 @@ export class Hud {
     }
   }
 
-  showNight(on: boolean): void {
-    this.night = on;
+  /** Offers Skip to morning on a quiet night, and says so while it's skipping. */
+  showSkip(state: 'off' | 'offer' | 'skipping'): void {
+    if (state === this.skip) return;
+    this.skip = state;
+    this.skipEl.hidden = state === 'off';
+    this.skipEl.disabled = state === 'skipping';
+    this.skipEl.textContent = state === 'skipping' ? 'Skipping to morning…' : 'Skip to morning';
   }
 
   notify(text: string, bad = false): void {
@@ -112,8 +124,9 @@ export class Hud {
     const sim = this.sim;
     const st = sim.state;
     this.dayEl.textContent = `Day ${sim.day} · ${dayName(sim.day)}`;
-    this.timeEl.textContent = hhmm(sim.minuteOfDay) + (this.night ? ' ☾»' : '');
-    this.timeEl.title = this.night ? 'Everyone is asleep or out, so the night is passing quickly' : '';
+    this.timeEl.textContent = hhmm(sim.minuteOfDay);
+    // A card waiting while Build or a panel hides the tray: a red dot on Done and Close (style.css).
+    document.body.classList.toggle('cards-waiting', cardsWaiting(sim));
     this.moneyEl.textContent = pounds(st.money);
     this.moneyEl.classList.toggle('negative', st.money < 0);
     // News from the sim becomes notices.
