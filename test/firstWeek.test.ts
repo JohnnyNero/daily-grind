@@ -22,14 +22,15 @@ describe('the first week', () => {
     }
   });
 
-  it('scripts 2 to 3 cards a day for days 1 to 7, all of them real cards, at least 240 minutes apart', () => {
+  it('scripts 0 or 1 cards a day for days 1 to 7 (day 1 not card-led, a card most days), all of them real cards', () => {
     for (let day = 1; day <= 7; day++) {
       const beats = FIRST_WEEK_SCRIPT.filter((b) => b.day === day).sort((a, b) => a.minute - b.minute);
-      expect(beats.length, `day ${day}`).toBeGreaterThanOrEqual(2);
-      expect(beats.length, `day ${day}`).toBeLessThanOrEqual(3);
+      expect(beats.length, `day ${day}`).toBeLessThanOrEqual(1);
       for (const b of beats) expect(cardDef(b.card), b.card).toBeDefined();
       for (let i = 1; i < beats.length; i++) expect(beats[i].minute - beats[i - 1].minute).toBeGreaterThanOrEqual(DRIP.minGap);
     }
+    expect(FIRST_WEEK_SCRIPT.length).toBeGreaterThanOrEqual(5);
+    expect(FIRST_WEEK_SCRIPT.filter((b) => b.day === 1).every((b) => b.minute >= 18 * 60)).toBe(true);
     expect(FIRST_WEEK_SCRIPT.every((b) => b.day >= 1 && b.day <= 7)).toBe(true);
   });
 

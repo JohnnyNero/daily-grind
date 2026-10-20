@@ -75,13 +75,15 @@ export function scriptActive(sim: Sim): boolean {
 }
 
 /**
- * What the day's budget would be now (1.2): two, less one for each of a happening running or
- * due, two letters waiting, two applicants waiting, someone moving in or out today, and three
- * cards in a row ignored.
+ * What the day's budget would be now (1.2, turned down): one card on about every other day
+ * (DRIP.dayChance, and less while works are drawn or going), less one for each of a happening
+ * running or due, two letters waiting, two applicants waiting, someone moving in or out today,
+ * and three cards in a row ignored.
  */
 export function dayBudget(sim: Sim): number {
   const st = sim.state;
-  let n = DRIP.perDay;
+  const building = !!(st.works.job || st.works.plan);
+  let n = random(st) < DRIP.dayChance * (building ? DRIP.buildingFactor : 1) ? DRIP.perDay : 0;
   if (st.story.running.length > 0 || st.council.visitDay === sim.day) n--;
   if (st.post.filter((l) => l.choices && l.chosen === undefined).length >= 2) n--;
   if (st.applicants.length >= 2) n--;
@@ -102,7 +104,7 @@ function setBudget(sim: Sim): void {
   delete d.cooldowns.script;
   d.budget = dayBudget(sim);
   // Yesterday brought both its cards: one today. Two a day, day after day, is a queue, not a drip.
-  if (d.cooldowns.dealtDay === sim.day - 1 && (d.cooldowns.dealt ?? 0) >= DRIP.perDay) d.budget = Math.min(d.budget, DRIP.perDay - 1);
+  if (DRIP.perDay > 1 && d.cooldowns.dealtDay === sim.day - 1 && (d.cooldowns.dealt ?? 0) >= DRIP.perDay) d.budget = Math.min(d.budget, DRIP.perDay - 1);
   // A card in the night spent today's budget.
   if ((d.cooldowns.night ?? -1) >= dripDayStart(sim) - (24 * 60 - DRIP.wakeTo + DRIP.wakeFrom) * TICKS_PER_MINUTE) d.budget = Math.max(0, d.budget - 1);
 }
