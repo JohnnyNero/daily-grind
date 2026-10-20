@@ -20,6 +20,7 @@ import type { Sim } from './sim';
 import { rememberAbout } from './social';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Card, type Drip, type Pawn, type TaleKind } from './state';
 import { tale } from './tales';
+import { addVisitor, visitorRoom } from './visitors';
 import { remember } from './thoughts';
 import { DRIP, EXPECT, FLAG_EFFECTS, SECONDS_PER_GAME_MINUTE, UPKEEP } from './tuning';
 import { breakIt, bookInspection, mend } from './upkeep';
@@ -236,11 +237,25 @@ function lifeOf(sim: Sim, def: CardDef, subject: CardSubject): number {
   }
 }
 
+/**
+ * Cards about someone at the door, and who: the drip puts them on the map when the card opens
+ * (a card's `when` and `resolve` never change the state). Roles are visitors.ts's.
+ */
+export const CARD_VISITORS: Record<string, string> = {
+  parcel: 'courier',
+  meterReader: 'meterReader',
+  meterAgain: 'meterReader',
+  manInAVan: 'van',
+};
+
 /** Puts a card in the tray, no questions asked. */
 function put(sim: Sim, def: CardDef, subject: CardSubject): Card {
   const st = sim.state;
   const d = st.drip;
   const card = makeCard(sim, def, subject, st.tick + lifeOf(sim, def, subject));
+  // Someone at the door the card's about, if they aren't about already (visitors.ts walks them).
+  const role = CARD_VISITORS[def.id];
+  if (role && card.visitor === undefined && visitorRoom(sim)) card.visitor = addVisitor(sim, role).id;
   d.open.push(card);
   d.lastCard = st.tick;
   d.cooldowns[def.id] = st.tick + def.cooldownDays * TICKS_PER_DAY;
@@ -440,9 +455,15 @@ export function applyEffect(sim: Sim, card: Card, e: Effect): void {
     case 'chat':
       post(sim, null, rest(1));
       return;
-    case 'thread':
-      if (d.threads.length < DRIP.maxThreads) d.threads.push({ card: a, due: st.tick + Math.round((Number(b) || 24) * TICKS_PER_HOUR), data: subjectData(card) });
+    case 'thread': {
+      // `thread:<card>:<hours>:<key>=<value>,...`: anything after the hours goes in the follow-up's data too.
+      const extra = Object.fromEntries(rest(3).split(',').filter((kv) => kv.includes('=')).map((kv) => {
+        const [k, v] = kv.split('=');
+        return [k, Number.isNaN(Number(v)) ? v : Number(v)];
+      }));
+      if (d.threads.length < DRIP.maxThreads) d.threads.push({ card: a, due: st.tick + Math.round((Number(b) || 24) * TICKS_PER_HOUR), data: { ...subjectData(card), ...extra } });
       return;
+    }
     case 'promise':
       d.promises.push({ what: a, arg: b, byDay: sim.day + (Number(c) || 7), pawn: card.pawn ?? -1 });
       return;
