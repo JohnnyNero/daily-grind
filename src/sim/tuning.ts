@@ -181,7 +181,7 @@ export const IMPRESSIVE = {
 
 /** How fast each need runs down while awake, per game hour. Warmth and quiet come from the building instead. */
 export const DECAY = {
-  sleep: 1 / 17,
+  sleep: 1 / 20,
   food: 1 / 7,
   hygiene: 1 / 30,
   bladder: 1 / 5,
@@ -220,9 +220,13 @@ export const NEEDS = {
   /** A morning wash below this; tea between six and eight below this. */
   morningWash: 0.85,
   teatime: 0.7,
-  /** Musicians practise when fun's below this, with this chance, for this much fun. */
+  /**
+   * Musicians practise when fun's below this, with this chance, for this much fun. (Chances like
+   * this are rolled each time someone decides what to do next; with walks three times the game
+   * minutes they decide about 15% less often an hour, so it went up from 0.3 to keep the evenings.)
+   */
   practiseUnder: 0.85,
-  practiseChance: 0.3,
+  practiseChance: 0.35,
   practiseFun: 0.3,
   /** They tidy when the flat's dirtier than this (house-proud sooner), taking off this much. */
   tidyAt: 0.45,
@@ -233,6 +237,13 @@ export const NEEDS = {
   /** Chance of a grim commute home from work. */
   commute: 0.3,
 };
+
+/**
+ * Game minutes off the map at the pub or on a walk, when there's no fun to be had at home.
+ * (60 to 150 before the faster clock; the walk to the end of the street and back now takes
+ * about 50 game minutes on its own, so the time out is shorter and the whole trip about the same.)
+ */
+export const OUT_FOR_FUN: [number, number] = [30, 120];
 
 /** What being out sorts out, by where they went. */
 export const OUTINGS: Record<string, Record<string, number>> = {
@@ -475,9 +486,13 @@ export const OPINION = {
 };
 
 export const TALK = {
-  /** Minutes between someone's conversations, and the chance each minute that someone free starts one. */
+  /**
+   * Minutes between someone's conversations, and the chance each minute that someone free starts
+   * one. (The chance was 1/6 when a minute was 60 ticks: passing on the stairs takes the same
+   * ticks, so three times the minutes, and it's a third a minute to give the same odds a meeting.)
+   */
   gapMinutes: 25,
-  chance: 1 / 6,
+  chance: 1 / 18,
   /** How far apart (in tiles) people can be to talk. */
   reach: 3,
   /** How often each kind of talk comes up, before what they think of each other. */
@@ -940,9 +955,9 @@ export const SHARED_USE = {
   bbqTemp: 15,
   bbqFrom: 12 * 60,
   bbqTo: 19 * 60,
-  /** Each time they're idle at home: the chance of going down to the garden; of firing up the grill; of joining a barbecue already going. */
-  leisureChance: 0.12,
-  bbqChance: 0.04,
+  /** Each time they're idle at home: the chance of going down to the garden; of firing up the grill; of joining a barbecue already going. (Up 15% for the slower decisions; see `practiseChance`.) */
+  leisureChance: 0.14,
+  bbqChance: 0.045,
   /** Sociable types fire it up this much sooner. */
   sociableBbq: 3,
   joinChance: 0.6,
@@ -1014,7 +1029,7 @@ export const DRIP = {
   wakeFrom: 7 * 60,
   wakeTo: 23 * 60,
   tryEvery: 30,
-  tryChance: 0.08,
+  tryChance: 0.1,
   lateFrom: 15 * 60,
   /** Least time between two cards on the same day. */
   minGap: 240,
@@ -1041,6 +1056,8 @@ export const DRIP = {
   beatWait: 120,
   /** Cards that touch something live (a thread's or promise's person) weigh this much more. */
   liveWeight: 1.5,
+  /** Each source's weight in the draw: the street's cards are always about, so they'd crowd out the building's own (spec 6: at most 30%). */
+  sourceWeight: { tenant: 1, building: 1, street: 0.1 } as Record<string, number>,
   /**
    * What a step of `risk` is worth: burglary risk (0 to 1) goes up this much a step, and the
    * storyteller's chance of a fight, a break-up or a party goes up this share a step.
@@ -1096,7 +1113,7 @@ export const SCHEDULES = {
   /** On a working day, up this long before setting off (a wash, breakfast). */
   upBefore: 70,
   /** Getting up on a day in, and bedtime (minutes of the day; past 24 * 60 is after midnight). Night owls add two hours to bed and lie in. */
-  wake: { office: 8 * 60 + 30, early: 7 * 60 + 30, late: 9 * 60 + 30, nights: 10 * 60, home: 7 * 60 + 45, student: 9 * 60 + 30, retired: 7 * 60 } as Record<string, number>,
+  wake: { office: 8 * 60 + 30, early: 7 * 60 + 30, late: 9 * 60 + 30, nights: 10 * 60, home: 7 * 60, student: 9 * 60 + 30, retired: 7 * 60 } as Record<string, number>,
   bed: { office: 23 * 60, early: 23 * 60, late: 24 * 60 + 30, nights: 25 * 60, home: 23 * 60, student: 24 * 60 + 30, retired: 22 * 60 + 30 } as Record<string, number>,
   /** The night before an early shift, and anyone with the early-night habit. */
   earlyBed: 21 * 60 + 30,

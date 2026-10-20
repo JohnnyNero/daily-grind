@@ -27,7 +27,7 @@ import { post, recently } from './chat';
 import { rememberAbout } from './social';
 import { hhmm } from './time';
 import { stat } from './stat';
-import { DECAY, ITEMS, NEEDS, OUTINGS, SCHEDULES, SEEK, SHARED_USE, START_NEEDS } from './tuning';
+import { DECAY, ITEMS, NEEDS, OUT_FOR_FUN, OUTINGS, SCHEDULES, SEEK, SHARED_USE, START_NEEDS } from './tuning';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -292,8 +292,8 @@ function decide(sim: Sim, p: Pawn): void {
   if (needs.fun < SEEK.fun) {
     if (tryUse(sim, p, flat, 'fun')) return;
     // Not if it'd make them late for work.
-    if (m >= 10 * 60 && m < 22 * 60 && freeFor(sim, p, 150 + 60)) {
-      leaveFor(sim, p, random(st) < 0.5 ? 'Out at the pub' : 'Out for a walk', m + randInt(st, 60, 150));
+    if (m >= 10 * 60 && m < 22 * 60 && freeFor(sim, p, OUT_FOR_FUN[1] + 60)) {
+      leaveFor(sim, p, random(st) < 0.5 ? 'Out at the pub' : 'Out for a walk', m + randInt(st, OUT_FOR_FUN[0], OUT_FOR_FUN[1]));
       return;
     }
   }

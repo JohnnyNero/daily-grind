@@ -33,9 +33,13 @@ interface Marks {
 }
 
 interface Day {
-  /** Cards from the budget (not follow-ups) and follow-ups, with the night before counted in. */
+  /** Cards from the budget and follow-ups (threads coming due), with the night before counted in. */
   drip: number;
   followUps: number;
+  /** New letters with choices, new applicants and chat requests: what the decisions were. */
+  letters: number;
+  applicants: number;
+  chats: number;
   /** A happening running or due, or two letters with choices waiting, at 07:00. */
   busy: boolean;
   decisions: number;
@@ -48,7 +52,7 @@ interface Run {
   gaps: number[];
   sources: Record<string, number>;
   answered: Marks[];
-  /** Follow-up and promise cards that came, by week. */
+  /** Threads that came back as cards, and promises that fell due (kept or broken), by week. */
   cameBack: number[];
   /** Each Sunday's recap: how many tales it told, and how many came from cards. */
   recaps: { day: number; tales: number; fromCards: number }[];
@@ -120,6 +124,9 @@ function stillShows(sim: Sim, m: Marks, opened: { def: string; tick: number }[],
   return false;
 }
 
+/** The tale kinds only the drip's cards write (state.ts, TaleKind). */
+const CARD_TALES = new Set<string>(['parcelNicked', 'lockout', 'cowboy', 'leak', 'cat', 'kittens', 'brokePromise', 'pritchard', 'fakeMeterMan', 'deposit', 'squatter', 'badTurn']);
+
 const runs = new Map<string, Run>();
 
 function play(seed: number, mode: Mode): Run {
@@ -135,24 +142,28 @@ function play(seed: number, mode: Mode): Run {
       ? 'ignore'
       : (s, c) => answerNoting(s, c, mode === 'decent' ? 0 : mode === 'ruthless' ? 1 : toss() < 0.5 ? 0 : 1, run.answered);
   const day = (d: number): Day => {
-    if (!run.days.has(d)) run.days.set(d, { drip: 0, followUps: 0, busy: false, decisions: 0 });
+    if (!run.days.has(d)) run.days.set(d, { drip: 0, followUps: 0, busy: false, decisions: 0, letters: 0, applicants: 0, chats: 0 });
     return run.days.get(d)!;
   };
   const seenCards = new Set<number>();
   const seenLetters = new Set<number>(st.post.map((l) => l.id));
   const seenApplicants = new Set<number>(st.applicants.map((a) => a.id));
+  const seenChats = new Set<number>(st.chat.map((c) => c.id));
+  const promised = new Set<string>();
   const opened: { def: string; tick: number }[] = [];
   const bubbles = new Map<number, string>();
   const onMap = new Set<number>();
   const moments = new Set<string>();
   let lastLog = -1;
-  /** Ticks cards were resolved at: a tale written then is the card's. */
-  const resolved = new Set<number>();
   let lastEvent = -1;
   const recapped = new Set<number>();
   const end = DAYS * TICKS_PER_DAY;
   while (st.tick < end) {
+    // Threads due by the end of this minute: a card of one of these that opens now is it coming back.
+    const due = new Set(st.drip.threads.filter((t) => t.due <= st.tick + TICKS_PER_MINUTE).map((t) => t.card));
+    const followUpAt = st.drip.cooldowns.followUp;
     sim.run(TICKS_PER_MINUTE);
+    const week = Math.floor((sim.day - 1) / 7);
     const m = sim.minuteOfDay;
     const waking = m >= WAKE && m < SLEEP;
     // Night cards spend the next day's budget, so they count for that day.
@@ -166,21 +177,34 @@ function play(seed: number, mode: Mode): Run {
       const def = cardDefOf(c.def)!;
       opened.push({ def: c.def, tick: st.tick });
       run.sources[def.source] = (run.sources[def.source] ?? 0) + 1;
-      if (def.followUp) day(cardDay).followUps++;
+      const thread = due.has(c.def) && st.drip.cooldowns.followUp !== followUpAt;
+      // The first week's script deals its own (followUp) cards; after that a followUp card only comes from a thread.
+      if (thread || def.followUp) day(cardDay).followUps++;
       else day(cardDay).drip++;
       day(cardDay).decisions++;
-      if (def.followUp || def.kind === 'promise') run.cameBack[Math.floor((sim.day - 1) / 7)]++;
+      if (thread) run.cameBack[week]++;
+    }
+    // A promise falling due: kept or broken, someone remembers it.
+    for (const p of people(sim)) {
+      for (const x of p.life!.memories) {
+        if ((x.id !== 'keptPromise' && x.id !== 'brokePromise') || promised.has(`${p.id}|${x.at}`)) continue;
+        promised.add(`${p.id}|${x.at}`);
+        run.cameBack[week]++;
+      }
     }
     for (const l of st.post) {
       if (seenLetters.has(l.id)) continue;
       seenLetters.add(l.id);
-      if (l.choices) day(sim.day).decisions++;
+      if (l.choices) {
+        day(sim.day).decisions++;
+        day(sim.day).letters++;
+      }
       // The Sunday recap: which tales it told.
       const week = /^Week (\d+) at /.exec(l.title);
       if (week) {
         const told = st.chronicle.tales.filter((t) => l.body.includes(t.text) || l.body.includes(t.text.charAt(0).toLowerCase() + t.text.slice(1)));
         for (const t of told) recapped.add(t.id);
-        const fromCards = told.filter((t) => resolved.has(t.tick));
+        const fromCards = told.filter((t) => CARD_TALES.has(t.kind));
         run.recaps.push({ day: sim.day, tales: told.length, fromCards: fromCards.length });
       }
     }
@@ -188,11 +212,16 @@ function play(seed: number, mode: Mode): Run {
       if (seenApplicants.has(a.id)) continue;
       seenApplicants.add(a.id);
       day(sim.day).decisions++;
+      day(sim.day).applicants++;
+    }
+    for (const c of st.chat) {
+      if (seenChats.has(c.id)) continue;
+      seenChats.add(c.id);
+      if (c.choices) day(sim.day).chats++;
     }
     // Cards resolved by being ignored: someone should hold it against you.
     for (const e of st.drip.log) {
       if (e.tick <= lastLog) continue;
-      resolved.add(e.tick);
       if (e.chose === 'ignored') {
         run.ignored++;
         if (people(sim).some((p) => p.life!.memories.some((x) => (x.id === 'ignored' || x.id === 'leftToIt') && x.at === e.tick))) run.ignoredMarked++;
@@ -327,8 +356,9 @@ describe('the pacing soak', () => {
         const all = Object.values(r.sources).reduce((n, x) => n + x, 0);
         const checked = r.answered.filter((a) => a.live !== undefined);
         console.log(
-          `seed ${seed} ${mode.padEnd(14)} drip/day wk2 ${mean(drip.slice(0, 7)).toFixed(2)} wk3 ${mean(drip.slice(7)).toFixed(2)} max ${Math.max(...drip)}` +
-            ` | decisions/day ${mean(range(8, DAYS).map((d) => r.days.get(d)?.decisions ?? 0)).toFixed(2)} | open max ${r.maxOpen}` +
+          `seed ${seed} ${mode.padEnd(14)} drip/day wk2 ${mean(drip.slice(0, 7)).toFixed(2)} wk3 ${mean(drip.slice(7)).toFixed(2)} [${drip.join('')}${range(8, DAYS).map((d) => (r.days.get(d)?.busy ? 'b' : '.')).join('')}]` +
+            ` | decisions/day ${mean(range(8, DAYS).map((d) => r.days.get(d)?.decisions ?? 0)).toFixed(2)}` +
+            ` (letters ${mean(range(8, DAYS).map((d) => r.days.get(d)?.letters ?? 0)).toFixed(2)} applicants ${mean(range(8, DAYS).map((d) => r.days.get(d)?.applicants ?? 0)).toFixed(2)} chat ${mean(range(8, DAYS).map((d) => r.days.get(d)?.chats ?? 0)).toFixed(2)} follow-ups ${mean(range(8, DAYS).map((d) => r.days.get(d)?.followUps ?? 0)).toFixed(2)}) | open max ${r.maxOpen}` +
             ` | visible>=2 ${((100 * r.visible.filter((n) => n >= 2).length) / r.visible.length).toFixed(1)}% | gap p90 ${percentile(r.gaps, 0.9)} p50 ${percentile(r.gaps, 0.5)}` +
             ` | street ${((100 * (r.sources.street ?? 0)) / Math.max(1, all)).toFixed(0)}% of ${all} | marks ${checked.filter((a) => a.live).length}/${checked.length}` +
             ` | back ${r.cameBack.join(',')} | recaps ${r.recaps.map((x) => `${x.fromCards}/${x.tales}`).join(' ')} | liking ${r.liking.map((x) => x.toFixed(0)).join(',')} | ignored ${r.ignoredMarked}/${r.ignored}`,

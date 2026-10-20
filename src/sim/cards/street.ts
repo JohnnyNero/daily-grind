@@ -197,7 +197,7 @@ const parcel: CardDef = {
   id: 'parcel',
   source: 'street',
   kind: 'door',
-  cooldownDays: 3,
+  cooldownDays: 6,
   turnsOn: ['locks', 'intercom', 'hidden traits'],
   icon: 'van',
   when(sim) {

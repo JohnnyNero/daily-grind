@@ -101,6 +101,8 @@ function setBudget(sim: Sim): void {
   }
   delete d.cooldowns.script;
   d.budget = dayBudget(sim);
+  // Yesterday brought both its cards: one today. Two a day, day after day, is a queue, not a drip.
+  if (d.cooldowns.dealtDay === sim.day - 1 && (d.cooldowns.dealt ?? 0) >= DRIP.perDay) d.budget = Math.min(d.budget, DRIP.perDay - 1);
   // A card in the night spent today's budget.
   if ((d.cooldowns.night ?? -1) >= dripDayStart(sim) - (24 * 60 - DRIP.wakeTo + DRIP.wakeFrom) * TICKS_PER_MINUTE) d.budget = Math.max(0, d.budget - 1);
 }
@@ -162,7 +164,10 @@ export function dripMinute(sim: Sim): void {
   if (options.length === 0) return;
   const late = m >= DRIP.lateFrom && d.lastCard < dripDayStart(sim);
   if (random(st) >= DRIP.tryChance * (late ? 2 : 1)) return;
-  if (deal(sim, options)) d.budget--;
+  if (!deal(sim, options)) return;
+  d.budget--;
+  d.cooldowns.dealt = d.cooldowns.dealtDay === sim.day ? (d.cooldowns.dealt ?? 0) + 1 : 1;
+  d.cooldowns.dealtDay = sim.day;
 }
 
 /** Room in the tray, and long enough since the last card. */
@@ -212,10 +217,21 @@ function candidates(sim: Sim, night: boolean): Option[] {
   return out;
 }
 
+/**
+ * Draws a card, then who it's about. Cards are weighed, not subjects: a card that could be
+ * about anyone (a parcel, a drill) weighs what its likeliest subject does, not that times
+ * the number of tenants, or it crowds out the cards about one particular person.
+ */
 function deal(sim: Sim, options: Option[]): Card | null {
-  const total = options.reduce((n, o) => n + o.weight, 0);
-  let r = random(sim.state) * total;
-  const o = options.find((x) => (r -= x.weight) < 0) ?? options[options.length - 1];
+  const byCard = new Map<CardDef, Option[]>();
+  for (const o of options) byCard.set(o.def, [...(byCard.get(o.def) ?? []), o]);
+  const cards = [...byCard.values()].map((os) => ({ os, weight: Math.max(...os.map((o) => o.weight)) * (DRIP.sourceWeight[os[0].def.source] ?? 1) }));
+  const draw = <T extends { weight: number }>(xs: T[]): T => {
+    let r = random(sim.state) * xs.reduce((n, x) => n + x.weight, 0);
+    return xs.find((x) => (r -= x.weight) < 0) ?? xs[xs.length - 1];
+  };
+  const { os } = draw(cards);
+  const o = os.length === 1 ? os[0] : draw(os);
   return put(sim, o.def, o.subject);
 }
 
