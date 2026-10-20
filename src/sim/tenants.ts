@@ -28,6 +28,7 @@ import { rememberAbout } from './social';
 import { hhmm } from './time';
 import { stat } from './stat';
 import { DECAY, ITEMS, NEEDS, OUT_FOR_FUN, OUTINGS, SCHEDULES, SEEK, SHARED_USE, START_NEEDS } from './tuning';
+import { wokenByDay } from './fit';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -156,6 +157,8 @@ function buildingNeeds(sim: Sim, p: Pawn): void {
   const felt = stat(amount, [], [has(life, 'lightSleeper') ? NEEDS.lightSleeper : 1, night ? NEEDS.night : 1]);
   const quiet = 1 - Math.min(1, felt / NEEDS.quietGone);
   life.needs.quiet += (quiet - life.needs.quiet) * (quiet < life.needs.quiet ? NEEDS.quietFalls : NEEDS.quietRises);
+  // layout L5: someone on nights, asleep by day, woken by next door (fit.ts).
+  if (!night && p.pose === 'sleep' && felt >= NEEDS.keptAwake && loudest) wokenByDay(sim, life, loudest);
   if (p.pose === 'sleep' && night && felt >= NEEDS.keptAwake && loudest) {
     const recent = life.memories.some((m) => m.id === 'keptAwake' && sim.state.tick - m.at < NEEDS.keptAwakeHours * TICKS_PER_HOUR);
     if (recent) return;

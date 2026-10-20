@@ -398,6 +398,8 @@ export const MEMORIES: Record<string, MemoryDef> = {
   toldToBleach: { label: 'Told to bleach the mould myself', value: -2, hours: 4 * 24, stack: 1 },
   draughty: { label: 'Draughty windows', value: -3, hours: 3 * 24, stack: 1 },
   wateredPlants: { label: 'Landlord watered my plants', value: 4, hours: 7 * 24, stack: 1, gossip: true },
+  // layout L5
+  wokenByDay: { label: 'Woken in the day', value: -5, hours: 14, stack: 3 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -1291,4 +1293,39 @@ export const LENS = {
   noiseFull: 3,
   /** A going rate, in pence, that paints a room fully green on the Rent overlay. */
   rentFull: 30000,
+};
+
+// --- layout L5 ---
+
+/** Who lives where (fit.ts; docs/specs/layout.md section 4). */
+export const FIT = {
+  /** Noise passing between flats at least this (0 to 1) puts a telly or the stairs "through the wall". */
+  through: 0.3,
+  /** Below this many degrees, a flat is cold for a baby. */
+  coldForBaby: 16,
+  /** What each fact is worth to someone it matters to. */
+  nightsTelly: -4,
+  nightsStairs: -2,
+  nightsQuiet: 2,
+  lightStairs: -3,
+  lightStreet: -2,
+  /** Ground or first floor, for someone who won't climb; each flight past the first costs this. */
+  climbLow: 2,
+  climbPerFlight: -3,
+  dogDown: 2,
+  dogUp: -3,
+  babyNoRoom: -4,
+  babyCold: -4,
+  babyDamp: -5,
+  musicianPeace: 3,
+  /** Chance each applicant household brings these (rolled on their own dice). */
+  babyCouple: 0.15,
+  babyFamily: 0.3,
+  wontClimbRetired: 0.6,
+  dogPetsListing: 0.5,
+  /** Lives change: a day's chance of a baby for a couple, and of a working tenant going onto nights. */
+  babyPerDay: 1 / 200,
+  nightsPerDay: 1 / 300,
+  /** Most a household will pay a week, in pounds: singles least, sharers per head. */
+  budget: { single: 320, couple: 480, sharersEach: 200, family: 640 },
 };
