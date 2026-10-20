@@ -539,13 +539,19 @@ export const LIGHTS: Record<string, string> = { lamp: '#ffb85a', tv: '#6aa0ff', 
 
 // ------------------------------------------------------------------ people
 
+/** What the renderer knows that a pawn doesn't: are they on a seat, and the sim tick (for waving and mopping). */
+export interface PoseOpts {
+  seated?: boolean;
+  tick?: number;
+}
+
 /**
  * A chibi person with feet at (x, y). With outlines, the silhouette is drawn first, offset a
  * pixel each way, in the outline colour.
  */
-export function drawPerson(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, walking: boolean): void {
-  for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) personShape(ctx, p, x + ox, y + oy, phase, walking, PAL.outline);
-  personShape(ctx, p, x, y, phase, walking, null);
+export function drawPerson(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, walking: boolean, opts: PoseOpts = {}): void {
+  for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) personShape(ctx, p, x + ox, y + oy, phase, walking, PAL.outline, opts);
+  personShape(ctx, p, x, y, phase, walking, null, opts);
 }
 
 /**
@@ -571,27 +577,107 @@ export function drawSleeper(ctx: Ctx, p: Pawn, x: number, y: number, body: boole
   r(5, 4, 2, 1, '#2a2020');
 }
 
-function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, walking: boolean, sil: string | null): void {
+// ------------------------------------------------------------------ outfits
+
+/** What a visitor wears for their job (a pawn's `role`), so they read from a few pixels. */
+interface Outfit {
+  top?: string;
+  legs?: string;
+  hat?: 'cap' | 'hard' | 'helmet' | 'scarf' | 'band';
+  hatColour?: string;
+  /** A reflective stripe across the middle, and its colour. */
+  vest?: string;
+  bag?: 'satchel' | 'cube';
+  bagColour?: string;
+  clipboard?: boolean;
+  /** Small: a child's proportions. */
+  kid?: boolean;
+}
+
+const OUTFITS: Record<string, Outfit> = {
+  postie: { top: '#c8352b', legs: '#2b3350', hat: 'cap', hatColour: '#c8352b', bag: 'satchel', bagColour: '#7a5a3a' },
+  courier: { top: '#e0782a', legs: '#2f2f35', hat: 'cap', hatColour: '#2b3a5a', vest: '#e9e6dc' },
+  rider: { top: '#e9e6dc', legs: '#2f2f35', hat: 'helmet', hatColour: '#2fa39b', bag: 'cube', bagColour: '#2fa39b' },
+  cleaner: { top: '#d8789a', legs: '#56606d', hat: 'scarf', hatColour: '#4f7aa8' },
+  windowcleaner: { top: '#e7dccb', legs: '#e7dccb', hat: 'cap', hatColour: '#4f7aa8' },
+  trade: { top: '#3f64a0', legs: '#3f64a0', hat: 'hard', hatColour: '#f2c43a' },
+  meter: { top: '#56606d', legs: '#2f2f35', vest: '#d6e03a', clipboard: true },
+  council: { top: '#56606d', legs: '#2f2f35', clipboard: true },
+  kid: { kid: true },
+  jogger: { top: '#3a9090', legs: '#2f2f35', hat: 'band', hatColour: '#e9e6dc' },
+};
+
+/** Other names a role goes by (visitors.ts and moments.ts name them as they like). */
+const ROLE_ALIASES: Record<string, string> = {
+  post: 'postie', sandra: 'postie',
+  takeaway: 'rider', delivery: 'rider',
+  lorraine: 'cleaner',
+  window: 'windowcleaner', windowcleaner: 'windowcleaner',
+  tradesperson: 'trade', tradie: 'trade', plumber: 'trade', electrician: 'trade', handyman: 'trade', engineer: 'trade', builder: 'trade',
+  meterreader: 'meter',
+  inspector: 'council', officer: 'council',
+  kids: 'kid', child: 'kid',
+};
+
+export function outfitFor(role: string | undefined): Outfit {
+  if (!role) return {};
+  const k = role.toLowerCase().replace(/[^a-z]/g, '');
+  return OUTFITS[ROLE_ALIASES[k] ?? k] ?? {};
+}
+
+/** Props that fill both hands, in front. */
+const CARRIED = new Set(['parcel', 'box']);
+
+/** The pose they're really drawn in: someone holding a box carries it, someone holding a mop mops. */
+function effectivePose(p: Pawn): Pawn['pose'] {
+  if (p.pose) return p.pose;
+  if (p.prop && CARRIED.has(p.prop)) return 'carry';
+  if (p.prop === 'mop') return 'mop';
+  return undefined;
+}
+
+function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, walking: boolean, sil: string | null, opts: PoseOpts): void {
   const f = p.facing;
   const r = (rx: number, ry: number, rw: number, rh: number, c: string) => rect(ctx, f > 0 ? x + rx : x - rx - rw, y + ry, rw, rh, sil ?? c);
+  const o = outfitFor(p.role);
+  const kid = !!o.kid;
+  const tick = opts.tick ?? 0;
   const skin = SKIN[p.look.skin % SKIN.length];
   const hair = HAIR[p.look.hair % HAIR.length];
-  const top = p.kind === 'agent' ? '#2b3a5a' : TOPS[p.look.top % TOPS.length];
-  const legs = LEGS[p.look.legs % LEGS.length];
-  const dancing = p.pose === 'dance';
+  const top = p.kind === 'agent' ? '#2b3a5a' : o.top ?? TOPS[p.look.top % TOPS.length];
+  const legs = o.legs ?? LEGS[p.look.legs % LEGS.length];
+  const pose = effectivePose(p);
+  const dancing = pose === 'dance';
   const stride = walking || dancing ? (phase < 0.5 ? 1 : -1) : 0;
   const bob = dancing ? (phase % 0.5 < 0.25 ? -2 : 0) : walking && phase % 0.5 < 0.25 ? -1 : 0;
-  const sitting = p.pose === 'sit';
+  const sitting = pose === 'sit' || (!!opts.seated && (pose === 'read' || pose === 'phone'));
+  const legH = kid ? 3 : 4;
+  const bodyH = kid ? 5 : 7;
+  const bx = kid ? -3 : -4;
+  const bw = kid ? 6 : 8;
+  const by = -(legH + bodyH) - (sitting ? 4 : 0) + bob;
+  // Behind them: a rider's box, a postie's satchel.
+  if (o.bag === 'cube') {
+    r(-10, by - 2, 8, 8, o.bagColour!);
+    r(-10, by - 2, 8, 1, light(o.bagColour!, 0.3));
+    r(-8, by + 1, 3, 2, '#efe7da');
+  } else if (o.bag === 'satchel') {
+    r(-7, by + 3, 4, 5, o.bagColour!);
+    r(-7, by + 3, 4, 1, light(o.bagColour!, 0.3));
+    r(-4, by, 1, 3, dark(o.bagColour!, 0.2));
+  }
   if (sitting) {
     // On a seat: thighs forward, shins down.
     r(-1, -8, 6, 3, legs);
     r(4, -5, 2, 5, legs);
   } else {
-    r(-3 + stride, -4, 2, 4, legs);
-    r(1 - stride, -4, 2, 4, legs);
+    r(-3 + stride, -legH, 2, legH, legs);
+    r(1 - stride, -legH, 2, legH, legs);
   }
-  const by = (sitting ? -15 : -11) + bob;
-  r(-4, by, 8, 7, top);
+  r(bx, by, bw, bodyH, top);
+  if (o.vest) r(bx, by + (kid ? 2 : 3), bw, 1, o.vest);
+  // Arms. Hands forward for reading, carrying and mopping; one up to wave or to the ear.
+  const forward = pose === 'read' || pose === 'carry' || pose === 'mop';
   if (dancing) {
     // One arm in the air, then the other.
     const up = phase < 0.5;
@@ -600,26 +686,328 @@ function personShape(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, wal
     r(-5, up ? by - 4 : by + 5, 1, 1, skin);
     r(4, up ? by + 5 : by - 4, 1, 1, skin);
   } else {
-    r(-5, by + 1, 1, 4, top);
-    r(4, by + 1, 1, 4, top);
-    r(-5, by + 5, 1, 1, skin);
-    r(4, by + 5, 1, 1, skin);
+    if (!forward) {
+      r(-5, by + 1, 1, 4, top);
+      r(-5, by + 5, 1, 1, skin);
+    }
+    if (pose === 'wave') {
+      // Front arm straight up, the hand going side to side.
+      const side = Math.floor(tick / 12) % 2;
+      r(4, by, 2, 1, top);
+      r(5, by - 7, 1, 7, top);
+      r(5 + side, by - 9, 2, 2, skin);
+    } else if (pose === 'phone') {
+      // Hand to the ear, a phone against the head.
+      const hyP = by - 10;
+      r(4, hyP + 9, 1, by + 4 - (hyP + 9), top);
+      r(4, hyP + 7, 2, 2, skin);
+      r(5, hyP + 4, 2, 4, '#2e3138');
+    } else if (forward) {
+      r(4, by + 3, 2, 1, top);
+      r(6, by + 3, 1, 1, skin);
+    } else {
+      r(4, by + 1, 1, 4, top);
+      r(4, by + 5, 1, 1, skin);
+    }
   }
-  if (p.kind === 'agent') {
+  if (p.kind === 'agent' || o.clipboard) {
     r(-1, by, 2, 4, '#efe7da');
     r(4, by + 3, 3, 4, '#6b4a32'); // clipboard
+    if (o.clipboard) r(5, by + 4, 1, 2, '#efe7da');
   }
-  const hy = by - 10;
-  r(-5, hy, 10, 10, skin);
-  r(-5, hy - 1, 10, 4, hair);
-  r(-6, hy, 2, 6, hair);
-  r(-5, hy + 3, 2, 3, hair);
+  const hh = kid ? 8 : 10;
+  const hx = kid ? -4 : -5;
+  const hy = by - hh;
+  r(hx, hy, hh, hh, skin);
+  r(hx, hy - 1, hh, 4, hair);
+  r(hx - 1, hy, 2, 6, hair);
+  r(hx, hy + 3, 2, 3, hair);
   if (!sil) {
-    r(1, hy + 4, 1, 2, '#2a2020');
-    r(3, hy + 4, 1, 2, '#2a2020');
-    r(2, hy + 7, 2, 1, mix(skin, '#c9583f', 0.35));
-    r(-1, hy + 6, 1, 1, mix(skin, '#e07a7a', 0.4));
+    const ey = pose === 'read' ? 1 : 0;
+    if (kid) {
+      r(0, hy + 3 + ey, 1, 2, '#2a2020');
+      r(2, hy + 3 + ey, 1, 2, '#2a2020');
+      r(1, hy + 6, 2, 1, mix(skin, '#c9583f', 0.35));
+      r(-1, hy + 5, 1, 1, mix(skin, '#e07a7a', 0.4));
+    } else {
+      r(1, hy + 4 + ey, 1, 2, '#2a2020');
+      r(3, hy + 4 + ey, 1, 2, '#2a2020');
+      r(2, hy + 7, 2, 1, mix(skin, '#c9583f', 0.35));
+      r(-1, hy + 6, 1, 1, mix(skin, '#e07a7a', 0.4));
+    }
   }
+  // Hats.
+  const hc = o.hatColour ?? '#c9583f';
+  if (o.hat === 'cap') {
+    r(hx, hy - 2, hh, 4, hc);
+    r(hx, hy - 2, hh, 1, light(hc, 0.2));
+    r(hh / 2 - 1, hy + 1, 3, 1, dark(hc, 0.25));
+  } else if (o.hat === 'hard') {
+    r(hx, hy - 3, hh, 4, hc);
+    r(-1, hy - 4, 2, 1, hc);
+    r(hx, hy - 3, hh, 1, light(hc, 0.25));
+    r(hx - 1, hy + 1, hh + 2, 1, dark(hc, 0.2));
+  } else if (o.hat === 'helmet') {
+    r(hx - 1, hy - 2, hh + 2, 6, hc);
+    r(hx - 1, hy - 2, hh + 2, 1, light(hc, 0.3));
+    r(3, hy + 2, 3, 2, '#2e3138');
+  } else if (o.hat === 'scarf') {
+    r(hx - 1, hy - 1, hh + 2, 4, hc);
+    r(hx - 1, hy, 3, 7, hc);
+  } else if (o.hat === 'band') {
+    r(hx, hy + 1, hh, 2, hc);
+  }
+  // A book, if they're reading and it isn't the paper.
+  if (pose === 'read' && p.prop !== 'paper') {
+    r(4, by + 1, 5, 6, '#4f7aa8');
+    r(4, by + 1, 1, 6, dark('#4f7aa8', 0.25));
+    r(5, by + 2, 3, 4, '#efe7da');
+    r(6, by + 3, 2, 1, '#9aa0a6');
+  }
+  // In the hand.
+  if (p.prop) propShape(r, p.prop, { by, pose, tick, sitting, sil: sil !== null });
+}
+
+// ------------------------------------------------------------------ props
+
+type R = (rx: number, ry: number, rw: number, rh: number, c: string) => void;
+
+interface PropCtx {
+  by: number;
+  pose: Pawn['pose'];
+  tick: number;
+  sitting: boolean;
+  sil: boolean;
+}
+
+/** What someone holds (Pawn.prop), drawn in the hand the pose puts forward. Unknown names draw nothing. */
+function propShape(r: R, prop: string, c: PropCtx): void {
+  const by = c.by;
+  const tan = '#c99a62';
+  switch (prop) {
+    case 'parcel':
+      r(4, by + 2, 6, 6, tan);
+      r(4, by + 2, 6, 1, light(tan, 0.3));
+      r(6, by + 2, 2, 6, '#e8c070');
+      r(4, by + 7, 6, 1, dark(tan, 0.2));
+      break;
+    case 'box':
+      r(3, by - 1, 8, 8, '#b98a58');
+      r(3, by - 1, 8, 1, light('#b98a58', 0.3));
+      r(6, by - 1, 2, 3, '#e8c070');
+      r(3, by + 6, 8, 1, dark('#b98a58', 0.2));
+      r(8, by + 3, 2, 2, '#efe7da');
+      break;
+    case 'bucket':
+      r(5, -5, 5, 5, '#8aa0b8');
+      r(5, -5, 5, 1, light('#8aa0b8', 0.35));
+      r(9, -4, 1, 4, dark('#8aa0b8', 0.2));
+      r(5, -7, 5, 1, '#4a4f57');
+      r(5, -6, 1, 1, '#4a4f57');
+      r(9, -6, 1, 1, '#4a4f57');
+      break;
+    case 'toolbox':
+      r(5, -5, 7, 5, '#c9402f');
+      r(5, -5, 7, 1, light('#c9402f', 0.3));
+      r(5, -2, 7, 1, dark('#c9402f', 0.25));
+      r(7, -7, 3, 1, '#2e3138');
+      r(7, -6, 1, 1, '#2e3138');
+      r(9, -6, 1, 1, '#2e3138');
+      r(8, -4, 1, 1, '#e8c070');
+      break;
+    case 'ladder': {
+      const wood = '#c9a060';
+      r(6, -26, 1, 26, wood);
+      r(11, -26, 1, 26, wood);
+      for (let yy = -24; yy < 0; yy += 4) r(7, yy, 4, 1, dark(wood, 0.15));
+      break;
+    }
+    case 'paper':
+      if (c.pose === 'read') {
+        r(4, by - 1, 6, 9, '#e8e2d4');
+        r(4, by - 1, 1, 9, dark('#e8e2d4', 0.2));
+        r(5, by + 1, 4, 1, '#56606d');
+        r(5, by + 3, 4, 1, '#9aa0a6');
+        r(5, by + 5, 3, 1, '#9aa0a6');
+      } else {
+        r(4, by + 3, 3, 5, '#e8e2d4');
+        r(4, by + 4, 3, 1, '#9aa0a6');
+      }
+      break;
+    case 'mop': {
+      const sway = [0, 1, 2, 1][Math.floor(c.tick / 14) % 4];
+      r(6 + (sway >> 1), by - 1, 1, -by - 2 - 0, '#9b6a42');
+      r(4 + sway, -3, 6, 3, '#d8d0c0');
+      r(4 + sway, -1, 6, 1, '#b0a898');
+      break;
+    }
+    case 'post':
+      r(5, by + 3, 5, 4, '#fbf7ef');
+      r(5, by + 3, 5, 1, '#c8352b');
+      r(6, by + 5, 3, 1, '#9aa0a6');
+      r(5, by + 6, 5, 1, dark('#fbf7ef', 0.2));
+      break;
+    case 'bag':
+      r(5, -8, 5, 7, '#4f944a');
+      r(5, -8, 5, 1, light('#4f944a', 0.3));
+      r(6, -10, 1, 2, '#2e3138');
+      r(8, -10, 1, 2, '#2e3138');
+      break;
+    case 'ball': {
+      const hop = Math.abs(Math.floor(c.tick / 6) % 8 - 4) - 2;
+      const by2 = -4 - Math.max(0, hop);
+      r(6, by2, 4, 4, '#efe7da');
+      r(7, by2, 2, 1, '#efe7da');
+      r(7, by2 + 1, 1, 1, '#2e3138');
+      r(9, by2 + 3, 1, 1, dark('#efe7da', 0.25));
+      break;
+    }
+    case 'pram':
+      r(5, -13, 7, 5, '#3a4a6a'); // hood
+      r(5, -9, 11, 5, '#4f7aa8');
+      r(5, -9, 11, 1, light('#4f7aa8', 0.3));
+      r(3, by + 3, 3, 1, '#2e3138'); // handle
+      r(4, by + 3, 1, -by - 11, '#2e3138');
+      r(6, -4, 3, 4, '#2e3138');
+      r(13, -4, 3, 4, '#2e3138');
+      break;
+    case 'dog': {
+      // On a lead, a little ahead.
+      r(5, by + 5, 7, 1, '#8a2a2a');
+      r(12, by + 5, 1, -by - 12, '#8a2a2a');
+      critter((rx, ry, w, h, col) => r(rx + 13, ry, w, h, col), 'dog', ['#b98050', '#8a5a34'], 0, false, c.pose, c.tick);
+      break;
+    }
+    default:
+  }
+}
+
+// ------------------------------------------------------------------ animals
+
+type Species = 'cat' | 'dog' | 'fox';
+const CAT_COATS: [string, string][] = [['#d98a3a', '#a8601f'], ['#7c7c85', '#55555e'], ['#2f2d33', '#1c1b1f'], ['#e9e0d0', '#b9a98f']];
+const DOG_COATS: [string, string][] = [['#b98050', '#8a5a34'], ['#3a3a40', '#222226'], ['#d9c9a5', '#a89773']];
+const FOX_COAT: [string, string] = ['#c8642a', '#8a3f18'];
+const CREAM = '#f1e6d4';
+const EYE = '#2a2020';
+
+/** Which animal a pawn is, from its role ('cat', 'dog', 'fox'; anything else is a cat). */
+export function speciesOf(role: string | undefined): Species {
+  const k = (role ?? '').toLowerCase();
+  return k.includes('fox') ? 'fox' : k.includes('dog') ? 'dog' : 'cat';
+}
+
+/** How tall an animal is drawn, for tapping. */
+export const ANIMAL_H: Record<Species, number> = { cat: 12, dog: 13, fox: 14 };
+
+/**
+ * An animal with its feet at (x, y), drawn the way people are: the silhouette first, in the
+ * outline colour, then the animal itself. The pose is `sit` or `sleep`, else it stands or walks.
+ */
+export function drawAnimal(ctx: Ctx, p: Pawn, x: number, y: number, phase: number, walking: boolean, tick = 0): void {
+  const sp = speciesOf(p.role);
+  const coat = sp === 'fox' ? FOX_COAT : sp === 'dog' ? DOG_COATS[p.look.top % DOG_COATS.length] : CAT_COATS[p.look.top % CAT_COATS.length];
+  const go = (ox: number, oy: number, sil: string | null) => {
+    const r: R = (rx, ry, rw, rh, c) => rect(ctx, p.facing > 0 ? x + ox + rx : x + ox - rx - rw, y + oy + ry, rw, rh, sil ?? c);
+    critter(r, sp, coat, phase, walking, p.pose, tick);
+  };
+  for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) go(ox, oy, PAL.outline);
+  go(0, 0, null);
+}
+
+/** Draws an animal facing right with its feet at (0, 0); `r` places and mirrors the pixels. */
+function critter(r: R, sp: Species, [coat, shade]: [string, string], phase: number, walking: boolean, pose: Pawn['pose'], tick: number): void {
+  const stride = walking ? (phase < 0.5 ? 1 : -1) : 0;
+  const sway = Math.floor(tick / 20) % 2;
+  if (pose === 'sleep') {
+    // Curled up: a loaf with the head tucked in and the tail round.
+    r(-6, -5, 12, 5, coat);
+    r(-6, -5, 12, 1, light(coat, 0.2));
+    r(-6, -2, 12, 2, shade);
+    r(3, -5, 5, 4, coat);
+    if (sp !== 'cat') r(7, -3, 3, 2, shade);
+    r(3, -7, 1, 2, coat);
+    r(6, -7, 1, 2, coat);
+    r(5, -3, 2, 1, EYE);
+    r(-8, -3, 3, 3, shade);
+    return;
+  }
+  if (sp === 'cat') {
+    if (pose === 'sit') {
+      r(-4, -8, 8, 8, coat);
+      r(-4, -8, 8, 1, light(coat, 0.2));
+      r(2, -6, 2, 6, light(coat, 0.15));
+      r(-4, -3, 8, 3, shade);
+      r(2, -14, 6, 6, coat);
+      r(2, -16, 2, 2, coat);
+      r(6, -16, 2, 2, coat);
+      r(6, -12, 1, 1, EYE);
+      r(7, -10, 1, 1, '#d98a8a');
+      r(-7, -2, 4, 2, shade);
+      r(-8, -4 - sway, 2, 3, shade);
+      return;
+    }
+    r(-7 + stride, -3, 2, 3, shade);
+    r(-4 - stride, -3, 2, 3, shade);
+    r(2 + stride, -3, 2, 3, shade);
+    r(5 - stride, -3, 2, 3, shade);
+    r(-7, -7, 13, 5, coat);
+    r(-7, -7, 13, 1, light(coat, 0.2));
+    r(-7, -3, 13, 1, shade);
+    r(-5, -7, 1, 2, shade);
+    r(-2, -7, 1, 2, shade);
+    r(1, -7, 1, 2, shade);
+    r(5, -10, 6, 6, coat);
+    r(5, -12, 2, 2, coat);
+    r(9, -12, 2, 2, coat);
+    r(9, -9, 1, 1, EYE);
+    r(10, -7, 1, 1, '#d98a8a');
+    r(-9, -12 + sway, 2, 6, coat);
+    r(-8, -13 + sway, 1, 1, coat);
+    return;
+  }
+  if (sp === 'dog') {
+    r(-7 + stride, -3, 2, 3, shade);
+    r(-4 - stride, -3, 2, 3, shade);
+    r(2 + stride, -3, 2, 3, shade);
+    r(5 - stride, -3, 2, 3, shade);
+    r(-8, -9, 14, 6, coat);
+    r(-8, -9, 14, 1, light(coat, 0.2));
+    r(-8, -4, 14, 1, shade);
+    r(5, -13, 7, 6, coat);
+    r(10, -10, 3, 3, light(coat, 0.25));
+    r(12, -10, 1, 1, EYE);
+    r(5, -13, 2, 5, shade);
+    r(9, -11, 1, 1, EYE);
+    r(-10, -12 + sway, 2, 5, coat);
+    return;
+  }
+  // A fox: long and low, a brush of a tail with a white tip, black socks.
+  r(-8 + stride, -3, 2, 3, '#2a2224');
+  r(-4 - stride, -3, 2, 3, '#2a2224');
+  r(2 + stride, -3, 2, 3, '#2a2224');
+  r(5 - stride, -3, 2, 3, '#2a2224');
+  r(-8, -8, 14, 5, coat);
+  r(-8, -8, 14, 1, light(coat, 0.2));
+  r(-8, -4, 14, 1, shade);
+  r(5, -7, 3, 3, CREAM);
+  r(6, -11, 6, 5, coat);
+  r(11, -9, 3, 2, coat);
+  r(13, -9, 1, 1, '#2a2224');
+  r(6, -14, 2, 3, coat);
+  r(10, -14, 2, 3, coat);
+  r(6, -14, 2, 1, '#2a2224');
+  r(10, -14, 2, 1, '#2a2224');
+  r(10, -10, 1, 1, EYE);
+  r(-17, -9 + sway, 9, 4, coat);
+  r(-17, -9 + sway, 9, 1, light(coat, 0.15));
+  r(-17, -9 + sway, 3, 4, CREAM);
+}
+
+/** How tall a pawn is drawn, in world pixels (for tapping and name tags). */
+export function pawnHeight(p: Pawn): number {
+  if (p.kind === 'animal') return ANIMAL_H[speciesOf(p.role)] + 2;
+  return outfitFor(p.role).kid ? 19 : PERSON_H;
 }
 
 /** How tall a person is drawn, in world pixels (for tapping and name tags). */
@@ -635,4 +1023,83 @@ export function portrait(p: Pick<Pawn, 'look' | 'kind'>): HTMLCanvasElement {
   rect(ctx, 0, 0, 16, 18, '#d9ccb6');
   drawPerson(ctx, { ...p, facing: 1 } as Pawn, 8, 25, 0, false);
   return c;
+}
+
+// ------------------------------------------------------------------ icons
+
+/**
+ * 8x8 pixel icons, drawn like the tab icons but in colour (a bubble's `icon`). Letters pick
+ * the colour: k ink, W white, r red, y gold, t tan, b blue, l light blue, g green, s steel.
+ */
+const ICON_INK: Record<string, string> = {
+  k: PAL.outline,
+  W: '#ffffff',
+  r: '#d0452f',
+  R: '#a02e22',
+  y: '#d9a21e',
+  t: '#c99a62',
+  b: '#4f7aa8',
+  l: '#bfe3f0',
+  g: '#4f944a',
+  s: '#7d848c',
+};
+
+const ICON_GRIDS: Record<string, string[]> = {
+  music: ['....kkk.', '....k..k', '....k...', '....k...', '..kkk...', '.kkkk...', '.kkkk...', '..kk....'],
+  cup: ['...s.s..', '..s.s...', 'kkkkkk..', 'krrrrkkk', 'krrrrk.k', 'krrrrkkk', '.krrrk..', '..kkkk..'],
+  envelope: ['........', 'kkkkkkkk', 'kkWWWWkk', 'kWkWWkWk', 'kWWkkWWk', 'kWWWWWWk', 'kkkkkkkk', '........'],
+  box: ['........', 'kkkkkkkk', 'kttyyttk', 'kttyyttk', 'kttttttk', 'kttttttk', 'kkkkkkkk', '........'],
+  phone: ['..kkkk..', 'k.kllk.k', '..kllk..', 'k.kllk.k', '..kllk..', '..kllk..', '..kkkk..', '........'],
+  zz: ['.bbbbb..', '....bb..', '...bb...', '..bb....', '.bbbbb..', '....bbbb', '.....bb.', '....bbbb'],
+  question: ['..bbbb..', '.bb..bb.', '.....bb.', '....bb..', '...bb...', '...bb...', '........', '...bb...'],
+  pound: ['..yyy...', '.yy.yy..', '.yy.....', 'yyyyy...', '.yy.....', '.yy.....', 'yyyyyyy.', '........'],
+  heart: ['........', '.rr..rr.', 'rWrrrrrr', 'rrrrrrrr', 'rrrrrrrr', '.rrrrrr.', '..rrrr..', '...rr...'],
+  fork: ['.s.s.s..', '.s.s.s..', '.sssss..', '..sss...', '...s....', '...s....', '...s....', '...s....'],
+  spanner: ['...ss.ss', '...ssss.', '...sss..', '..sss...', '.sss....', 'sss.....', 'ss......', '........'],
+  paw: ['.kk..kk.', '.kk..kk.', 'kk....kk', 'kk....kk', '..kkkk..', '.kkkkkk.', '.kkkkkk.', '..kkkk..'],
+  van: ['........', 'kkkkkkk.', 'kWWWWWkk', 'kWWWWWkb', 'kWWWWWkb', 'kkkkkkkk', '.kk..kk.', '........'],
+  bins: ['.kkkkkk.', 'kggggggk', 'kkkkkkkk', '.kggggk.', '.kggggk.', '.kggggk.', '.kggggk.', '..kkkk..'],
+  water: ['...k....', '...kk...', '..klbk..', '..kbbk..', '.klbbbk.', '.kbbbbk.', '..kbbk..', '...kk...'],
+  bang: ['..rr....', '..rr....', '..rr....', '..rr....', '..rr....', '........', '..rr....', '..rr....'],
+};
+
+/** Other names the sim, the cards and the moments use for the same icon. */
+const ICON_ALIASES: Record<string, string> = {
+  note: 'music', song: 'music', '♪': 'music',
+  tea: 'cup', kettle: 'cup', coffee: 'cup', mug: 'cup',
+  post: 'envelope', letter: 'envelope', mail: 'envelope',
+  parcel: 'box',
+  call: 'phone',
+  sleep: 'zz', z: 'zz', zzz: 'zz',
+  '?': 'question',
+  '£': 'pound', moan: 'pound', money: 'pound',
+  love: 'heart', '♥': 'heart',
+  eat: 'fork', food: 'fork',
+  mend: 'spanner', fix: 'spanner', repair: 'spanner',
+  cat: 'paw', pet: 'paw', dog: 'paw', fox: 'paw',
+  bin: 'bins', leak: 'water', drip: 'water',
+  '!': 'bang',
+};
+
+/** The name of the icon a bubble's `icon` means, or null if there's no such picture (the text shows instead). */
+export function iconName(name: string | undefined): string | null {
+  if (!name) return null;
+  if (ICON_GRIDS[name]) return name;
+  const a = ICON_ALIASES[name] ?? ICON_ALIASES[name.toLowerCase()];
+  return a && ICON_GRIDS[a] ? a : null;
+}
+
+/** Every icon's name. */
+export const ICON_NAMES = Object.keys(ICON_GRIDS);
+
+/** An icon with its top-left corner at (x, y), each pixel k by k. */
+export function drawIcon(ctx: Ctx, name: string, x: number, y: number, k = 1): void {
+  const grid = ICON_GRIDS[iconName(name) ?? ''];
+  if (!grid) return;
+  grid.forEach((row, j) => {
+    for (let i = 0; i < row.length; i++) {
+      const c = ICON_INK[row[i]];
+      if (c) rect(ctx, x + i * k, y + j * k, k, k, c);
+    }
+  });
 }
