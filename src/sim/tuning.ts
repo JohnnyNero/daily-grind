@@ -363,6 +363,9 @@ export const MEMORIES: Record<string, MemoryDef> = {
   grubbyWindows: { label: 'Grubby windows', value: -1, hours: 2 * 24, stack: 1 },
   // chunk 2b
   crackedWindow: { label: 'Hole in the window', value: -6, hours: 3 * 24, stack: 1 },
+  // chunk 4
+  friendRound: { label: 'Had a friend round', value: 2, hours: 12, stack: 1 },
+  familyRound: { label: 'Family came for tea', value: 3, hours: 24, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -1069,14 +1072,47 @@ export const VISITORS = {
   /** Most on the map at once (not counting party guests and applicants with Denise), and passers-by. */
   most: 3,
   mostPassersBy: 3,
-  /** Sandra the postie, every morning about now. */
+  /** Sandra the postie, every morning about now (give or take `jitter` minutes). */
   postie: 9 * 60 + 30,
+  jitter: 10,
   /** Couriers a day, and when they come. */
   couriers: [2, 4] as [number, number],
   courierFrom: 9 * 60,
   courierTo: 20 * 60,
   /** Lorraine does the stairs at this time, if you pay the cleaner. */
   cleaner: 8 * 60,
+  // --- added by chunk 4 ---
+  /** Takeaway riders: a night's chance of one on an ordinary evening, how many on a Friday, and the window (minutes of the day). */
+  riderChance: 0.3,
+  riderFriday: 2,
+  riderFrom: 18 * 60,
+  riderTo: 21 * 60 + 30,
+  /** Someone with less food than this, or no kitchen, is who a rider comes for. */
+  hungry: 0.4,
+  /** Friends a day (weekdays, weekends) and when; family on a weekend and when. */
+  friends: [0, 2] as [number, number],
+  friendsWeekend: [1, 3] as [number, number],
+  friendFrom: 14 * 60,
+  friendTo: 21 * 60,
+  familyChance: 0.7,
+  familyFrom: 11 * 60,
+  familyTo: 15 * 60,
+  /** Nobody calls round after this (minutes of the day), or before dawn. */
+  curfew: 23 * 60,
+  /** The fox: a night's chance of one when the bins are full. */
+  foxChance: 0.3,
+  /** A visit that can't start this long after it was due is forgotten (hours). */
+  staleHours: 2,
+  /** How long they stay, in real seconds at 1x: a word with the postie, the buzzer, a mop, the banging, a cuppa. */
+  postieSeconds: [8, 12] as [number, number],
+  buzzSeconds: [4, 8] as [number, number],
+  mopSeconds: [3, 5] as [number, number],
+  tradeSeconds: [12, 22] as [number, number],
+  friendSeconds: [20, 45] as [number, number],
+  familySeconds: [40, 80] as [number, number],
+  foxSeconds: [4, 7] as [number, number],
+  /** The cat: how long a nap or a loiter lasts, in real seconds. */
+  catNap: [10, 40] as [number, number],
 };
 
 // ================================================================== ambient moments (chunk 5 tunes)

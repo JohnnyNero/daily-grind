@@ -3,6 +3,7 @@
 // things themselves. And the council: inspections, improvement notices and fines, on what's
 // really wrong with the building rather than a coin toss.
 
+import { visitorsMended } from './visitors';
 import { post } from './chat';
 import { COUNCIL_FINE, COUNCIL_FINE_CAP, POUND, book, furniturePrice, letter, spend } from './economy';
 import { SHARED, dirtOf, itemsIn, tempOf } from './environment';
@@ -87,6 +88,8 @@ export function mend(sim: Sim, id: number): string | null {
   delete f.broken;
   delete f.reported;
   if (wasBroken) sim.changed();
+  // Someone comes to do it (visitors.ts).
+  visitorsMended(sim, sim.layout.flatAt(f.x, f.s)?.id ?? null, f.def, f.id);
   if (asked) {
     const flat = sim.layout.flatAt(f.x, f.s);
     if (flat) for (const p of household(sim, flat.id)) remember(sim, p.life!, 'landlordListened');
