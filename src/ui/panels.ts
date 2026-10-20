@@ -1,6 +1,7 @@
 // The bottom sheet: whatever you've opened, from a flat or a tenant to the money and the
 // post. One sheet, the same layout every time: a header, sometimes tabs, then the detail.
-// Every number says where it comes from.
+// It shows what a landlord could know (prices, bills, what's broken, what people say), not
+// how the game works it out.
 
 import { meet } from '../sim/handover';
 import { brokenIn, mend, repairCost } from '../sim/upkeep';
@@ -10,21 +11,19 @@ import type { ListingStyle } from '../sim/state';
 import { portrait } from '../render/art';
 import { furnitureDef } from '../sim/defs';
 import { gradedName } from '../sim/grades';
-import { AMENITIES } from '../sim/tuning';
 import { spaceAt, type Space } from '../sim/shared';
 import { POUND, billsDue, flatInfo, goingRate, overpay, pounds, MISSES_ALLOWED, MORTGAGE, LOCKS_PRICE, ALARM_PRICE, ALARM_WEEKLY } from '../sim/economy';
 import { CLEANER_WEEKLY, flatClimate, gasBill, outdoorTemp, seasonName } from '../sim/environment';
 import { answer } from '../sim/chat';
 import { opinionParts, relationships } from '../sim/social';
-import { FACTOR_NAMES, flatScore, scoreFor, type FactorId, type FlatScore } from '../sim/impressiveness';
-import { accept, changeRent, giveNotice, household, householdLiking, likelyLiking, noticeProblem, turnAway } from '../sim/leases';
-import { linesFor } from '../sim/outcomes';
+import { FACTOR_NAMES, flatScore, scoreFor, type FactorId } from '../sim/impressiveness';
+import { accept, changeRent, giveNotice, household, householdLiking, noticeProblem, turnAway } from '../sim/leases';
 import { choose } from '../sim/post';
 import type { Sim } from '../sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, type Letter, type NeedId, type Pawn } from '../sim/state';
 import { NEED_NAMES } from '../sim/tenants';
 import { expectName, expectNote } from '../sim/expectations';
-import { BASELINE, likingTarget, thoughtsOf } from '../sim/thoughts';
+import { thoughtsOf } from '../sim/thoughts';
 import { traitDef } from '../sim/traits';
 import { talesOf } from '../sim/tales';
 import { el, h, hhmm } from './dom';
@@ -169,9 +168,8 @@ export class Panels {
     this.fill([id, score, info, people.map((p) => p.id), applicants.length, furniture.length, draft, sim.day], () => {
       const out: (Node | string)[] = [];
       out.push(
-        h('div', { className: 'score-head' }, h('div', { className: 'tier-box' }, String(score.score)), h('div', {}, h('b', {}, score.tier), h('p', {}, 'Impressiveness: mostly the average of these, dragged down by the weakest'))),
-        h('div', { className: 'meters sec' }, ...(Object.keys(FACTOR_NAMES) as FactorId[]).map((f) => meter(FACTOR_NAMES[f], score.factors[f], f === score.weakest ? 'weakest' : undefined))),
-        h('div', { className: 'tip' }, h('b', {}, 'What to fix: '), fixHint(score)),
+        h('div', { className: 'score-head' }, h('div', { className: 'tier-box' }, String(score.score)), h('div', {}, h('b', {}, score.tier), h('p', {}, 'How it comes across'))),
+        h('div', { className: 'meters sec' }, ...(Object.keys(FACTOR_NAMES) as FactorId[]).map((f) => meter(FACTOR_NAMES[f], score.factors[f]))),
       );
       // Warmth, noise and dirt.
       const cl = flatClimate(sim, id);
@@ -185,7 +183,7 @@ export class Panels {
             { className: 'lines' },
             h('div', { className: 'line' }, h('span', {}, 'Temperature', h('small', {}, `${cl.radiators} radiator${cl.radiators === 1 ? '' : 's'}, boiler on ${BOILER[sim.state.boiler].toLowerCase()}`)), h('b', {}, `${Math.round(cl.temp)}°`)),
             h('div', { className: 'line' }, h('span', {}, 'Noise from next door', h('small', {}, 'Lately, on average')), h('b', {}, cl.noise < 0.3 ? 'Quiet' : cl.noise < 1 ? 'Some' : cl.noise < 2 ? 'Noisy' : 'Very noisy')),
-            h('div', { className: 'line' }, h('span', {}, 'Insulated', h('small', {}, 'Outside walls, roof and floor')), h('b', {}, `${cl.insulated} of ${cl.outside}`)),
+            h('div', { className: 'line' }, h('span', {}, 'Insulated', h('small', {}, 'Outside walls, roof and floor')), h('b', {}, `${Math.round(cl.insulated)} of ${Math.round(cl.outside)}`)),
             h('div', { className: 'line' }, h('span', {}, 'Dirt'), h('b', {}, cl.dirt < 0.2 ? 'Clean' : cl.dirt < 0.5 ? 'A bit grubby' : 'A tip')),
           ),
           ...brokenIn(sim, id).map((f) =>
@@ -197,7 +195,7 @@ export class Panels {
       const rent = h('div', { className: 'rentbox' });
       const gr = h('div', { className: 'row' }, h('span', {}, `Going rate for "${info.tier}"`), h('b', {}, `${pounds(going)} a week`));
       rent.append(gr);
-      if (info.belowSince !== undefined) rent.append(h('p', { className: 'small note' }, `It's slipped to ${score.tier}: the going rate drops in a few days unless that's fixed.`));
+      if (info.belowSince !== undefined) rent.append(h('p', { className: 'small note' }, `It looks more ${score.tier.toLowerCase()} than it did.`));
       const current = lease ? (lease.rise?.rent ?? lease.rent) : info.asking;
       const shown = draft ?? current;
       const step = (d: number) => {
@@ -258,11 +256,10 @@ export class Panels {
             { className: 'sec' },
             h('h3', {}, 'Letting'),
             h('label', { className: 'line' }, h('span', {}, 'Listed: people can apply'), h('input', { type: 'checkbox', id: `listed-${id}`, checked: info.listed, onchange: (e: Event) => { info.listed = (e.target as HTMLInputElement).checked; this.rerender(); } })),
-            liveable ? '' : h('p', { className: 'note small' }, 'Without a bed, a loo, a shower or bath and a cooker or fridge, only desperate people will apply.'),
+            liveable ? '' : h('p', { className: 'note small' }, `No ${[!s.bed && 'bed', !s.toilet && 'loo', !s.wash && 'shower or bath', !s.kitchen && 'cooker or fridge'].filter(Boolean).join(', no ')}.`),
             h('h3', {}, 'The listing'),
             h('div', { className: 'seg-row wrap' }, ...(Object.keys(LISTINGS) as ListingStyle[]).map((k) => h('button', { type: 'button', 'aria-pressed': String((info.style ?? 'plain') === k), onclick: () => { info.style = k; this.rerender(); } }, LISTINGS[k].name))),
             h('p', { className: 'listing' }, `“${LISTINGS[info.style ?? 'plain'].blurb}”`),
-            h('p', { className: 'small muted' }, LISTINGS[info.style ?? 'plain'].does),
             h('button', { type: 'button', className: 'btn primary', disabled: applicants.length === 0, onclick: () => this.show({ kind: 'applicants', flat: id }) }, applicants.length === 0 ? 'No applicants yet' : `See ${applicants.length} applicant${applicants.length > 1 ? 's' : ''}`),
           ),
         );
@@ -297,38 +294,35 @@ export class Panels {
     const liking = Math.round(life.liking);
     this.head(p.name, `${flat?.name ?? 'No flat'} · ${p.note ?? ''}`, face(p, likingColour(liking)));
     const thoughts = thoughtsOf(sim, p);
-    const target = Math.round(likingTarget(thoughts));
     const doing = life.away ? `${life.away.why} (back about ${hhmm(Math.floor((life.away.until % TICKS_PER_DAY) / TICKS_PER_MINUTE))})` : p.doing;
     const needsKey = this.pawnTab === 'needs' ? Object.values(life.needs).map((v) => Math.round(v * 50)) : 0;
     const socialKey = this.pawnTab === 'social' ? relationships(sim, p).map((r) => [r.other.id, r.opinion]) : 0;
     const history = this.pawnTab === 'about' ? talesOf(sim, id) : [];
-    this.fill([id, this.pawnTab, liking, target, doing, thoughts, needsKey, life.revealed, life.traits.length, socialKey, history.length], () => {
+    this.fill([id, this.pawnTab, liking, doing, thoughts, needsKey, life.revealed, life.traits.length, socialKey, history.length], () => {
       const tab = (t: 'liking' | 'needs' | 'social' | 'about', label: string) =>
         h('button', { type: 'button', role: 'tab', 'aria-selected': String(this.pawnTab === t), onclick: () => { this.pawnTab = t; this.rerender(); } }, label);
       const out: (Node | string)[] = [h('p', { className: 'doing' }, doing), h('div', { className: 'tabs', role: 'tablist' }, tab('liking', 'Liking'), tab('needs', 'Needs'), tab('social', 'Social'), tab('about', 'About'))];
       if (this.pawnTab === 'liking') {
-        const lines = linesFor(p);
+        const mind = thoughts.filter((t) => Math.round(t.value * 10) !== 0).sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
         out.push(
           h(
             'div',
-            { className: 'gauge', style: `--l1:${lines.minor}%;--l2:${lines.major}%;--l3:${lines.extreme}%` },
+            { className: 'gauge' },
             h('span', { className: 'now', style: `left:${liking}%` }, String(liking)),
             h('div', { className: 'bar' }),
-            h('span', { className: 'target', style: `left:${target}%` }, `▲ heading for ${target}`),
           ),
-          h('p', { className: 'small' }, h('span', { className: 'liking-word' }, likingWord(liking)), ` · below ${lines.minor} they grumble, below ${lines.major} they act up, below ${lines.extreme} they leave or report you.`),
+          h('p', { className: 'small' }, h('span', { className: 'liking-word' }, likingWord(liking))),
+          // What's on their mind, biggest first: good or bad, never by how much.
           h(
             'div',
             { className: 'thoughts sec', style: 'margin-top:8px' },
-            h('div', { className: 'thought base' }, h('span', {}, 'Starting point'), h('b', {}, String(BASELINE))),
-            ...thoughts.map((t) => h('div', { className: 'thought' }, h('span', {}, t.label), h('b', { className: t.value > 0 ? 'pos' : t.value < 0 ? 'neg' : '' }, signed(t.value)))),
-            h('div', { className: 'thought total' }, h('span', {}, 'Heading for'), h('b', {}, String(target))),
+            h('h3', {}, 'On their mind'),
+            ...mind.map((t) => h('div', { className: 'thought' }, h('span', {}, t.label), h('b', { className: t.value > 0 ? 'pos' : 'neg' }, t.value > 0 ? '+' : '−'))),
+            mind.length === 0 ? h('p', { className: 'small muted' }, 'Nothing much.') : '',
           ),
         );
-        if (liking < lines.major) out.push(h('div', { className: 'warn' }, h('b', {}, 'Close to the edge. '), `Worst right now: ${thoughts.filter((t) => t.value < 0).sort((a, b) => a.value - b.value)[0]?.label.toLowerCase() ?? 'nothing in particular'}.`));
       } else if (this.pawnTab === 'needs') {
         out.push(h('div', { className: 'meters' }, ...(Object.keys(NEED_NAMES) as NeedId[]).map((n) => meter(NEED_NAMES[n], life.needs[n] * 100))));
-        out.push(h('p', { className: 'small muted', style: 'margin-top:8px' }, 'Warmth and quiet come from the flat: the heating, the insulation and the neighbours.'));
       } else if (this.pawnTab === 'social') {
         const rels = relationships(sim, p);
         if (rels.length === 0) out.push(h('p', {}, 'Doesn\'t really know anyone here yet.'));
@@ -340,8 +334,7 @@ export class Panels {
           const flat = sim.layout.flat(r.other.life!.flat)?.name ?? '';
           const row = h('button', { type: 'button', className: 'rel link', style: 'text-decoration:none;width:100%;text-align:left;color:inherit', onclick: () => this.show({ kind: 'pawn', id: r.other.id }) },
             face(r.other, likingColour(r.other.life!.liking)),
-            h('div', {}, h('b', {}, `${r.other.name} · ${flat}${life.partner === r.other.id ? ' · partner' : ''}`), h('small', {}, why || 'Hardly know each other'), h('div', { className: 'opbar' }, h('i', { style: `--c:${c};${bar}` }))),
-            h('span', { className: `v ${v >= 0 ? 'pos' : 'neg'}` }, signed(v)));
+            h('div', {}, h('b', {}, `${r.other.name} · ${flat}${life.partner === r.other.id ? ' · partner' : ''}`), h('small', {}, why || 'Hardly know each other'), h('div', { className: 'opbar' }, h('i', { style: `--c:${c};${bar}` }))));
           out.push(row);
         }
       } else {
@@ -352,7 +345,7 @@ export class Panels {
             { className: 'sec' },
             h('h3', {}, 'Traits', h('em', {}, `${life.revealed.length} known · ${hidden.length} not yet`)),
             ...life.revealed.map((t) => h('div', { className: 'trait' }, h('span', { className: 't-ic' }, traitDef(t).name[0]), h('div', {}, h('b', {}, traitDef(t).name), h('p', { className: 'muted' }, traitDef(t).says)))),
-            ...hidden.map(() => h('div', { className: 'trait hidden' }, h('span', { className: 't-ic' }, '?'), h('div', {}, h('b', {}, 'Not known yet'), h('p', { className: 'muted' }, 'Shows itself when it matters, or as you get to know them.')))),
+            ...hidden.map(() => h('div', { className: 'trait hidden' }, h('span', { className: 't-ic' }, '?'), h('div', {}, h('b', {}, 'Not known yet'), ''))),
           ),
         );
         const lease = flatInfo(sim, life.flat).lease;
@@ -389,7 +382,7 @@ export class Panels {
     const key = [sim.day, Math.floor(sim.minuteOfDay / 10), tenants.map((p) => [p.id, Math.round(p.life!.liking)]), empty.map((f) => f.id), sim.state.applicants.length, sim.state.reviews.length, Math.round(sim.state.expect.level)];
     this.fill(key, () => {
       const avg = tenants.length ? Math.round(tenants.reduce((n, p) => n + p.life!.liking, 0) / tenants.length) : 0;
-      const atRisk = tenants.filter((p) => p.life!.liking < linesFor(p).major);
+      const leaving = Object.values(sim.state.flats).filter((f) => f.lease?.notice).length;
       const owed = Object.values(sim.state.flats).reduce((n, f) => n + (f.lease?.owed ?? 0), 0);
       const rating = landlordRating(sim);
       const rows = [...tenants].sort((a, b) => sim.layout.flats.findIndex((f) => f.id === a.life!.flat) - sim.layout.flats.findIndex((f) => f.id === b.life!.flat));
@@ -398,7 +391,7 @@ export class Panels {
           'div',
           { className: 'summary' },
           h('div', { className: 'stat' }, h('small', {}, 'Average liking'), h('b', { style: `color:${likingColour(avg)}` }, String(avg))),
-          h('div', { className: 'stat' }, h('small', {}, 'At risk'), h('b', {}, String(atRisk.length)), h('span', { className: 'small muted' }, atRisk.map((p) => p.name.split(' ')[0]).join(', ') || 'Nobody')),
+          h('div', { className: 'stat' }, h('small', {}, 'Leaving'), h('b', {}, String(leaving))),
           h('div', { className: 'stat' }, h('small', {}, 'Rent owed'), h('b', {}, pounds(owed))),
           h('div', { className: 'stat' }, h('small', {}, 'Your rating'), h('b', {}, rating === null ? '–' : `${rating.toFixed(1)}★`), h('span', { className: 'small muted' }, rating === null ? 'No reviews yet' : `${Math.min(8, sim.state.reviews.length)} latest reviews`)),
         ),
@@ -417,16 +410,14 @@ export class Panels {
               ...rows.map((p) => {
                 const life = p.life!;
                 const lk = Math.round(life.liking);
-                const target = Math.round(likingTarget(thoughtsOf(sim, p)));
                 const lease = flatInfo(sim, life.flat).lease;
-                const trend = target > lk + 5 ? '⇈' : target > lk + 1 ? '↑' : target < lk - 5 ? '⇊' : target < lk - 1 ? '↓' : '';
                 const status = !lease ? h('span', { className: 'chip' }, '–') : lease.notice ? h('span', { className: 'chip bad' }, `Leaving day ${lease.notice.day}`) : lease.owed > 0 ? h('span', { className: 'chip low' }, `Owes ${pounds(lease.owed)}`) : h('span', { className: 'chip good' }, pounds(lease.rent));
                 const row = h(
                   'tr',
                   { className: 'person' },
                   h('td', {}, h('div', { className: 'nm' }, face(p, likingColour(lk)), h('div', {}, h('b', {}, p.name.split(' ')[0]), h('div', { className: 'small muted' }, p.note ?? '')))),
                   h('td', {}, sim.layout.flat(life.flat)?.name.replace('Flat ', '') ?? '?'),
-                  h('td', {}, h('div', { className: 'lk' }, h('b', { style: `color:${likingColour(lk)}` }, `${lk} ${trend}`), h('div', { className: 'track' }, h('div', { className: 'fill', style: `width:${lk}%;--c:${likingColour(lk)}` })))),
+                  h('td', {}, h('div', { className: 'lk' }, h('b', { style: `color:${likingColour(lk)}` }, String(lk)), h('div', { className: 'track' }, h('div', { className: 'fill', style: `width:${lk}%;--c:${likingColour(lk)}` })))),
                   h('td', {}, status),
                 );
                 row.addEventListener('click', () => this.show({ kind: 'pawn', id: p.id }));
@@ -445,7 +436,7 @@ export class Panels {
           ? h(
               'div',
               { className: 'sec' },
-              h('h3', {}, 'Reviews', h('em', {}, 'what people said when they left; good ones bring applicants quicker')),
+              h('h3', {}, 'Reviews', h('em', {}, 'what people said when they left')),
               h('div', { className: 'reviews' }, ...[...sim.state.reviews].reverse().slice(0, 10).map((r) => h('div', { className: 'review' }, h('b', {}, `${'★'.repeat(r.stars)}${'☆'.repeat(5 - r.stars)}`), h('span', {}, `“${r.text}”`), h('small', {}, `${r.who}, ${r.flat} · day ${r.day}`)))),
             )
           : '',
@@ -527,12 +518,11 @@ export class Panels {
           'div',
           { className: 'sec' },
           h('h3', {}, 'Security', h('em', {}, `Risk of a break-in: ${riskWord(burglaryRisk(sim)).toLowerCase()}`)),
-          h('p', { className: 'small muted' }, 'Burglars come in the small hours, by the street door or a ground-floor window, for tellies and laptops.'),
           h(
             'div',
             { className: 'lines' },
-            h('div', { className: 'line' }, h('span', {}, 'Better locks', h('small', {}, 'Street door and ground-floor windows. Slows them down; often puts them off.')), st.security.locks ? h('b', {}, 'Fitted') : h('button', { type: 'button', className: 'btn', disabled: st.money < LOCKS_PRICE, onclick: () => { if (fitLocks(sim)) this.notify('New locks fitted.'); this.rerender(); } }, `Fit ${pounds(LOCKS_PRICE)}`)),
-            h('div', { className: 'line' }, h('span', {}, 'Burglar alarm', h('small', {}, `Sends them running. ${pounds(ALARM_WEEKLY)} a week to monitor.`)), st.security.alarm ? h('b', {}, 'Fitted') : h('button', { type: 'button', className: 'btn', disabled: st.money < ALARM_PRICE, onclick: () => { if (fitAlarm(sim)) this.notify('Alarm fitted.'); this.rerender(); } }, `Fit ${pounds(ALARM_PRICE)}`)),
+            h('div', { className: 'line' }, h('span', {}, 'Better locks', h('small', {}, 'Street door and ground-floor windows.')), st.security.locks ? h('b', {}, 'Fitted') : h('button', { type: 'button', className: 'btn', disabled: st.money < LOCKS_PRICE, onclick: () => { if (fitLocks(sim)) this.notify('New locks fitted.'); this.rerender(); } }, `Fit ${pounds(LOCKS_PRICE)}`)),
+            h('div', { className: 'line' }, h('span', {}, 'Burglar alarm', h('small', {}, `${pounds(ALARM_WEEKLY)} a week to monitor.`)), st.security.alarm ? h('b', {}, 'Fitted') : h('button', { type: 'button', className: 'btn', disabled: st.money < ALARM_PRICE, onclick: () => { if (fitAlarm(sim)) this.notify('Alarm fitted.'); this.rerender(); } }, `Fit ${pounds(ALARM_PRICE)}`)),
           ),
         ),
         h(
@@ -584,7 +574,7 @@ export class Panels {
       if (l.chosen === undefined && l.dueDay !== undefined) box.append(h('div', { className: 'deadline' }, h('b', {}, `Answer by day ${l.dueDay}.`), h('span', {}, `If you don't: "${l.choices[l.fallback ?? 0].label}".`)));
       l.choices.forEach((c, i) =>
         box.append(
-          h('button', { type: 'button', className: `opt ${l.chosen === i ? 'chosen' : ''}`, disabled: l.chosen !== undefined, onclick: () => { choose(sim, l.id, i); this.rerender(); } }, h('span', {}, `${l.chosen === i ? '✓ ' : ''}${c.label}`), h('small', {}, c.note)),
+          h('button', { type: 'button', className: `opt ${l.chosen === i ? 'chosen' : ''}`, disabled: l.chosen !== undefined, onclick: () => { choose(sim, l.id, i); this.rerender(); } }, h('span', {}, `${l.chosen === i ? '✓ ' : ''}${c.label}`), c.note ? h('small', {}, c.note) : ''),
         ),
       );
     }
@@ -618,15 +608,15 @@ export class Panels {
         }
         const p = st.pawns.find((x) => x.id === m.from);
         box.append(h('div', { className: 'msg' }, p ? face(p, p.life ? likingColour(p.life.liking) : undefined) : h('span', {}), h('div', { className: 'bubble' }, h('b', {}, m.who), m.text, h('time', {}, time))));
-        if (m.choices && m.ignored) box.append(h('span', { className: 'sys' }, `No reply from you, so: "${m.choices[m.chosen ?? 0].label}". They noticed.`));
+        if (m.choices && m.ignored) box.append(h('span', { className: 'sys' }, `No reply from you, so: "${m.choices[m.chosen ?? 0].label}".`));
         if (m.choices && m.chosen === undefined) {
           box.append(
             h(
               'div',
               { className: 'choice' },
               h('b', {}, 'Reply as the landlord'),
-              ...m.choices.map((c, i) => h('button', { type: 'button', className: 'opt', onclick: () => { answer(sim, m.id, i); this.rerender(); } }, h('span', {}, `"${c.label}"`), h('small', {}, c.note))),
-              h('small', { className: 'muted' }, 'Left two days, it counts as a no, and they notice.'),
+              ...m.choices.map((c, i) => h('button', { type: 'button', className: 'opt', onclick: () => { answer(sim, m.id, i); this.rerender(); } }, h('span', {}, `"${c.label}"`), c.note ? h('small', {}, c.note) : '')),
+              h('small', { className: 'muted' }, 'Leave it two days and it counts as a no.'),
             ),
           );
         }
@@ -678,7 +668,7 @@ export class Panels {
     this.head(`${flat.name} · ${list.length} applicant${list.length === 1 ? '' : 's'}`, `Going rate ${pounds(goingRate(sim, flatId))} · listed at ${pounds(info.asking)}`);
     this.fill([flatId, list.map((a) => a.id), sim.day], () => {
       if (info.lease) return [h('p', {}, 'Let. Nobody else needed.')];
-      if (list.length === 0) return [h('p', {}, 'Nobody yet. Fairly priced, impressive flats get more applicants.'), h('button', { type: 'button', className: 'btn', onclick: () => this.show({ kind: 'flat', id: flatId }) }, `Back to ${flat.name}`)];
+      if (list.length === 0) return [h('p', {}, 'Nobody yet.'), h('button', { type: 'button', className: 'btn', onclick: () => this.show({ kind: 'flat', id: flatId }) }, `Back to ${flat.name}`)];
       return [
         h(
           'div',
@@ -686,7 +676,6 @@ export class Panels {
           ...list.map((a) => {
             const lead = a.people[0];
             const others = a.people.slice(1);
-            const liking = likelyLiking(sim, a);
             return h(
               'article',
               { className: 'card' },
@@ -694,7 +683,6 @@ export class Panels {
               h('dl', { className: 'kv' }, h('dt', {}, 'Offers'), h('dd', {}, `${pounds(a.offer)} a week`), h('dt', {}, 'Deposit'), h('dd', {}, pounds(a.offer * 4)), h('dt', {}, 'Known trait'), h('dd', {}, h('span', { className: 'chip' }, traitDef(a.shown).name))),
               h('p', { className: 'small muted' }, traitDef(a.shown).says),
               ...a.hints.map((t) => h('div', { className: 'hintline' }, '? ', t)),
-              h('p', { className: 'small' }, h('b', {}, `Likely liking: about ${liking}. `), h('span', { className: 'muted' }, 'From what you know: the flat, the rent, the basics.')),
               h('p', { className: 'small muted' }, `Waiting until day ${Math.floor(a.until / TICKS_PER_DAY) + 1}.`),
               h(
                 'div',
@@ -716,49 +704,21 @@ function days(n: number): string {
   return `${n} day${n === 1 ? '' : 's'}`;
 }
 
-export function signed(v: number): string {
-  const r = Math.round(v * 10) / 10;
-  return r > 0 ? `+${r}` : r < 0 ? `−${Math.abs(r)}` : '0';
-}
-
-function meter(label: string, value: number, note?: string): HTMLElement {
+function meter(label: string, value: number): HTMLElement {
   const v = Math.round(value);
   const c = v >= 60 ? 'var(--good)' : v >= 40 ? 'var(--ok)' : v >= 25 ? 'var(--low)' : 'var(--bad)';
-  return h('div', { className: `meter ${note ? 'weakest' : ''}` }, h('span', {}, label, note ? h('small', {}, ` ${note}`) : ''), h('div', { className: 'track' }, h('div', { className: 'fill', style: `width:${v}%;--c:${c}` })), h('b', {}, String(v)));
+  return h('div', { className: 'meter' }, h('span', {}, label), h('div', { className: 'track' }, h('div', { className: 'fill', style: `width:${v}%;--c:${c}` })), h('b', {}, String(v)));
 }
 
-/** What a shared space does for the building. */
+/** What a shared space is, as you'd see it. */
 function spaceBlurb(space: Space): string {
-  if (!space.working) return `Not much use yet: ${space.kind === 'garden' ? 'it needs a bench or a table to sit at, and a way up there.' : 'nothing in it works, or nobody can get to it from the street.'}`;
+  if (!space.working) return space.kind === 'garden' ? 'Nowhere to sit yet, or no way up to it.' : 'Nothing in it works, or there\'s no way in from the street.';
   switch (space.kind) {
     case 'laundry':
-      return `Tenants without a machine of their own do the washing here, and think better of the building (+${AMENITIES.laundry}). Every flat scores a little higher.`;
+      return 'Washing machines, for tenants without one of their own.';
     case 'bikes':
-      return `Tenants with jobs sometimes cycle, and like having somewhere to keep the bike (+${AMENITIES.bikes}). Every flat scores a little higher.`;
+      return 'Somewhere to keep a bike.';
     case 'garden':
-      return `Tenants sit out here on fine days, daylight only, and think better of the building (+${AMENITIES.garden}). A barbecue brings the neighbours together.`;
-  }
-}
-
-function fixHint(score: FlatScore): string {
-  switch (score.weakest) {
-    case 'space':
-      return 'more room per person. Fewer people, or knock through.';
-    case 'furnishing':
-      return 'more (or better) furniture.';
-    case 'basics': {
-      const missing = [!score.has.bed && 'a bed', !score.has.toilet && 'a toilet', !score.has.wash && 'a shower or bath', !score.has.kitchen && 'a cooker or fridge'].filter(Boolean);
-      return `it needs ${missing.join(', ')}.`;
-    }
-    case 'light':
-      return 'a window or a lamp.';
-    case 'decor':
-      return 'pictures, plants, a mirror.';
-    case 'clean':
-      return 'it\'s dirty. Tenants who aren\'t messy tidy up after themselves; messy ones don\'t.';
-    case 'warmth':
-      return 'turn the boiler up, add radiators, or insulate the outside walls, roof and floor.';
-    case 'quiet':
-      return 'noise is getting in from next door. Insulate the walls and floors it shares.';
+      return 'Somewhere to sit out on a fine day.';
   }
 }

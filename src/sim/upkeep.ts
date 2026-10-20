@@ -127,8 +127,8 @@ export function upkeepHour(sim: Sim): void {
       f.reported = true;
       const name = furnitureDef(f.def).name.toLowerCase();
       post(sim, pick(st, people), pick(st, [`The ${name}'s packed in. Can you get someone out?`, `So the ${name} has died. Any chance of it being fixed this week?`, `Not to be a pain but the ${name} is broken. Properly broken.`]), [
-        { label: `Get it mended (£${repairCost(f) / POUND})`, note: 'They\'ll be pleased', act: `mend:${f.id}` },
-        { label: 'Have you tried giving it a kick?', note: 'It stays broken. They\'ll remember.', act: 'notMine' },
+        { label: `Get it mended (£${repairCost(f) / POUND})`, note: '', act: `mend:${f.id}` },
+        { label: 'Have you tried giving it a kick?', note: 'It stays broken.', act: 'notMine' },
       ]);
     }
   }

@@ -160,8 +160,8 @@ function buildingNeeds(sim: Sim, p: Pawn): void {
       for (const n of sim.state.pawns.filter((o) => o.life?.flat === loudest)) rememberAbout(sim, p, 'noise', n);
       if (!recently(sim, 'Some of us are trying to sleep')) {
         post(sim, p, `Some of us are trying to sleep. ${from}, it's ${hhmm(sim.minuteOfDay)}`, [
-          { label: `Have a word with ${from}`, note: `${from} won't thank you; ${p.name.split(' ')[0]} will`, act: `word:${loudest}` },
-          { label: 'Not my business', note: `${p.name.split(' ')[0]} will remember`, act: 'notMine' },
+          { label: `Have a word with ${from}`, note: '', act: `word:${loudest}` },
+          { label: 'Not my business', note: '', act: 'notMine' },
         ]);
       }
     }

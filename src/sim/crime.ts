@@ -257,8 +257,8 @@ function flee(sim: Sim, p: Pawn, why: 'spotted' | 'passerby' | 'alarm' | 'gaveUp
       sim.notify(wasInside ? `${first(by)} woke up to someone in ${flatName}. They ran off empty-handed.` : `${first(by)} spotted someone trying to get in. They legged it.`);
       if (!st.security.locks) {
         post(sim, by, wasInside ? 'There was someone IN OUR FLAT last night. Can we please get proper locks??' : 'Someone was trying to get in last night!! Can we get better locks on the doors?', [
-          { label: `Fit better locks (${'£'}${LOCKS_PRICE / POUND})`, note: 'Harder to get in. Everyone feels safer.', act: 'locks' },
-          { label: "It's a safe area really", note: 'They won\'t believe you', act: 'notMine' },
+          { label: `Fit better locks (${'£'}${LOCKS_PRICE / POUND})`, note: 'Street door and ground-floor windows', act: 'locks' },
+          { label: "It's a safe area really", note: '', act: 'notMine' },
         ]);
       } else post(sim, by, 'Someone tried to get in last night. The locks held, but still.');
       return;
@@ -307,16 +307,16 @@ function steal(sim: Sim, p: Pawn, flat: Flat): boolean {
     const lead = people[0];
     if (!thing) {
       post(sim, lead, 'We\'ve been burgled. They took a laptop and my nan\'s ring. Can we get better locks at least?', st.security.locks ? undefined : [
-        { label: `Fit better locks (£${LOCKS_PRICE / POUND})`, note: 'Harder to get in. Everyone feels safer.', act: 'locks' },
-        { label: 'That\'s what contents insurance is for', note: 'They won\'t forget it', act: 'notMine' },
+        { label: `Fit better locks (£${LOCKS_PRICE / POUND})`, note: 'Street door and ground-floor windows', act: 'locks' },
+        { label: 'That\'s what contents insurance is for', note: '', act: 'notMine' },
       ]);
     } else {
       const name = furnitureDef(thing.def).name.toLowerCase();
       // Like for like: a posh one for a posh one.
       const grade = gradeOf(thing);
       post(sim, lead, `We've been burgled. They took ${took}! Are you replacing ${things.length > 1 ? `the ${name} at least` : 'it'}?`, [
-        { label: `Replace the ${name} (£${priceOf(thing) / POUND})`, note: 'They\'ll appreciate it', act: `replace:${thing.def}:${thing.x}:${thing.s}:${thing.flip ? 1 : 0}${grade === 'standard' ? '' : `:${grade}`}` },
-        { label: 'That\'s what contents insurance is for', note: 'They won\'t forget it', act: 'notMine' },
+        { label: `Replace the ${name} (£${priceOf(thing) / POUND})`, note: '', act: `replace:${thing.def}:${thing.x}:${thing.s}:${thing.flip ? 1 : 0}${grade === 'standard' ? '' : `:${grade}`}` },
+        { label: 'That\'s what contents insurance is for', note: '', act: 'notMine' },
       ]);
     }
   }

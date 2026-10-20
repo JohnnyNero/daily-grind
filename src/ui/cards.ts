@@ -192,7 +192,7 @@ export class CardTray {
 
   /** A button: tap to answer; hold to read its note in full. */
   private choice(cardId: number, i: 0 | 1, label: string, note: string): HTMLButtonElement {
-    const b = h('button', { type: 'button', className: 'card-choice', 'data-choice': String(i) }, h('b', {}, label), h('small', {}, note));
+    const b = h('button', { type: 'button', className: 'card-choice', 'data-choice': String(i) }, h('b', {}, label), note ? h('small', {}, note) : '');
     let timer: ReturnType<typeof setTimeout> | undefined;
     let held = false;
     b.addEventListener('pointerdown', () => {

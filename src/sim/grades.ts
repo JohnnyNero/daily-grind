@@ -68,9 +68,9 @@ export function poshUnlocked(sim: Sim): boolean {
   return sim.state.poshFrom !== undefined || poshReason(sim) !== null;
 }
 
-/** What it takes to open up posh, for the build bar. */
+/** Why posh is shut, for the build bar: as the suppliers would put it, not the rule. */
 export function poshLockedWhy(): string {
-  return `Posh opens up at ${POSH_UNLOCK.stars} stars, a ${POSH_UNLOCK.tier.toLowerCase()} flat, or day ${POSH_UNLOCK.day}`;
+  return 'The posh suppliers only deal with landlords they\'ve heard of';
 }
 
 /** Every morning: has posh opened up? Says so the once. */
@@ -79,7 +79,7 @@ export function gradesMorning(sim: Sim): void {
   const why = poshReason(sim);
   if (!why) return;
   sim.state.poshFrom = sim.day;
-  sim.notify(`${why}: posh furniture is open to you now. It's in build mode.`);
+  sim.notify('The posh furniture suppliers will deal with you now.');
 }
 
 /** Why a piece can't be bought at a grade, or null. */

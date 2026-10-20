@@ -83,8 +83,8 @@ function placeThoughts(sim: Sim, life: Life, flatId: string): Thought[] {
   if (proud) {
     // House-proud people like something nice in the kitchen and the bathroom (working, mind).
     const posh = poshGroups(sim, flatId);
-    if (posh.has('kitchen')) out.push({ label: 'Posh kitchen (house-proud)', value: POSH_PROUD.kitchen });
-    if (posh.has('bathroom')) out.push({ label: 'Posh bathroom (house-proud)', value: POSH_PROUD.bathroom });
+    if (posh.has('kitchen')) out.push({ label: 'Posh kitchen', value: POSH_PROUD.kitchen });
+    if (posh.has('bathroom')) out.push({ label: 'Posh bathroom', value: POSH_PROUD.bathroom });
   }
   return out;
 }
@@ -121,7 +121,7 @@ function peopleThoughts(sim: Sim, p: Pawn): Thought[] {
 export function tierThought(tier: string, houseProud: boolean): Thought | null {
   const v = TIER_THOUGHTS[tier];
   if (!v) return null;
-  return { label: `Lives in a ${tier.toLowerCase()} flat${houseProud ? ' (house-proud)' : ''}`, value: houseProud ? Math.round(v * HOUSE_PROUD_TIER) : v };
+  return { label: `Lives in a ${tier.toLowerCase()} flat`, value: houseProud ? Math.round(v * HOUSE_PROUD_TIER) : v };
 }
 
 /** What they think of the rent against the going rate for the flat. Tenants who expect more are quicker to call it steep and slower to call it fair. */

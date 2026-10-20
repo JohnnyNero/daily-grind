@@ -52,16 +52,9 @@ export function expectTarget(sim: Sim): number {
   return readFlags(sim, 'expect.target', target);
 }
 
-/** One line on why tenants expect what they do. */
+/** One line on what tenants expect, as you'd hear it (not why). */
 export function expectNote(sim: Sim): string {
-  const grade = expectGrade(sim);
-  const parts = expectParts(sim);
-  const top = [...parts].filter((p) => p.label !== 'your reviews' || landlordRating(sim) !== null).sort((a, b) => b.points - a.points)[0];
-  const target = expectTarget(sim);
-  const level = sim.state.expect?.level ?? EXPECT_START;
-  const trend = target > level + EXPECT.trend ? 'Rising' : target < level - EXPECT.trend ? 'Easing' : 'Steady';
-  const base = ['Nobody expects much of a place like this.', 'Tenants want a decent flat for a fair price.', 'Tenants have seen what you can do, and want it everywhere.', 'Tenants expect the earth. Possibly with a view.'][grade];
-  return `${base} ${trend}, mostly because of ${top.label}.`;
+  return ['Nobody expects much of a place like this.', 'Tenants want a decent flat for a fair price.', 'Tenants have seen what you can do, and want it everywhere.', 'Tenants expect the earth. Possibly with a view.'][expectGrade(sim)];
 }
 
 /** Every morning: the level eases towards where it ought to be, and the building's run of good days is counted. */

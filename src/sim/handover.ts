@@ -230,7 +230,7 @@ function endWalk(sim: Sim): void {
   letter(sim, {
     from: AGENT,
     title: 'Your list',
-    body: `As promised. It ticks itself off.\n• Meet your tenants: tap them, or their faces at the bottom.\n• Let ${toLet?.name ?? 'an empty flat'}: it's listed, and people will apply. Look past the rent at what their last landlord says.\n• Furnish ${fit?.name ?? 'the bare flat'}: Build shows you what it needs, and ticks it off as you go.\n• Make Monday's payment: keep £${Math.round((st.mortgage.payment + billsDue(sim)) / POUND)} in the bank for day 8.\nD.`,
+    body: `As promised.\n• Meet your tenants.\n• Let ${toLet?.name ?? 'an empty flat'}. It's listed.\n• Furnish ${fit?.name ?? 'the bare flat'}.\n• Make Monday's payment: £${Math.round((st.mortgage.payment + billsDue(sim)) / POUND)}, day 8.\nD.`,
   });
   // Someone's already keen on the flat, and a bit cheeky with it.
   if (toLet && !flatInfo(sim, toLet.id).lease) {
@@ -335,7 +335,7 @@ export function handoverHour(sim: Sim): void {
   const fit = h.fit ? todo(sim).find((t) => t.id === 'fit') : undefined;
   if (fit?.done && !st.project.praised && h.stop < 0 && sim.day > 1 && h.fit && scoreFor(sim, h.fit, 1).has.bed) {
     st.project.praised = true;
-    letter(sim, { from: AGENT, title: 'Well done', body: "That flat looks like somewhere to live. That's the whole trick: pick the next thing, save for it, do it. The bar at the bottom will keep suggesting one. No prize, I'm afraid. D." });
+    letter(sim, { from: AGENT, title: 'Well done', body: "That flat looks like somewhere to live now. No prize, I'm afraid. D." });
   }
   // The list, all done: a word from Denise, and it goes away.
   if (listDone(sim) && beat('list')) {
@@ -346,8 +346,8 @@ export function handoverHour(sim: Sim): void {
   if (sim.day >= 2 && hour >= 10 && hour < 18 && bill && beat('boiler')) {
     const temp = Math.round(st.temps[bill.life!.flat] ?? 16);
     post(sim, bill, `Is the heating on? It's ${temp}° in here. I've got two cardigans on.`, [
-      { label: 'Turn the boiler up', note: 'Warmer for everyone, dearer gas', act: 'boilerUp' },
-      { label: 'Try a jumper', note: 'Free. Unpopular.', act: 'jumper' },
+      { label: 'Turn the boiler up', note: 'Dearer gas', act: 'boilerUp' },
+      { label: 'Try a jumper', note: 'Free.', act: 'jumper' },
     ]);
   }
   // Short for Monday before the flat's let: Denise offers some of the deposit up front.
@@ -359,7 +359,7 @@ export function handoverHour(sim: Sim): void {
       body: `You're looking short for Monday. I can advance you £${ADVANCE / POUND} against the deposit on the flat you're letting; it comes back out when someone moves in. Don't tell my manager.`,
       choices: [
         { label: `Take the £${ADVANCE / POUND}`, note: 'Paid back from the deposit', act: `advance:${ADVANCE}` },
-        { label: "I'll manage", note: 'Nothing happens', act: 'none' },
+        { label: "I'll manage", note: '', act: 'none' },
       ],
       dueDay: sim.day + 2,
       fallback: 1,
@@ -371,7 +371,7 @@ export function handoverHour(sim: Sim): void {
     letter(sim, {
       from: AGENT,
       title: `An idea for ${gutted.name}`,
-      body: `It's big for one. Two studios would let for more. Open Build, pick Walls, and draw a wall down the middle with your finger: it's only a plan until you sign it off, and nothing's paid till then. Anything red isn't held up. Each half needs its own front door (Doors & windows), and a bed, a loo, a shower and a cooker. Then Sign off.`,
+      body: `It's big for one. Two studios would let for more: a wall down the middle, a front door each, and a bed, a loo, a shower and a cooker in both. Just a thought.`,
       flat: gutted.id,
     });
   }

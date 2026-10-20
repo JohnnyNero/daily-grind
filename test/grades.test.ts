@@ -99,7 +99,7 @@ describe('furniture grades', () => {
     expect(poshUnlocked(sim)).toBe(false);
     const [x, s] = spot(sim, 2, 'sofa');
     const money = sim.state.money;
-    expect(buyFurniture(sim, 'sofa', x, s, false, undefined, 'posh')).toMatch(/Posh opens up/);
+    expect(buyFurniture(sim, 'sofa', x, s, false, undefined, 'posh')).toMatch(/posh suppliers/);
     expect(sim.state.money).toBe(money);
     // Cheap is always there.
     const cheap = buyFurniture(sim, 'sofa', x, s, false, undefined, 'cheap');
@@ -130,7 +130,7 @@ describe('furniture grades', () => {
     const { id, x, s } = bed;
     const count = sim.state.furniture.length;
     // Posh is locked to start with.
-    expect(upgradeFurniture(sim, id, 'posh')).toMatch(/Posh opens up/);
+    expect(upgradeFurniture(sim, id, 'posh')).toMatch(/posh suppliers/);
     const money = sim.state.money;
     const toStandard = furniturePrice('bed') - furniturePrice('bed', 'cheap');
     expect(upgradeCost(bed, 'standard')).toBe(toStandard);
@@ -199,7 +199,7 @@ describe('furniture grades', () => {
     for (const f of sim.state.furniture) if (inMine(f) && f.def === 'cooker') f.grade = 'posh';
     sim.changed();
     let thoughts = thoughtsOf(sim, p);
-    expect(thoughts.some((t) => t.label === 'Posh kitchen (house-proud)' && t.value > 0)).toBe(true);
+    expect(thoughts.some((t) => t.label === 'Posh kitchen' && t.value > 0)).toBe(true);
     expect(likingTarget(thoughts)).toBeCloseTo(Math.max(0, Math.min(100, BASELINE + thoughts.reduce((n, t) => n + t.value, 0))), 6);
     // Not if they aren't house-proud.
     p.life!.traits = [];

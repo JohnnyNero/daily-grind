@@ -63,7 +63,7 @@ function split(sim: Sim): Project | null {
 
 function locks(sim: Sim): Project | null {
   if (sim.state.security.locks) return null;
-  return { id: 'locks', label: 'fit better locks', cost: LOCKS_PRICE, needs: 'Locks on the street door: Build, then Security.' };
+  return { id: 'locks', label: 'fit better locks', cost: LOCKS_PRICE, needs: 'Better locks on the street door and ground-floor windows.' };
 }
 
 /** A laundry, then a bike store, then a garden: whichever you haven't got. */

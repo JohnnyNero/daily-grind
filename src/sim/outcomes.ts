@@ -132,8 +132,8 @@ const OUTCOMES: Outcome[] = [
         title: 'Money off',
         body: `Given everything (${straw.toLowerCase()}, mostly), I think ${pounds(ask)} a week is fairer. Let me know.`,
         choices: [
-          { label: `Agree to ${pounds(ask)}`, note: 'They like you more', act: `rent:${p.life!.flat}:${ask}` },
-          { label: 'No', note: 'They\'ll grumble', act: `refuse:${p.life!.flat}` },
+          { label: `Agree to ${pounds(ask)}`, note: '', act: `rent:${p.life!.flat}:${ask}` },
+          { label: 'No', note: '', act: `refuse:${p.life!.flat}` },
         ],
         dueDay: sim.day + 3,
         fallback: 1,

@@ -26,18 +26,16 @@ export interface ListingDef {
   name: string;
   /** How it reads on the property site. */
   blurb: string;
-  /** What it does, for the panel. */
-  does: string;
   /** Hours between applicants, times this. */
   pace: number;
 }
 
 export const LISTINGS: Record<ListingStyle, ListingDef> = {
-  plain: { name: 'Plain', blurb: 'Flat to let. Furnished. Rent weekly.', does: 'No surprises either way.', pace: LISTING_PACE.plain },
-  agent: { name: 'Estate agent', blurb: 'Bijou. Characterful. Moments from transport. Viewing essential!', does: "Lots of applicants. They'll feel short-changed when they see it.", pace: LISTING_PACE.agent },
-  honest: { name: 'Brutally honest', blurb: 'Small. Brown. The boiler has moods. Neighbours mostly fine.', does: 'Fewer applicants, pleasantly surprised ones.', pace: LISTING_PACE.honest },
-  professionals: { name: 'Professionals only', blurb: 'Would suit a working professional. No students, no bands, no exceptions.', does: 'Only people with jobs, and none of the noisy sort. Slower to let.', pace: LISTING_PACE.professionals },
-  pets: { name: 'Pets considered', blurb: 'Pets considered. Within reason. Not a horse.', does: 'Pet owners come running.', pace: LISTING_PACE.pets },
+  plain: { name: 'Plain', blurb: 'Flat to let. Furnished. Rent weekly.', pace: LISTING_PACE.plain },
+  agent: { name: 'Estate agent', blurb: 'Bijou. Characterful. Moments from transport. Viewing essential!', pace: LISTING_PACE.agent },
+  honest: { name: 'Brutally honest', blurb: 'Small. Brown. The boiler has moods. Neighbours mostly fine.', pace: LISTING_PACE.honest },
+  professionals: { name: 'Professionals only', blurb: 'Would suit a working professional. No students, no bands, no exceptions.', pace: LISTING_PACE.professionals },
+  pets: { name: 'Pets considered', blurb: 'Pets considered. Within reason. Not a horse.', pace: LISTING_PACE.pets },
 };
 
 // ------------------------------------------------------------------ reviews
@@ -279,8 +277,8 @@ function leaseEnd(sim: Sim, id: string, lease: Lease, liking: number, people: Pa
         title: 'About the renewal',
         body: `Happy to stay on. Bit of a cheeky one, but would you do ${pounds(ask)} a week? Similar flats round here are going for less. (They aren't.)`,
         choices: [
-          { label: `Agree to ${pounds(ask)}`, note: 'They like you more', act: `rent:${id}:${ask}` },
-          { label: 'Keep it as it is', note: 'They\'ll grumble', act: `refuse:${id}` },
+          { label: `Agree to ${pounds(ask)}`, note: '', act: `rent:${id}:${ask}` },
+          { label: 'Keep it as it is', note: '', act: `refuse:${id}` },
         ],
         dueDay: sim.day + 3,
         fallback: 1,

@@ -203,7 +203,7 @@ export class Hud {
     for (const p of st.pawns) {
       if (!p.life || p.life.leaving) continue;
       const lines = linesFor(p);
-      if (p.life.liking < lines.extreme) out.push({ key: `risk${p.id}`, title: `${p.name.split(' ')[0]} may leave`, sub: `Liking ${Math.round(p.life.liking)}`, colour: 'var(--bad)', urgent: true, open: { kind: 'pawn', id: p.id } });
+      if (p.life.liking < lines.extreme) out.push({ key: `risk${p.id}`, title: `${p.name.split(' ')[0]} has had enough`, sub: `Liking ${Math.round(p.life.liking)}`, colour: 'var(--bad)', urgent: true, open: { kind: 'pawn', id: p.id } });
       else if (p.life.liking < lines.major) out.push({ key: `fed${p.id}`, title: `${p.name.split(' ')[0]} is fed up`, sub: `Liking ${Math.round(p.life.liking)}`, colour: 'var(--low)', open: { kind: 'pawn', id: p.id } });
     }
     for (const f of sim.layout.flats) {

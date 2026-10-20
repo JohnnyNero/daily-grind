@@ -4,7 +4,7 @@
 import { furnitureDef, isGraded } from '../sim/defs';
 import { pounds } from '../sim/economy';
 import { resaleOf, sellFurniture, turnFurniture } from '../sim/furnish';
-import { GRADE_NAMES, furnitureValue, gradeOf, gradedName, poshLockedWhy, poshUnlocked, upgradeCost, upgradeFurniture, upgradesFor } from '../sim/grades';
+import { GRADE_NAMES, gradeOf, gradedName, poshLockedWhy, poshUnlocked, upgradeCost, upgradeFurniture, upgradesFor } from '../sim/grades';
 import type { Sim } from '../sim/sim';
 import type { Furniture, Grade, NeedId } from '../sim/state';
 import { el, h } from './dom';
@@ -28,19 +28,19 @@ function useOf(def: string): string {
   if (def === 'lamp') return 'Lights the flat in the evening';
   if (def === 'bins') return 'Where the rubbish goes';
   if (def === 'washer') return 'For doing the washing, in the flat or the laundry room';
-  if (def === 'bikeRack') return 'Somewhere to keep the bike; working tenants sometimes cycle';
-  if (def === 'bbq') return 'For barbecues: whoever fires it up, the neighbours come';
+  if (def === 'bikeRack') return 'Somewhere to keep a bike';
+  if (def === 'bbq') return 'For barbecues';
   if (def === 'doormat') return 'Keeps the muck off the floors';
-  if (def === 'dishwasher') return 'Less mess in the flat, and nobody washes up. Hums after tea';
-  if (def === 'console') return 'Strong fun, but only with a telly in the room. Loud, and worth nicking';
-  if (def === 'bigTv') return 'A telly for the sofa and armchair, with more fun in it. Louder, and worth nicking';
-  if (def === 'bookshelf') return 'Quiet fun: reading. Light sleepers and easy-going types love it; party animals won\'t touch it';
+  if (def === 'dishwasher') return 'Nobody has to wash up. Hums after tea';
+  if (def === 'console') return 'Needs a telly in the room. Loud, and worth nicking';
+  if (def === 'bigTv') return 'A bigger telly for the sofa and armchair. Louder, and worth nicking';
+  if (def === 'bookshelf') return 'Something to read. Quiet';
   if (def === 'diningSet') return 'Somewhere to eat, table and chairs in one';
   if (def === 'rug') return 'Soaks up noise going down to the flat below. Lies under other furniture';
-  if (def === 'curtains') return 'A darker bedroom, so better sleep. Does not change the light';
+  if (def === 'curtains') return 'A darker bedroom';
   if (def === 'smokeAlarm') return 'The council checks every let flat has one';
-  if (def === 'cctv') return 'In the lobby or stairs: lowers burglary risk, and burglars are more likely to be seen. Some tenants have views';
-  if (def === 'intercom') return 'By the street door: burglars at the door are more likely to be spotted. Tenants like it';
+  if (def === 'cctv') return 'A camera on the lobby or stairs';
+  if (def === 'intercom') return 'By the street door, so tenants can see who\'s buzzing';
   if (d.offers?.length) {
     const uses = d.offers.map((o) => (o.needsNearby ? `${FOR[o.need]} (with a ${furnitureDef(o.needsNearby).name.toLowerCase()})` : FOR[o.need]));
     return `For ${[...new Set(uses)].join(', ')}`;
@@ -100,7 +100,7 @@ export class FurnitureCard {
         h('div', {}, h('strong', {}, gradedName(f)), h('span', {}, `${flat} · ${user ? `${user.name.split(' ')[0]} is using it` : 'nobody using it'}`)),
         h('button', { type: 'button', class: 'close', 'aria-label': 'Close', onclick: () => this.hide() }, '✕'),
       ),
-      h('p', {}, `${useOf(f.def)}. Adds ${Math.round(furnitureValue(f))} to how furnished the flat is.${isGraded(f.def) ? ` ${GRADE_WORDS[grade]}` : ''}`),
+      h('p', {}, `${useOf(f.def)}.${isGraded(f.def) ? ` ${GRADE_WORDS[grade]}` : ''}`),
       d.offers ? h('p', { class: f.broken !== undefined ? 'cond bad' : 'cond' }, f.broken !== undefined ? `Broken since day ${f.broken}: nobody can use it.` : `Condition: ${condition(f)}.`) : '',
       this.upgrades(f),
       h(

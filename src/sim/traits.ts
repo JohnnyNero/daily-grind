@@ -28,17 +28,17 @@ export const TRAITS: readonly TraitDef[] = [
   { id: 'clumsy', name: 'Clumsy', says: 'Breaks things. Always sorry.', hint: 'Lovely tenant. Bought us a new kettle. Twice.', touchy: 0, weight: 2 },
   { id: 'friendly', name: 'Friendly', says: 'Talks to everyone on the stairs. Makes friends fast.', hint: 'Knew the whole street within a week.', touchy: -2, weight: 4 },
   { id: 'busybody', name: 'Busybody', says: 'Knows everyone\'s business, and shares it.', hint: 'Very aware of the other tenants.', touchy: 2, weight: 3 },
-  { id: 'complainer', name: 'Complainer', says: 'Puts every grievance in writing. Kicks off sooner.', hint: 'They\'ll tell you exactly what they think. In writing.', touchy: 8, conflicts: ['easyGoing'], weight: 3 },
-  { id: 'partyAnimal', name: 'Party animal', says: 'Needs fun more, and throws parties.', hint: 'Popular. Very popular. On Fridays especially.', touchy: 0, conflicts: ['lightSleeper'], weight: 3 },
+  { id: 'complainer', name: 'Complainer', says: 'Puts every grievance in writing.', hint: 'They\'ll tell you exactly what they think. In writing.', touchy: 8, conflicts: ['easyGoing'], weight: 3 },
+  { id: 'partyAnimal', name: 'Party animal', says: 'Likes a good time, and throws parties.', hint: 'Popular. Very popular. On Fridays especially.', touchy: 0, conflicts: ['lightSleeper'], weight: 3 },
   { id: 'nightOwl', name: 'Night owl', says: 'Up late, up late. Quiet in the mornings.', hint: 'Never saw them before noon.', touchy: 0, weight: 3 },
-  { id: 'lightSleeper', name: 'Light sleeper', says: 'Every noise at night counts double.', hint: 'Asked us about double glazing at the viewing.', touchy: 4, conflicts: ['partyAnimal'], weight: 3 },
+  { id: 'lightSleeper', name: 'Light sleeper', says: 'Wakes at the slightest noise.', hint: 'Asked us about double glazing at the viewing.', touchy: 4, conflicts: ['partyAnimal'], weight: 3 },
   { id: 'musician', name: 'Musician', says: 'Practises. At home. Most evenings.', hint: 'Very talented. You could hear it from the car park.', touchy: 0, weight: 2 },
   { id: 'petOwner', name: 'Pet owner', says: 'Comes with a pet. The pet comes with opinions.', hint: 'Asked if the lease mentions cats. Specifically cats.', touchy: 0, weight: 2 },
   { id: 'keenCook', name: 'Keen cook', says: 'A proper meal means a lot. The smells travel.', hint: 'The kitchen was the first thing they looked at.', touchy: 0, weight: 3 },
   { id: 'paysEarly', name: 'Always pays early', says: 'Rent arrives before it\'s due. Almost never late.', hint: 'Paid three months up front. Unprompted.', touchy: -2, conflicts: ['haggler'], weight: 3 },
   { id: 'haggler', name: 'Haggler', says: 'Pushes back on every rent rise, and asks for money off.', hint: 'Asked whether the rent was a starting point.', touchy: 3, conflicts: ['paysEarly'], weight: 3 },
-  { id: 'knowsRights', name: 'Knows their rights', says: 'Knows the tenancy law better than you. Reports you when fed up.', hint: 'Knew the tenancy agreement better than I did.', touchy: 2, weight: 2 },
-  { id: 'easyGoing', name: 'Easy-going', says: 'Forgives a lot. Kicks off later than most.', hint: 'Never complained once. Not even about the boiler.', touchy: -10, conflicts: ['complainer'], weight: 3 },
+  { id: 'knowsRights', name: 'Knows their rights', says: 'Knows the tenancy law better than you, and isn\'t shy about it.', hint: 'Knew the tenancy agreement better than I did.', touchy: 2, weight: 2 },
+  { id: 'easyGoing', name: 'Easy-going', says: 'Forgives a lot. Takes a lot to rile.', hint: 'Never complained once. Not even about the boiler.', touchy: -10, conflicts: ['complainer'], weight: 3 },
 ];
 
 const byId = new Map(TRAITS.map((t) => [t.id, t]));

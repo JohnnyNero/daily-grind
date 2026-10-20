@@ -164,7 +164,6 @@ body.building .recentre { bottom: calc(var(--tab-h) + 12px + var(--buildbar-h, 0
 .muted { color: var(--sheet-muted); }
 .small { font-size: 11px !important; }
 .doing { margin: 0 0 10px !important; color: var(--sheet-ink) !important; font-weight: 600; }
-.tip { border: 1px dashed #9b6a42; background: #f7edda; border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 14px; }
 .warn { border: 2px solid var(--bad); background: #fbe7e1; border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 14px; }
 .btn {
   min-height: 44px; border-radius: 8px; border: 2px solid var(--outline); background: var(--sheet); color: var(--sheet-ink);
@@ -183,7 +182,6 @@ body.building .recentre { bottom: calc(var(--tab-h) + 12px + var(--buildbar-h, 0
 .meters { display: flex; flex-direction: column; gap: 6px; }
 .meter { display: grid; grid-template-columns: 104px 1fr 32px; align-items: center; gap: 10px; font-size: 13px; padding: 2px 4px; border-radius: 6px; }
 .meter small { color: #b5543f; font-weight: 700; }
-.meter.weakest { background: #fbe1d7; outline: 2px solid var(--bad); }
 .meter b { text-align: right; font-variant-numeric: tabular-nums; }
 .track { position: relative; height: 10px; border-radius: 3px; background: #e7dccb; border: 1px solid #d3c4ad; }
 .fill { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--c, var(--good)); }
@@ -192,7 +190,7 @@ body.building .recentre { bottom: calc(var(--tab-h) + 12px + var(--buildbar-h, 0
 .score-head b { font-size: 16px; }
 
 /* liking gauge */
-.gauge { position: relative; padding: 24px 0 26px; }
+.gauge { position: relative; padding: 24px 0 8px; --l1: 60%; --l2: 40%; --l3: 25%; }
 .gauge .bar { height: 14px; border: 2px solid var(--outline); border-radius: 3px; background: linear-gradient(90deg, var(--bad) 0 var(--l3), var(--low) var(--l3) var(--l2), var(--ok) var(--l2) var(--l1), var(--good) var(--l1)); }
 .gauge .now { position: absolute; top: 0; transform: translateX(-50%); display: grid; justify-items: center; font-weight: 800; font-size: 14px; line-height: 1; }
 .gauge .now::after { content: ""; width: 3px; height: 20px; background: var(--outline); margin-top: 2px; }

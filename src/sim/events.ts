@@ -541,8 +541,8 @@ function complain(sim: Sim, h: Happening, who: Pawn): void {
   const name = sim.layout.flat(h.flat!)?.name ?? 'next door';
   h.flag = 'complained';
   post(sim, who, `Is there a PARTY in ${name}?? It's ${hour < 10 ? `${hour}am` : 'gone eleven'}`, [
-    { label: `Tell ${name} to wrap it up`, note: `${name} won't thank you`, act: `endParty:${h.flat}` },
-    { label: 'Let them have their night', note: `${first(who)} won't thank you`, act: 'notMine' },
+    { label: `Tell ${name} to wrap it up`, note: '', act: `endParty:${h.flat}` },
+    { label: 'Let them have their night', note: '', act: 'notMine' },
   ]);
 }
 
