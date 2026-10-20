@@ -14,7 +14,7 @@ import { friendsLeaving } from './social';
 import { amenities } from './shared';
 import { post } from './chat';
 import { expectGrade, expectThought } from './expectations';
-import { likingTarget, missingThoughts, rentThought, thoughtsOf, tierThought, type Thought } from './thoughts';
+import { fitThoughts, likingTarget, missingThoughts, rentThought, thoughtsOf, tierThought, type Thought } from './thoughts';
 import { rollTraits, traitDef, touchiness, has } from './traits';
 import { tale } from './tales';
 import { flatKind, householdsFor } from './rooms';
@@ -173,6 +173,8 @@ export function likelyLiking(sim: Sim, a: Applicant): number {
   const hoped = expectThought(score.tier, grade);
   if (hoped) thoughts.push(hoped);
   thoughts.push(...missingThoughts(score));
+  // Whether it suits them: enough bedrooms, somewhere to sit together.
+  thoughts.push(...fitThoughts(flatKind(sim, a.flat), a.household, a.people.length));
   const rent = rentThought(a.offer, rateFor(flatKind(sim, a.flat).type, score.tier), grade);
   if (rent) thoughts.push(rent);
   thoughts.push({ label: MEMORIES.newPlace.label, value: MEMORIES.newPlace.value });

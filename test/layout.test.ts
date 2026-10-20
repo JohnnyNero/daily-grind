@@ -168,6 +168,19 @@ describe('households', () => {
     const options = householdsFor(flatKind(sim, ids[0]), false).map((o) => o.kind);
     expect(options).toEqual(['single', 'couple']);
     expect(householdsFor(flatKind(sim, sim.layout.flats[1].id), false).map((o) => o.kind)).toEqual(['single']);
+    // A studio with a double bed: couples about 15% of the time.
+    const st = sim.state;
+    const studio = sim.layout.flats[1];
+    // Swap its single bed and the sink beside it for a double.
+    const bed = st.furniture.find((f) => f.def === 'bed' && sim.layout.flatAt(f.x, f.s)?.id === studio.id)!;
+    st.furniture = st.furniture.filter((f) => f !== bed && !(f.def === 'sink' && f.s === bed.s && f.x === bed.x + 2));
+    expect(typeof placeFurniture(st, 'doubleBed', bed.x, bed.s)).not.toBe('string');
+    sim.changed();
+    expect(flatKind(sim, studio.id).type).toBe('studio');
+    let couples = 0;
+    for (let i = 0; i < 400; i++) if (newApplicant(sim, studio.id).household === 'couple') couples++;
+    expect(couples / 400).toBeGreaterThan(0.09);
+    expect(couples / 400).toBeLessThan(0.21);
   });
 
   it('households move in as what they are; sharers short of a bedroom say so', () => {

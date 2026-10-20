@@ -1266,6 +1266,6 @@ export const LAYOUT = {
   secondChild: 0.4,
   /** Sharers or a family with fewer bedrooms than they need. */
   tooFewBedrooms: -6,
-  /** Two or more people and nowhere to sit but the beds. */
+  /** Sharers or a family (people who don't share a bed) with nowhere to sit but the beds. */
   nowhereToSit: -3,
 };

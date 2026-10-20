@@ -149,8 +149,9 @@ What they think of the fit (live thoughts, labelled like every other):
 
 - **Not enough bedrooms** (−6): sharers with fewer bedrooms than sharers, a family with
   fewer than two. Only happens once you've rebuilt round them, as applicants always fit.
-- **Nowhere to sit but the bed** (−3): two or more people and no sitting anywhere but a
-  bedroom.
+- **Nowhere to sit but the bed** (−3): sharers or a family (people who don't share a bed)
+  with no sitting anywhere but a bedroom. A couple can sit on the bed.
+- Applicants weigh the same fit thoughts when you look at them (`likelyLiking`).
 - **Cramped** (−5, existing): fewer than five tiles each.
 - Their own tier thought (existing) uses their actual numbers, so a crowded flat feels
   shabbier to them even though its going rate hasn't moved.
@@ -199,6 +200,7 @@ landing, and a flat beyond another can only be reached through it. So the ways t
 - **A ground-floor flat with its own street door** (the plinth's doorstep works today).
 - **Up**, with planning permission (exists), and later down and into the shop (payoff d).
 - **A second stair core**: dear, eats a column of every floor, buys two more flats a floor.
+  No tool for it now (owner); it comes with growing the building (L10).
 
 ### 1.8 How part 1 proves it's a trade-off
 
@@ -222,19 +224,15 @@ landing, and a flat beyond another can only be reached through it. So the ways t
 Changes to other tests, each for a reason:
 
 - `test/policy.ts`: the scripted landlords furnish like a player: the bed alone in the
-  smallest room big enough for a bedroom (a double if they can afford it), the rest
-  elsewhere. Before, everything went in the first room, which now makes a single-bed studio
-  that only singles apply for, and the building ran a person or two short of what the soaks
-  were tuned on.
+  smallest room big enough for a bedroom, and a double whenever a single would have been
+  affordable, the rest elsewhere. Before, everything went in the first room with a single
+  bed, which now makes a studio only singles apply for: the building ran a person or two
+  short of what the soaks were tuned on (the pacing soak's "2+ people visible" fell to
+  94.8%).
 - `test/stage.ts`: `homeAndAwake` also takes them off the pavement walk (a tenant caught
   walking home was teleported in and carried on walking along the street).
 - `test/schedules.test.ts`: a tenant let at 08:00 isn't counted late for a 07:30 start that
   day (all four "late" lines were that).
-- `test/pace.soak.test.ts` (the drip-down branch's, not touched): three of its tight
-  measures now miss by a hair on single seeds (2+ people visible 94.8% against 95% on seed 1
-  decent; no thread or promise back in weeks 2 and 3 on seed 2; the absent landlord liked
-  more than the decent one in week 2 on seed 4). Who lives where has changed, so the dice
-  fall differently; it needs retuning with the drip's owner.
 
 What part 1 doesn't yet have, and parts 2 and 3 add: the carved flat's extra cost is only
 crowding, no living room and more people. Thinner walls between more households, the stair
@@ -388,8 +386,9 @@ the files it owns. Shared touch points are named so merges stay clean.
 | **L7 It worked** (payoff a) | settling overlays, rent tick-up popups, complaints stopping | `renderer.ts` popups, `ui/` | `economy.ts` (an event when a rate rises) |
 | **L8 Moving-in day** (payoff b) | van, boxes, first night | `visitors.ts` (the van), `moments.ts` | `leases.ts accept` (one call) |
 | **L9 Layout tales** (payoff c) | tales naming the cause | `tales.ts`, `outcomes.ts` | needs L2 and L3's "why" strings |
-| **L10 Growing** (payoff d) | basement, the shop, sign-off | `start.ts` (the shop), `planning.ts`, `build.ts` | after L4 |
+| **L10 Growing** (payoff d) | basement, the shop, sign-off; a second stair core is how the basement and the shop open up (no separate tool before this) | `start.ts` (the shop), `planning.ts`, `build.ts` | after L4 |
 | **L11 Decor curve** | repeats count for less | `impressiveness.ts` | `tuning.ts` |
+| **L12 Couples as partners** | a couple (and a family's parents) move in as partners: "In love", breakups and affairs from day one | `tenants.ts moveIn` | retune the drip's pacing soak with it (affairs are a happening and hold up the drip) |
 
 L2, L3, L4, L5, L6, L8 and L11 can start together. L7 and L9 want L2 and L3's interfaces
 (stubbed first); L10 wants L4.
@@ -438,16 +437,11 @@ furniture recipes; timers, rushing, collecting and restocking; landlord survival
 prestige stars and long gates; contracts, districts and more buildings; dozens of overlays;
 combat; anything location-based.
 
-## 9. Decisions for the owner
+## 9. Decided by the owner
 
-1. **Size factors.** Carving a one-bed into a two-bed lifts the going rate about 50% at the
-   same quality. Too tempting, or right while parts 2 to 4 aren't in?
-2. **Couples as partners.** A couple move in as a household but not as partners in the
-   romance code. Making them partners gives "In love", breakups and affairs from day one,
-   which is truer, but affairs are a happening and hold up the drip. Worth it, once the
-   drip's pacing soak is retuned for it?
-3. **Box room at under 3 tiles.** A single bed is 2 wide, so a box room is a 2-tile room.
-   Right line?
-4. **Studios with a double bed** draw couples 15% of the time. Keep, or singles only?
-5. **Second stair core** as the way to more flats a floor: worth a dedicated tool, or leave
-   it to the existing stair and door tools?
+1. **Size factors** stay as they are; review after noise and heat (L2, L3) land.
+2. **Couples as partners**: yes, as its own chunk (L12) with the pacing soak retuned. Not in
+   part 1: a couple move in as a household, and romance starts in the building.
+3. **Box room** under 3 tiles: keep.
+4. **A studio with a double bed** draws couples about 15% of the time (tested).
+5. **No second-stair tool** now; noted under L10.

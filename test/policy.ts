@@ -75,7 +75,8 @@ export function landlord(sim: Sim, policy: Policy, cards?: Cards): void {
       if (st.money < furniturePrice(def) + 600 * POUND) break;
       const isBed = def === 'bed';
       const order = isBed ? [bedRoom, ...rooms.filter((r) => r !== bedRoom)] : [...rooms.filter((r) => !hasBed(r)), ...rooms.filter((r) => hasBed(r))];
-      const tries = isBed && st.money >= furniturePrice('doubleBed') + 600 * POUND ? ['doubleBed', 'bed'] : [def];
+      // A double whenever the single would have been affordable: it sleeps a couple, for £120 more.
+      const tries = isBed && st.money >= furniturePrice('bed') + 600 * POUND ? ['doubleBed', 'bed'] : [def];
       let done = false;
       for (const room of order) {
         if (!room || done) continue;
