@@ -68,6 +68,11 @@ export const FLAGS: Record<string, FlagDef> = {
   foxNight: { about: 'The fox has been at the bins: more dirt in the lobby and on the stairs', readBy: ['dirt.shared'] },
   alarmChecked: { about: 'Someone has seen to this flat\'s smoke alarm lately', subject: 'flat', readBy: ['card:chirping'] },
   batteryOut: { about: 'A smoke alarm with its battery out: the council counts it as broken', subject: 'flat', readBy: ['council.issues', 'card:chirping'], grudge: true },
+  // --- added by chunk 2a ---
+  lodger: { about: 'Someone not on the lease is living in a flat: it wears faster, and they count for the council\'s "overcrowded"', subject: 'flat', readBy: ['upkeep.wear', 'council.issues', 'card:lodger'] },
+  petWear: { about: 'A pet lives in a flat: it wears faster', subject: 'flat', readBy: ['upkeep.wear'] },
+  diyShelf: { about: 'A tenant put a shelf up themselves: no more asking for the drill', subject: 'flat', readBy: ['card:drill'] },
+  painted: { about: 'A tenant painted the flat their colour: once they\'ve gone, it lets slower', subject: 'flat', readBy: ['letting.hours', 'card:paint'] },
 };
 
 // ------------------------------------------------------------------ the hooks
@@ -135,7 +140,25 @@ export const READERS: Record<string, { [H in FlagHook]?: FlagReader<H> }> = {
   wrongBin: { 'bins.overflowing': () => true },
   boilerServiced: { 'bills.gas': (_sim, _flag, bill) => Math.round(bill * 0.9) },
   boilerMoods: { 'bills.gas': (_sim, _flag, bill) => Math.round(bill * 1.15) },
+  // --- added by chunk 2a ---
+  lodger: {
+    'upkeep.wear': (_sim, flag, wear, ctx) => (flag.subject === ctx.flat ? wear * 1.25 : wear),
+    // One more person in the flat for the council's "fewer tiles each" check.
+    'council.issues': (sim, flag, list) => {
+      const flat = sim.layout.flat(flag.subject ?? null);
+      if (!flat || !sim.state.flats[flat.id]?.lease) return list;
+      const people = sim.state.pawns.filter((p) => p.life?.flat === flat.id && !p.life.leaving).length;
+      const line = `${flat.name} is overcrowded`;
+      return list.includes(line) || sim.layout.flatNodes(flat).length / (people + 1) >= LODGER_CROWDED ? list : [...list, line];
+    },
+  },
+  petWear: { 'upkeep.wear': (_sim, flag, wear, ctx) => (flag.subject === ctx.flat ? wear * 1.3 : wear) },
+  // Half of applicants hate someone else's colours: a slower let while it's empty.
+  painted: { 'letting.hours': (sim, flag, hours, ctx) => (flag.subject !== undefined && flag.subject === ctx.flat && !sim.state.flats[flag.subject]?.lease ? hours * 1.5 : hours) },
 };
+
+/** COUNCIL.overcrowded, kept here so this file imports only types. */
+const LODGER_CROWDED = 3;
 
 /** The value a system should use, after any live flags have had their say. */
 export function readFlags<H extends FlagHook>(sim: Sim, hook: H, value: FlagHooks[H], ctx: FlagContext = {}): FlagHooks[H] {
