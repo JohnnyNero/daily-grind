@@ -16,6 +16,7 @@ import { eventsMinute, storyHour } from './events';
 import { crimeMinute } from './crime';
 import { councilMorning, upkeepHour } from './upkeep';
 import { planningMorning } from './planning';
+import { risersMorning } from './risers';
 import { expectationsMorning } from './expectations';
 import { gradesMorning } from './grades';
 import { handoverHour, startHandover } from './handover';
@@ -111,6 +112,7 @@ export class Sim {
       chatMorning(this);
       councilMorning(this);
       planningMorning(this);
+      risersMorning(this);
     }
     environmentHour(this);
     raiseTiers(this);

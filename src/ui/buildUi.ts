@@ -31,14 +31,17 @@ import { CELL_PRICE, DEMOLISH_PRICE, INSULATE_PRICE, book, furniturePrice, pound
 import { GRADE_NAMES, GRADE_ORDER, gradeOf, gradeProblem, gradedName, poshLockedWhy, poshUnlocked } from '../sim/grades';
 import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, TICKS_PER_HOUR, TILE, isDoor, isSolid, key, type CellKind, type Grade, type State } from '../sim/state';
-import { buyFurniture, shiftFurniture, turnFurniture } from '../sim/furnish';
+import { buyFurniture, fittedPrice, shiftFurniture, turnFurniture } from '../sim/furnish';
+import { pipeCost } from '../sim/risers';
 import { partsOf, piecesBetween, quote } from '../sim/works';
+import { applyForRisers, riserProblem, risersOf, setRisers, unapproved } from '../sim/risers';
+import { RISERS } from '../sim/tuning';
 import { drawFurniture } from '../render/art';
 import { floorY, type Cell, type Renderer } from '../render/renderer';
 import { el, h } from './dom';
 import type { FurnitureCard } from './furnitureCard';
 
-type Tool = CellKind | 'insulate' | 'demolish';
+type Tool = CellKind | 'insulate' | 'demolish' | 'riser';
 
 const TOOLS: Record<Tool, { name: string; hint: string }> = {
   wall: { name: 'Add', hint: 'Tap or drag to draw walls a cell at a time, anywhere. A wall with space over it is a floor.' },
@@ -49,13 +52,14 @@ const TOOLS: Record<Tool, { name: string; hint: string }> = {
   entrance: { name: 'Street door', hint: 'Tap the bottom of a two-cell gap on the ground: the way in from the street.' },
   stair: { name: 'Stairs', hint: 'Tap a floor: a flight goes straight up from it, one cell wide, through the floor above.' },
   demolish: { name: 'Erase', hint: 'Tap or drag to take out walls, windows, doors and stairs.' },
+  riser: { name: 'Riser', hint: 'Tap a column: a riser, the pipes kitchens and bathrooms plumb into, up every floor. Building control look at it first. Tap a planned one to take it out.' },
 };
 
 /** The groups along the top of the bar: building work first, then furniture. */
 const GROUPS: { id: string; name: string; tools?: Tool[]; furniture?: FurnitureGroup[] }[] = [
   { id: 'walls', name: 'Walls', tools: ['wall', 'demolish'] },
   { id: 'doors', name: 'Doors & windows', tools: ['door', 'flatDoor', 'entrance', 'window'] },
-  { id: 'stairs', name: 'Stairs', tools: ['stair'] },
+  { id: 'stairs', name: 'Stairs & pipes', tools: ['stair', 'riser'] },
   { id: 'insulate', name: 'Insulation', tools: ['insulate'] },
   { id: 'sleep', name: 'Bedroom', furniture: ['sleep'] },
   { id: 'sit', name: 'Living', furniture: ['sit'] },
@@ -198,8 +202,15 @@ export class BuildUi {
     if (p.id !== undefined) return null;
     const locked = gradeProblem(this.sim, p.def, p.grade ?? 'standard');
     if (locked) return locked;
-    if (this.sim.state.money < furniturePrice(p.def, p.grade)) return `Can't afford it: you have ${pounds(this.sim.state.money)}`;
+    if (this.sim.state.money < this.pendingPrice()) return `Can't afford it: you have ${pounds(this.sim.state.money)}`;
     return null;
+  }
+
+  /** What the piece being placed costs where it is: its price, and the plumbing if it's new (or moving) far from the pipes. */
+  private pendingPrice(): number {
+    const p = this.pending;
+    if (!p) return 0;
+    return p.id === undefined ? fittedPrice(this.sim.state, p.def, p.x, p.grade) : pipeCost(this.sim.state, p.def, p.x);
   }
 
   /** The ghost, and the bar: what it is, what it costs, and whether it fits there. */
@@ -209,7 +220,7 @@ export class BuildUi {
     const problem = this.pendingProblem();
     this.renderer.build.ghost = { def: p.def, x: p.x, s: p.s, flip: p.flip, ok: problem === null, grade: p.grade };
     const name = gradedName({ def: p.def, grade: p.grade });
-    el('place-name').textContent = p.id === undefined ? `${name} · ${pounds(furniturePrice(p.def, p.grade))}` : `Moving the ${name.toLowerCase()}`;
+    el('place-name').textContent = p.id === undefined ? `${name} · ${pounds(this.pendingPrice())}` : `Moving the ${name.toLowerCase()}`;
     const why = el('place-why');
     why.textContent = problem ?? 'Tap where it should go, or drag it.';
     why.classList.toggle('bad', problem !== null);
@@ -217,7 +228,7 @@ export class BuildUi {
     el('place-facts').replaceChildren(...(problem === null ? this.pendingFacts() : []).map(factSpan));
     const ok = el('place-ok') as HTMLButtonElement;
     ok.disabled = problem !== null;
-    ok.textContent = p.id === undefined ? `Place ${pounds(furniturePrice(p.def, p.grade))}` : 'Place';
+    ok.textContent = p.id === undefined || this.pendingPrice() > 0 ? `Place ${pounds(this.pendingPrice())}` : 'Place';
     el('place-cancel').textContent = p.id === undefined ? 'Done' : 'Cancel';
     this.bump();
   }
@@ -331,25 +342,32 @@ export class BuildUi {
   private loadDraft(): void {
     const st = this.sim.state;
     const from = st.works.plan ?? st;
-    this.draft = { ...st, cells: { ...from.cells }, insulated: { ...from.insulated } };
+    this.draft = { ...st, cells: { ...from.cells }, insulated: { ...from.insulated }, wet: this.draftWet(st.works.plan?.risers ?? risersOf(st)) };
+  }
+
+  /** The draft's risers: the plan's, with the rest of the wet stack as it really is. */
+  private draftWet(risers: readonly number[]): State['wet'] {
+    const st = this.sim.state;
+    return { approved: [], rng: 0, ...st.wet, risers: [...risers] };
   }
 
   /** The draft's copy of everything but the cells is the real thing, kept up to date. */
   private syncDraft(): void {
     const { cells, insulated } = this.draft;
-    Object.assign(this.draft, this.sim.state, { cells, insulated });
+    const risers = risersOf(this.draft);
+    Object.assign(this.draft, this.sim.state, { cells, insulated, wet: this.draftWet(risers) });
   }
 
   /** The draft, for undo. */
   private buildingSnap(): (typeof this.undo)[number] {
-    return { plan: JSON.stringify({ cells: this.draft.cells, insulated: this.draft.insulated }) };
+    return { plan: JSON.stringify({ cells: this.draft.cells, insulated: this.draft.insulated, risers: risersOf(this.draft) }) };
   }
 
   /** Keeps the draft as the plans (shown in blue), or none if it's no different from the building. */
   private savePlan(): void {
     const st = this.sim.state;
     const d = this.draft;
-    st.works.plan = piecesBetween(partsOf(st), partsOf(d)).length > 0 ? { cells: { ...d.cells }, insulated: { ...d.insulated }, furniture: [] } : null;
+    st.works.plan = piecesBetween(partsOf(st), partsOf(d)).length > 0 ? { cells: { ...d.cells }, insulated: { ...d.insulated }, furniture: [], risers: [...risersOf(d)] } : null;
   }
 
   private furnitureSnap(): (typeof this.undo)[number] {
@@ -409,8 +427,11 @@ export class BuildUi {
     const red = this.unheld().length;
     const planning = needsPlanning(this.sim, plan.cells);
     const applied = st.planning.applied;
-    sign.textContent = planning && !applied ? `Apply for planning ${pounds(PLANNING_FEE)}` : `Sign off ${pounds(cost)}`;
-    sign.disabled = red > 0 || (planning ? applied !== undefined || st.money < PLANNING_FEE : cost > st.money);
+    // New risers wait on building control (risers.ts), as building higher waits on planning.
+    const control = !planning && unapproved(st, plan.risers).length > 0;
+    const asked = st.wet?.applied;
+    sign.textContent = planning && !applied ? `Apply for planning ${pounds(PLANNING_FEE)}` : control && !asked ? `Apply to building control ${pounds(RISERS.controlFee)}` : `Sign off ${pounds(cost)}`;
+    sign.disabled = red > 0 || (planning ? applied !== undefined || st.money < PLANNING_FEE : control ? asked !== undefined || st.money < RISERS.controlFee : cost > st.money);
     const facts = red > 0 ? [] : changeFacts(this.sim, {}, { cells: plan.cells, insulated: plan.insulated });
     out.append(
       ...facts.map((f) => h('span', { class: `fact${f.tone ? ` ${f.tone}` : ''}` }, f.text)),
@@ -419,6 +440,8 @@ export class BuildUi {
         ? h('span', { class: 'down' }, `${red} cell${red === 1 ? " isn't" : "s aren't"} held up (in red)`)
         : planning
           ? h('span', { class: 'down' }, applied ? `Planning: the council decides on day ${applied.decideDay}` : 'Above the roofline: needs planning permission')
+          : control
+            ? h('span', { class: 'down' }, asked ? `Building control decide on day ${asked.decideDay}` : 'A new riser: needs building control')
           : cost > st.money
             ? h('span', { class: 'down' }, `You have ${pounds(st.money)}`)
             : h('span', {}, 'Ready to build'),
@@ -437,10 +460,18 @@ export class BuildUi {
       this.updateFooter();
       return;
     }
+    const waiting = unapproved(st, plan.risers);
+    if (waiting.length > 0) {
+      const problem = applyForRisers(this.sim, waiting);
+      this.onNotify(problem ?? 'Sent to building control. They will write.', problem !== null);
+      this.updateFooter();
+      return;
+    }
     const cost = quote(piecesBetween(partsOf(st), plan)).cost;
     if (cost > st.money) return;
     st.cells = { ...plan.cells };
     st.insulated = { ...plan.insulated };
+    setRisers(this.sim, plan.risers);
     if (cost !== 0) book(this.sim, 'Building work', -cost);
     st.works.plan = null;
     this.sim.changed();
@@ -471,7 +502,9 @@ export class BuildUi {
   private restoreStep(step: (typeof this.undo)[number]): void {
     const st = this.sim.state;
     if (step.plan) {
-      Object.assign(this.draft, JSON.parse(step.plan) as Partial<State>);
+      const { risers, ...parts } = JSON.parse(step.plan) as Partial<State> & { risers?: number[] };
+      Object.assign(this.draft, parts);
+      if (risers) this.draft.wet = this.draftWet(risers);
       this.draftChanged();
     }
     if (step.furniture) {
@@ -761,6 +794,9 @@ export class BuildUi {
       case 'stair':
         if (single) run(() => placeStairs(st, x, this.stairFoot(x, s), false));
         break;
+      case 'riser':
+        if (single) run(() => this.toggleRiser(x));
+        break;
       default: {
         // A door goes in by its bottom cell: tapping the top half of a gap means the cell below.
         const kind = this.tool as CellKind;
@@ -769,6 +805,20 @@ export class BuildUi {
       }
     }
     this.setHint(problem, problem !== null);
+  }
+
+  /** A tap with the riser tool: plans a riser up that column, or takes a planned one out. */
+  private toggleRiser(x: number): string | null {
+    const d = this.draft;
+    const planned = risersOf(d);
+    if (planned.includes(x) && !risersOf(this.sim.state).includes(x)) {
+      d.wet = this.draftWet(planned.filter((r) => r !== x));
+      return null;
+    }
+    const problem = riserProblem(this.sim.state, planned, x);
+    if (problem) return problem;
+    d.wet = this.draftWet([...planned, x].sort((a, b) => a - b));
+    return null;
   }
 
   get isMoving(): boolean {
@@ -848,6 +898,10 @@ export class BuildUi {
     } else if (this.tool === 'stair') {
       const foot = this.stairFoot(cell.x, cell.s);
       b.marks.push({ x: cell.x, s: foot, w: 1, h: FLIGHT, ok: stairsProblem(st, cell.x, foot, false) === null });
+    } else if (this.tool === 'riser') {
+      const planned = risersOf(st);
+      const ok = riserProblem(this.sim.state, planned, cell.x) === null || (planned.includes(cell.x) && !risersOf(this.sim.state).includes(cell.x));
+      b.marks.push({ x: cell.x, s: 1, w: 1, h: Math.max(1, cell.s), ok });
     } else if (this.tool === 'insulate') {
       b.marks.push({ x: cell.x, s: cell.s, w: 1, h: 1, ok: insulateProblem(st, key(cell.x, cell.s)) === null });
     } else if (this.tool === 'demolish') {
@@ -940,6 +994,12 @@ function toolIcon(t: Tool): HTMLCanvasElement {
       r(11, 2, 10, 21, '#d6c9b2');
       for (let i = 0; i < 5; i++) r(12 + (i % 2) * 4, 3 + i * 4, 4, 3, '#e8c84a');
       break;
+    case 'riser':
+      // A pipe up the wall, with brackets.
+      r(14, 2, 5, 21, '#6f7a82');
+      r(15, 2, 1, 21, '#9aa6ae');
+      for (const y of [6, 14, 21]) r(12, y, 9, 2, '#4f585e');
+      break;
     case 'demolish':
       r(14, 3, 4, 14, '#6b4a32');
       r(8, 3, 16, 6, '#56606d');
@@ -956,6 +1016,7 @@ function toolPrice(t: Tool): string {
   if (t === 'demolish') return `${pounds(DEMOLISH_PRICE)} a cell`;
   if (t === 'insulate') return `${pounds(INSULATE_PRICE)} a cell`;
   if (t === 'stair') return `${pounds(CELL_PRICE.stair * FLIGHT)} a flight`;
+  if (t === 'riser') return `${pounds(RISERS.perStorey)} a storey`;
   return `${pounds(CELL_PRICE[t])}${t === 'wall' || t === 'window' ? ' a cell' : ''}`;
 }
 

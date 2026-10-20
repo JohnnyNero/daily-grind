@@ -17,6 +17,7 @@ import { spacesOf } from '../sim/shared';
 import { flatKind } from '../sim/rooms';
 import { flightOf, unsupportedCells, type BuildParts } from '../sim/build';
 import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
+import { risersOf } from '../sim/risers';
 
 const SKY_ROWS = 4;
 const GROUND_ROWS = 3;
@@ -442,6 +443,7 @@ export class Renderer {
       this.drawCell(ctx, lay, colours, x, s, kind);
     }
     this.drawDoorsteps(ctx, lay);
+    for (const x of risersOf(st)) this.drawRiser(ctx, x);
     // Rugs first, so everything else stands on them.
     const drawOrder = [...st.furniture].sort((a, b) => Number(!!furnitureDef(b.def).underfoot) - Number(!!furnitureDef(a.def).underfoot));
     for (const f of drawOrder) {
@@ -927,6 +929,10 @@ export class Renderer {
     const part = p.part;
     const X = p.x * TILE;
     const Y = floorY(p.s) - TILE;
+    if (part.kind === 'riser') {
+      this.drawRiser(ctx, p.x, BLUE);
+      return;
+    }
     if (part.kind === 'insulate') {
       if (p.removes) cross(X, Y, TILE, TILE);
       else {
@@ -954,6 +960,27 @@ export class Renderer {
       for (let j = 0; j < 4; j++) ctx.fillRect(X + 2, floorY(p.s) - (j + 1) * 4, TILE - 4, 3);
     } else ctx.fillRect(X, top, TILE, TILE);
     outline(X, top, TILE, rows * TILE);
+  }
+
+  /**
+   * A riser (layout L4): a pipe up the back wall from the ground floor to under the roof,
+   * with a bracket on every storey. A planned one is drawn in the blueprint colour.
+   */
+  private drawRiser(ctx: CanvasRenderingContext2D, x: number, planned?: string): void {
+    let top = 1;
+    for (const k of Object.keys(this.sim.state.cells)) top = Math.max(top, Number(k.split(',')[1]));
+    const X = x * TILE + 10;
+    const y0 = floorY(top);
+    const y1 = floorY(1);
+    if (planned) {
+      ctx.fillStyle = `${planned}aa`;
+      ctx.fillRect(X, y0, 4, y1 - y0);
+      return;
+    }
+    rect(ctx, X, y0, 4, y1 - y0, '#6f7a82');
+    rect(ctx, X + 1, y0, 1, y1 - y0, '#9aa6ae');
+    rect(ctx, X + 3, y0, 1, y1 - y0, '#4f585e');
+    for (let s = 2; s < top; s += 4) rect(ctx, X - 1, floorY(s) - 2, 6, 2, '#4f585e');
   }
 
   /** A builder in a hard hat, hammering away at the piece they're on. */

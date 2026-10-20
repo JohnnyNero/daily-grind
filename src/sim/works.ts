@@ -14,6 +14,7 @@ import { SHARED } from './environment';
 import type { Sim } from './sim';
 import { isDoor, key, type CellKind, type State } from './state';
 import { remember } from './thoughts';
+import { riserPrice, risersOf, storeysOf, unapproved, wetOf } from './risers';
 
 export const BUILDERS = 'Bodge & Sons';
 
@@ -27,7 +28,7 @@ export const BUILDER_NOISE = 5;
 
 /** Minutes of work for each kind of cell. */
 const CELL_MINUTES: Record<CellKind, number> = { wall: 20, window: 45, door: 60, flatDoor: 90, entrance: 120, stair: 45 };
-const MINUTES = { knockDown: 15, insulate: 20 };
+const MINUTES = { knockDown: 15, insulate: 20, riserStorey: 240 };
 
 /** One thing to do: what, where (for drawing it and the noise), what it costs and how long. */
 export interface Piece {
@@ -41,12 +42,12 @@ export interface Piece {
   /** Takes something away (drawn crossed out) rather than adding it. */
   removes: boolean;
   /** For drawing it: a cell (what goes in, or null for knocking out what's there) or insulation. */
-  part: { kind: 'cell'; cell: CellKind | null; was?: CellKind } | { kind: 'insulate' };
+  part: { kind: 'cell'; cell: CellKind | null; was?: CellKind } | { kind: 'insulate' } | { kind: 'riser' };
   apply(st: State): void;
 }
 
 export function partsOf(st: State): BuildParts {
-  return { cells: st.cells, furniture: st.furniture, insulated: st.insulated };
+  return { cells: st.cells, furniture: st.furniture, insulated: st.insulated, risers: risersOf(st) };
 }
 
 export function copyParts(p: BuildParts): BuildParts {
@@ -133,6 +134,23 @@ export function piecesBetween(now: BuildParts, target: BuildParts): Piece[] {
       },
     });
   }
+  // New risers, last: up every storey, from the ground. (Risers don't come out.)
+  for (const x of target.risers ?? []) {
+    if ((now.risers ?? target.risers ?? []).includes(x)) continue;
+    out.push({
+      label: 'Put in a riser',
+      cost: riserPrice(target.cells),
+      minutes: MINUTES.riserStorey * storeysOf(target.cells),
+      x,
+      s: 1,
+      removes: false,
+      part: { kind: 'riser' },
+      apply: (st) => {
+        const w = wetOf(st);
+        if (!w.risers.includes(x)) w.risers = [...w.risers, x].sort((a, b) => a - b);
+      },
+    });
+  }
   return out;
 }
 
@@ -195,6 +213,7 @@ export function signOff(sim: Sim): string | null {
     return null;
   }
   if (q.cost > st.money) return `It comes to ${pounds(q.cost)} and you have ${pounds(st.money)}`;
+  if (unapproved(st, plan.risers).length > 0) return 'Building control haven\'t approved the riser yet';
   const starting = !st.works.job;
   st.works.job = plan;
   st.works.plan = null;

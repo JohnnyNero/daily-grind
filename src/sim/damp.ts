@@ -16,6 +16,7 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, type Life } from './state';
 import { has } from './traits';
 import { remember, type Thought } from './thoughts';
+import { riserLeakRooms } from './risers';
 import { DAMP, SMELL } from './tuning';
 
 /** Pieces that leak when they're broken. */
@@ -75,6 +76,8 @@ function sources(sim: Sim, people: (flat: string) => number, warmth: (room: numb
   const { fans, leaks } = piecesByRoom(sim);
   const out = new Map<number, Source>();
   const shapes = roomShapes(sim);
+  // A riser leak (risers.ts) runs down the wall: each room it passes through has a leak of its own for a while.
+  const wetByRiser = new Set(riserLeakRooms(sim));
   for (const [id, shape] of shapes) {
     const reasons: string[] = [];
     const use = uses.get(id) ?? [];
@@ -99,6 +102,11 @@ function sources(sim: Sim, people: (flat: string) => number, warmth: (room: numb
     if (leak > 0) {
       made += DAMP.leak * leak * (shape.links.some((l) => l.dir === 'below') ? DAMP.leakStays : 1);
       reasons.push('A leak');
+    }
+    // Water down the wall from the riser wets every room it passes, all the way down.
+    if (wetByRiser.has(id)) {
+      made += DAMP.leak;
+      reasons.push('The riser leaked');
     }
     for (const l of shape.links) {
       if (l.dir !== 'above' || !leaks.get(l.to)) continue;
