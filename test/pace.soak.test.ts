@@ -126,7 +126,7 @@ function stillShows(sim: Sim, m: Marks, opened: { def: string; tick: number }[],
 }
 
 /** The tale kinds only the drip's cards write (state.ts, TaleKind). */
-const CARD_TALES = new Set<string>(['parcelNicked', 'lockout', 'cowboy', 'leak', 'cat', 'kittens', 'brokePromise', 'pritchard', 'fakeMeterMan', 'deposit', 'squatter', 'badTurn']);
+const CARD_TALES = new Set<string>(['parcelNicked', 'lockout', 'cowboy', 'leak', 'cat', 'kittens', 'brokePromise', 'pritchard', 'fakeMeterMan', 'deposit', 'squatter', 'badTurn', 'praise', 'lobbyDo', 'stairTrip', 'washerFlood']);
 
 const runs = new Map<string, Run>();
 
@@ -324,17 +324,17 @@ describe('the pacing soak', () => {
     });
   }
 
-  // The spec's measures the game doesn't meet yet, kept word for word so they can be switched
-  // back on. Why each fails, and what to change, is in the chunk 8 notes at the end of
-  // docs/specs/minute-to-minute.md; "prints the numbers" below shows where each run stands.
-  describe('not met yet (chunk 8 notes)', () => {
+  // The spec's measures that the chunk 8 notes left switched off. The everyday cards (b2)
+  // and a telly in Flat 1 bring them on; "prints the numbers" below shows where each run stands.
+  // One half of one is still off: see "ignoring hurts" below.
+  describe('the measures chunk 8 left off', () => {
     const all = () => SEEDS.flatMap((seed) => MODES.map((mode) => ({ name: `seed ${seed} ${mode}`, r: play(seed, mode) })));
 
-    it.skip('drip cards: a mean of at least 1 a day over each week from week two', () => {
+    it('drip cards: a mean of at least 1 a day over each week from week two', () => {
       for (const { name, r } of all()) for (const week of [2, 3]) expect(weekMean(r, week), `${name} week ${week}`).toBeGreaterThanOrEqual(1);
     });
 
-    it.skip('decisions of any kind: 2 to 5 a day from day 8, on average', () => {
+    it('decisions of any kind: 2 to 5 a day from day 8, on average', () => {
       for (const { name, r } of all()) {
         const perDay = mean(range(8, DAYS).map((d) => r.days.get(d)?.decisions ?? 0));
         expect(perDay, name).toBeGreaterThanOrEqual(2);
@@ -342,15 +342,15 @@ describe('the pacing soak', () => {
       }
     });
 
-    it.skip('at least 2 people visible and awake in 95% of waking minutes', () => {
+    it('at least 2 people visible and awake in 95% of waking minutes', () => {
       for (const { name, r } of all()) expect(visibleShare(r), name).toBeGreaterThanOrEqual(0.95);
     });
 
-    it.skip('street cards are at most 30% of the mix', () => {
+    it('street cards are at most 30% of the mix', () => {
       for (const { name, r } of all()) expect(streetShare(r), name).toBeLessThanOrEqual(0.3);
     });
 
-    it.skip("decent answers come back: a thread or promise each week from week two, and 2 of each Sunday's tales from cards", () => {
+    it("decent answers come back: a thread or promise each week from week two, and 2 of each Sunday's tales from cards", () => {
       for (const seed of SEEDS) {
         const r = play(seed, 'decent');
         expect(r.cameBack[1], `seed ${seed} week 2`).toBeGreaterThanOrEqual(1);
@@ -359,13 +359,26 @@ describe('the pacing soak', () => {
       }
     });
 
-    it.skip('ignoring hurts: an absent landlord ends each week less liked than the decent and the ruthless one', () => {
+    it('ignoring hurts: an absent landlord ends each week less liked than the decent one', () => {
       for (const seed of SEEDS) {
-        const [decent, ruthless, absentD, absentR] = (['decent', 'ruthless', 'absentDecent', 'absentRuthless'] as Mode[]).map((m) => play(seed, m));
-        for (let w = 0; w < 3; w++) {
-          expect(absentD.liking[w], `seed ${seed} week ${w + 1}, against decent`).toBeLessThan(decent.liking[w]);
-          expect(absentR.liking[w], `seed ${seed} week ${w + 1}, against ruthless`).toBeLessThan(ruthless.liking[w]);
-        }
+        const [decent, absentD] = (['decent', 'absentDecent'] as Mode[]).map((m) => play(seed, m));
+        for (let w = 0; w < 3; w++) expect(absentD.liking[w], `seed ${seed} week ${w + 1}, against decent`).toBeLessThan(decent.liking[w]);
+      }
+    });
+
+    // Still off. Against the ruthless landlord it holds on seeds 2 and 4 and fails on seed 1 in
+    // week three (34 against 22); before the b2 cards it failed in week two on every seed. The
+    // cause is who is left to ask, not what the cards do. Ignoring the first week's cards makes
+    // tenants give notice (Bill, on day 6, "Landlord couldn't care less"); by the end of week two
+    // they've gone, and their flats are let to newcomers who have "New place" and no rent rise
+    // yet. The ruthless landlord who answers keeps the same tenants, now on their second rise.
+    // The measure averages only who's there, so the harder ignoring hurts, the more it churns and
+    // the better the absent landlord looks. No card content fixes that; counting leavers (or
+    // comparing turnover) would.
+    it.skip('ignoring hurts: an absent landlord ends each week less liked than the ruthless one', () => {
+      for (const seed of SEEDS) {
+        const [ruthless, absentR] = (['ruthless', 'absentRuthless'] as Mode[]).map((m) => play(seed, m));
+        for (let w = 0; w < 3; w++) expect(absentR.liking[w], `seed ${seed} week ${w + 1}, against ruthless`).toBeLessThan(ruthless.liking[w]);
       }
     });
   });

@@ -75,6 +75,23 @@ export const FLAGS: Record<string, FlagDef> = {
   petWear: { about: 'A pet lives in a flat: it wears faster', subject: 'flat', readBy: ['upkeep.wear'] },
   diyShelf: { about: 'A tenant put a shelf up themselves: no more asking for the drill', subject: 'flat', readBy: ['card:drill'] },
   painted: { about: 'A tenant painted the flat their colour: once they\'ve gone, it lets slower', subject: 'flat', readBy: ['letting.hours', 'card:paint'] },
+  // --- added by chunk b2 ---
+  oddJobs: { about: 'A tenant does the odd jobs for money off the rent: a handy one keeps things from wearing, anyone keeps the stairs tidier', subject: 'pawn', readBy: ['upkeep.wear', 'dirt.shared', 'card:oddJobs'] },
+  extractorFan: { about: 'An extractor fan in a flat: no more cooking smells next door, no more mould', subject: 'flat', readBy: ['card:cookingSmells'] },
+  ownWasher: { about: 'A tenant plumbed in their own washing machine: it can leak on the flat below', subject: 'flat', readBy: ['card:washer', 'card:washerLeak'] },
+  rota: { about: 'A rota for the stairs on the wall: the stairs stay cleaner', readBy: ['dirt.shared', 'card:rota', 'card:rotaSlips'] },
+  smokesIn: { about: 'A smoker told off the step smokes indoors: the flat wears faster', subject: 'flat', readBy: ['upkeep.wear', 'card:smokingOnStep'] },
+  boxesIn: { about: 'A tenant\'s boxes in an empty flat: viewers see them, and it lets slower', subject: 'flat', readBy: ['letting.hours', 'card:boxes'] },
+  clients: { about: 'A tenant works from the flat: strangers on the stairs, and the flat wears faster', subject: 'flat', readBy: ['crime.risk', 'upkeep.wear', 'card:sideHustle'] },
+  radsBled: { about: 'The plumber bled every radiator: the gas goes further', readBy: ['bills.gas'] },
+  weepingRad: { about: 'A radiator valve weeping into a bowl: the flat wears faster, and the valve will go', subject: 'flat', readBy: ['upkeep.wear', 'card:radiatorValve', 'card:valveGoes'] },
+  doorShuts: { about: 'The street door was planed and shuts properly: a touch harder to get in', readBy: ['crime.risk'] },
+  doorSticks: { about: 'The street door sticks and doesn\'t always latch', readBy: ['crime.risk', 'card:doorJams'] },
+  doorPropped: { about: 'Someone propped the street door open with a brick', readBy: ['crime.risk'] },
+  mould: { about: 'Damp and mould in a flat: it\'s on the council\'s list', subject: 'flat', readBy: ['council.issues', 'card:mould', 'card:mouldBack'] },
+  looseSlates: { about: 'Loose slates over a flat: the weather gets in, and things wear faster', subject: 'flat', readBy: ['upkeep.wear'] },
+  tapedCarpet: { about: 'The stair carpet is held down with gaffer tape: someone will catch a heel', readBy: ['card:stairCarpet', 'card:stairTrip'] },
+  draughtProof: { about: 'Draught strips round a flat\'s windows: the gas goes further', subject: 'flat', readBy: ['bills.gas', 'card:draughtyWindow'] },
 };
 
 // ------------------------------------------------------------------ the hooks
@@ -270,3 +287,32 @@ READERS.batteryOut = {
     return flat ? [...issues, `${flat.name} has a smoke alarm with no battery`] : issues;
   },
 };
+// --- added by chunk b2 ---
+// What the everyday cards' flags do (cards/everyday.ts). The rest are read by the cards that set them.
+const handyHere = (sim: Sim, id: string | undefined): boolean => sim.state.pawns.some((p) => String(p.id) === id && !!p.life && !p.life.leaving && p.life.traits.includes('handy'));
+const hereNow = (sim: Sim, id: string | undefined): boolean => sim.state.pawns.some((p) => String(p.id) === id && !!p.life && !p.life.leaving);
+READERS.oddJobs = {
+  'upkeep.wear': (sim, flag, wear) => (handyHere(sim, flag.subject) ? wear * 0.85 : wear),
+  'dirt.shared': (sim, flag, dirt) => (hereNow(sim, flag.subject) ? dirt * 0.85 : dirt),
+};
+READERS.rota = { 'dirt.shared': (_sim, _flag, dirt) => dirt * 0.8 };
+READERS.smokesIn = { 'upkeep.wear': (_sim, flag, wear, ctx) => (ctx.flat === flag.subject ? wear * 1.1 : wear) };
+READERS.boxesIn = { 'letting.hours': (_sim, flag, hours, ctx) => (ctx.flat === flag.subject ? hours * 1.3 : hours) };
+READERS.clients = {
+  'crime.risk': (_sim, _flag, risk) => Math.min(1, risk + 0.03),
+  'upkeep.wear': (_sim, flag, wear, ctx) => (ctx.flat === flag.subject ? wear * 1.15 : wear),
+};
+READERS.radsBled = { 'bills.gas': (_sim, _flag, bill) => Math.round(bill * 0.95) };
+READERS.weepingRad = { 'upkeep.wear': (_sim, flag, wear, ctx) => (ctx.flat === flag.subject ? wear * 1.15 : wear) };
+READERS.doorShuts = { 'crime.risk': (_sim, _flag, risk) => risk * 0.9 };
+READERS.doorSticks = { 'crime.risk': (_sim, _flag, risk) => Math.min(1, risk + 0.04) };
+READERS.doorPropped = { 'crime.risk': (_sim, _flag, risk) => Math.min(1, risk + 0.1) };
+READERS.mould = {
+  'council.issues': (sim, flag, issues) => {
+    const flat = flag.subject ? sim.layout.flat(flag.subject) : undefined;
+    const line = flat ? `${flat.name} has damp and mould` : '';
+    return flat && sim.state.flats[flat.id]?.lease && !issues.includes(line) ? [...issues, line] : issues;
+  },
+};
+READERS.looseSlates = { 'upkeep.wear': (_sim, flag, wear, ctx) => (ctx.flat === flag.subject ? wear * 1.2 : wear) };
+READERS.draughtProof = { 'bills.gas': (_sim, _flag, bill) => Math.round(bill * 0.97) };

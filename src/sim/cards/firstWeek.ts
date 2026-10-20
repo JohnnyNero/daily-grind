@@ -133,8 +133,8 @@ const billsShopping: CardDef = {
   hook: () => 'Bill and his shopping.',
   text: () => "Bill's on the stairs with two bags and one good knee. He's not asking.",
   choices: () => [
-    { label: 'Carry it up', note: "He'll talk all the way" },
-    { label: "He'll manage", note: 'He will. Slowly.' },
+    { label: 'Carry it up', note: '' },
+    { label: "He'll manage", note: '' },
   ],
   resolve(sim, card, answer) {
     const b = subjectOf(sim, card);
@@ -164,8 +164,8 @@ const billStairsAsk: CardDef = {
   hook: () => 'Bill asks about downstairs.',
   text: () => "Bill: 'The stairs are getting me. Any chance of a ground-floor flat?'",
   choices: () => [
-    { label: "I'll look into it", note: 'Frees his flat up' },
-    { label: 'Stairs keep you fit', note: 'Free. Unwise.' },
+    { label: "I'll look into it", note: '' },
+    { label: 'Stairs keep you fit', note: 'Free' },
   ],
   resolve(sim, card, answer) {
     const b = subjectOf(sim, card);
@@ -202,7 +202,7 @@ const keysOnMat: CardDef = {
   text: () => "Mr Pritchard (the old owner) posted his spare keys back. Who else has a set?",
   choices: (sim) => [
     { label: 'Change the locks', note: sim.state.security.locks ? 'Already done' : '£60' },
-    { label: 'Post them back', note: 'Free. Trusting.' },
+    { label: 'Post them back', note: 'Free' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -238,7 +238,7 @@ const cleanerCard: CardDef = {
   text: () => "Lorraine: stairs done every morning, £30 a week. She hears everything.",
   choices: () => [
     { label: 'Take her on', note: '£30 a week' },
-    { label: 'Not yet', note: 'The stairs are yours' },
+    { label: 'Not yet', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -276,7 +276,7 @@ const binsQuestion: CardDef = {
   hook: (sim, card) => `${first(subjectOf(sim, card))} can't find the bins.`,
   text: (sim, card) => `${first(subjectOf(sim, card))} is stood in the lobby with a bag of rubbish and no idea.`,
   choices: () => [
-    { label: 'Show them', note: 'Bill is out front' },
+    { label: 'Show them', note: '' },
     { label: 'Point', note: 'Out the back, left' },
   ],
   resolve(sim, card, answer) {
@@ -324,7 +324,7 @@ const billsShower: CardDef = {
   text: (sim, card) => (card.data?.below ? `Water through ${sim.layout.flat(belowFlat(sim, card))?.name ?? 'the flat below'}'s ceiling. It's Bill's shower.` : "Bill's shower is dripping onto the floor. The floor has noticed."),
   choices: (sim, card): [CardChoice, CardChoice] => [
     { label: 'Plumber', note: quote(sim, sim.state.furniture.find((f) => f.id === card.furniture)) },
-    { label: 'Bucket and towel', note: 'Free. Drips again.' },
+    { label: 'Bucket and towel', note: 'Free' },
   ],
   resolve(sim, card, answer) {
     const b = subjectOf(sim, card);
@@ -382,7 +382,7 @@ const showerAgain: CardDef = {
   text: () => "Bill's shower again. The bucket's full and so is Bill's patience.",
   choices: (sim, card): [CardChoice, CardChoice] => [
     { label: 'Plumber now', note: quote(sim, sim.state.furniture.find((f) => f.id === card.furniture)) },
-    { label: 'One more week', note: 'Empty the bucket' },
+    { label: 'One more week', note: 'Free' },
   ],
   resolve(sim, card, answer) {
     const b = subjectOf(sim, card);
@@ -406,8 +406,8 @@ const windowMan: CardDef = {
   hook: () => 'Window cleaner at the door.',
   text: () => 'A man with a ladder: £15 a month, windows done. Says he is cheaper than rain.',
   choices: () => [
-    { label: '£15 a month', note: 'Monthly, on the dot' },
-    { label: 'No ta', note: 'Rain will do' },
+    { label: '£15 a month', note: '' },
+    { label: 'No ta', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -443,8 +443,8 @@ const gasMeterFirst: CardDef = {
   hook: () => 'Gas man at the door.',
   text: () => 'The man from the gas wants to read the meter. He has a lanyard.',
   choices: () => [
-    { label: 'Let him in', note: 'Someone follows him' },
-    { label: 'Appointment first', note: 'Bill estimated' },
+    { label: 'Let him in', note: '' },
+    { label: 'Appointment first', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -473,8 +473,8 @@ const scaffoldNextDoor: CardDef = {
   hook: () => 'Next door want to scaffold.',
   text: () => "Next door's builders want to scaffold your wall for a fortnight. £80.",
   choices: () => [
-    { label: 'Take the £80', note: 'Noise and a way in' },
-    { label: 'No', note: "They'll remember" },
+    { label: 'Take the £80', note: '' },
+    { label: 'No', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -507,7 +507,7 @@ const newcomerAsks: CardDef = {
   text: (sim, card) => `${first(subjectOf(sim, card))} wants to put shelves up. With a drill. Today.`,
   choices: () => [
     { label: 'Go on then', note: 'Drilling, daytime' },
-    { label: 'Not in the walls', note: 'Safe. Unpopular.' },
+    { label: 'Not in the walls', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -547,8 +547,8 @@ const friendsRound: CardDef = {
   hook: (sim, card) => `${first(subjectOf(sim, card))} has people coming.`,
   text: (sim, card) => `${first(subjectOf(sim, card))} is having a few people round tonight. All right?`,
   choices: () => [
-    { label: 'Fine', note: 'A good night, a loud one' },
-    { label: 'Keep it down', note: 'Quiet. Unpopular.' },
+    { label: 'Fine', note: '' },
+    { label: 'Keep it down', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -596,7 +596,7 @@ const billsDaughter: CardDef = {
   hook: () => "Bill's daughter wants a word.",
   text: () => "Bill's daughter is on the stairs, looking at the damp and then at you.",
   choices: () => [
-    { label: 'Say hello', note: 'She will look around' },
+    { label: 'Say hello', note: '' },
     { label: 'Send up biscuits', note: '£5' },
   ],
   resolve(sim, card, answer) {
@@ -637,8 +637,8 @@ const lockedOutFirst: CardDef = {
   hook: (sim, card) => `${first(subjectOf(sim, card))}'s locked out.`,
   text: (sim, card) => `${first(subjectOf(sim, card))} is locked out and sat on the step in the rain.`,
   choices: () => [
-    { label: 'Let them in', note: 'They will owe you' },
-    { label: 'Key under the mat', note: 'Never again' },
+    { label: 'Let them in', note: '' },
+    { label: 'Key under the mat', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -672,8 +672,8 @@ const monthUpFront: CardDef = {
   hook: (sim, card) => `${first(subjectOf(sim, card))} offers rent up front.`,
   text: (sim, card) => `${first(subjectOf(sim, card))} wants to pay a week ahead, for a fiver a week off from now on.`,
   choices: () => [
-    { label: 'Take it', note: 'Cash now, less later' },
-    { label: 'Rent as it is', note: 'They stop paying early' },
+    { label: 'Take it', note: '' },
+    { label: 'Rent as it is', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);
@@ -709,7 +709,7 @@ const boilerMoods: CardDef = {
   text: () => "The boiler sounds like a man falling downstairs. Pritchard did say it had moods.",
   choices: () => [
     { label: 'Call the engineer', note: '£60' },
-    { label: 'Give it a thump', note: 'Free. Moody.' },
+    { label: 'Give it a thump', note: 'Free' },
   ],
   resolve(sim, card, answer) {
     const p = subjectOf(sim, card);

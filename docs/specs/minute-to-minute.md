@@ -986,3 +986,21 @@ switched back on; "prints the numbers" shows where every run stands.
    rent up) cost about what being ignored does (-5 to -6), while three ignored cards take one
    off each day's budget, so the absent landlord also sees fewer cards. Proposal: compare
    against the decent landlord only, or make `ignored` -7 and `leftToIt` -6.
+
+## Chunk b2 notes: everyday cards
+
+Thirty-five more cards in `cards/everyday.ts` (21 drawn, 14 follow-ups), two thirds about
+tenants and a third about the building, none from the street: paying late, a mate on the sofa,
+a bike in the hall, a parcel opened by mistake, odd jobs for rent off, a birthday do in the
+lobby, cooking smells, a washing machine, someone thinking of leaving, a stairs rota, smoke on
+the step, boxes in the empty flat, a little business from the flat, watering the plants, a
+weeping radiator valve, a dripping tap, a sticking street door, mould, the gutter, the stair
+carpet and a draughty window. Kind answers leave `praise` tales and often come back as a
+follow-up. Flat 1 starts with a telly (a cooker, the telly and the sofa; no fridge or sink), so
+its tenant stops going out for a walk every late morning. Choice notes now give only a price or
+a plain fact, on every card.
+
+With them, measures 1 to 5 above pass on every seed and policy and are switched on. Measure 6
+passes against the decent landlord and is on; against the ruthless one it still fails (now only
+seed 1, week three), because averaging who's left rewards churn: ignoring makes tenants leave,
+and their replacements are new and happy. See the comment in `test/pace.soak.test.ts`.

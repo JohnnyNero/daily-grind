@@ -395,7 +395,8 @@ describe('the first week', () => {
     });
     expect(cards.length).toBeGreaterThanOrEqual(7);
     const perDay = new Map<number, number>();
-    for (const c of cards) {
+    // Seven days from 08:00 on day 1 runs into day 8's first hour, when the ordinary drip has taken over.
+    for (const c of cards.filter((x) => x.tick < 7 * TICKS_PER_DAY)) {
       expect(cardDef(c.def)?.followUp, c.def).toBe(true);
       const day = Math.floor(c.tick / TICKS_PER_DAY);
       perDay.set(day, (perDay.get(day) ?? 0) + 1);

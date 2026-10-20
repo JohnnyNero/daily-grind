@@ -380,7 +380,9 @@ export type TaleKind =
   | 'affair' | 'repossessed' | 'fight' | 'burglary' | 'councilFine' | 'missedMortgage' | 'breakup' | 'partyShutDown' | 'burglaryFoiled'
   | 'couple' | 'gaveNotice' | 'councilNotice' | 'partyDamage' | 'party' | 'moveIn' | 'moveOut' | 'grant' | 'broken'
   // From the drip's cards (1.4).
-  | 'parcelNicked' | 'lockout' | 'cowboy' | 'leak' | 'cat' | 'kittens' | 'brokePromise' | 'pritchard' | 'fakeMeterMan' | 'deposit' | 'squatter' | 'badTurn';
+  | 'parcelNicked' | 'lockout' | 'cowboy' | 'leak' | 'cat' | 'kittens' | 'brokePromise' | 'pritchard' | 'fakeMeterMan' | 'deposit' | 'squatter' | 'badTurn'
+  // From the everyday cards (chunk b2).
+  | 'praise' | 'lobbyDo' | 'stairTrip' | 'washerFlood';
 
 /** Something that happened, as people will tell it. */
 export interface Tale {

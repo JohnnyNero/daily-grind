@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { placeFurniture, removeFurniture } from '../src/sim/build';
+import { removeFurniture } from '../src/sim/build';
 import { flatScore } from '../src/sim/impressiveness';
 import { deserialize, serialize } from '../src/sim/save';
 import { Sim } from '../src/sim/sim';
@@ -83,15 +83,8 @@ describe('tenants', () => {
 
   it('use a telly once there is one', () => {
     const sim = Sim.create(6);
-    const st = sim.state;
-    const { x0 } = st.plot;
-    // Flat 1's living room is full, so swap the sink and cooker for a telly by the sofa.
-    const sink = st.furniture.find((f) => f.def === 'sink' && f.s === 1)!;
-    removeFurniture(st, sink.id);
-    const cooker = st.furniture.find((f) => f.def === 'cooker' && f.s === 1)!;
-    removeFurniture(st, cooker.id);
-    expect(typeof placeFurniture(st, 'tv', x0 + 15, 1)).not.toBe('string');
-    sim.changed();
+    // Flat 1 starts with a telly by the sofa (start.ts).
+    expect(sim.state.furniture.some((f) => f.def === 'tv' && f.s === 1)).toBe(true);
     let watched = false;
     for (let t = 0; t < 3 * TICKS_PER_DAY && !watched; t += TICKS_PER_HOUR / 4) {
       sim.run(TICKS_PER_HOUR / 4);

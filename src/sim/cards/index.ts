@@ -6,6 +6,7 @@
 // before that card file's array exists, so nothing here may touch the arrays at load time.
 
 import { BUILDING_CARDS } from './building';
+import { EVERYDAY_CARDS } from './everyday';
 import { FIRST_WEEK_CARDS } from './firstWeek';
 import { STREET_CARDS } from './street';
 import { TENANT_CARDS } from './tenant';
@@ -18,7 +19,7 @@ let byId: Map<string, CardDef> | null = null;
 
 /** Every card, in file order. */
 export function allCards(): readonly CardDef[] {
-  return (all ??= [...TENANT_CARDS, ...BUILDING_CARDS, ...STREET_CARDS, ...FIRST_WEEK_CARDS]);
+  return (all ??= [...TENANT_CARDS, ...BUILDING_CARDS, ...STREET_CARDS, ...FIRST_WEEK_CARDS, ...EVERYDAY_CARDS]);
 }
 
 /** The catalogue as an array, gathered the first time anything reads it. */

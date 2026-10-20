@@ -377,6 +377,30 @@ export const MEMORIES: Record<string, MemoryDef> = {
   // chunk 4
   friendRound: { label: 'Had a friend round', value: 2, hours: 12, stack: 1 },
   familyRound: { label: 'Family came for tea', value: 3, hours: 24, stack: 1 },
+  // chunk b2: the everyday cards (cards/everyday.ts)
+  helpedOut: { label: 'Landlord let me off the rent for a week', value: 5, hours: 7 * 24, stack: 1, gossip: true },
+  refusedLate: { label: 'Rent\'s due when it\'s due, apparently', value: -3, hours: 5 * 24, stack: 1 },
+  squareAgain: { label: 'Paid back what I owed', value: 2, hours: 3 * 24, stack: 1 },
+  mateStayed: { label: 'A mate got to stay on my sofa', value: 3, hours: 4 * 24, stack: 1 },
+  noGuests: { label: 'Not allowed a mate to stay', value: -3, hours: 5 * 24, stack: 1, gossip: true },
+  bikeMoved: { label: 'Told to shift my bike', value: -2, hours: 4 * 24, stack: 1 },
+  trippedOnStairs: { label: 'Went flying on the stairs', value: -5, hours: 4 * 24, stack: 1, gossip: true },
+  trustedWithJobs: { label: 'Landlord trusts me with the odd jobs', value: 4, hours: 10 * 24, stack: 1, gossip: true },
+  lobbyDo: { label: 'A birthday do in the lobby', value: 5, hours: 3 * 24, stack: 1 },
+  cookingMoan: { label: 'Told my cooking smells', value: -3, hours: 5 * 24, stack: 1 },
+  ownWasher: { label: 'Got my own washing machine', value: 4, hours: 10 * 24, stack: 1 },
+  noWasher: { label: 'Not allowed a washing machine', value: -3, hours: 5 * 24, stack: 1 },
+  onTheRota: { label: 'Put on the stairs rota', value: -2, hours: 5 * 24, stack: 1 },
+  smokeMoved: { label: 'Told not to smoke on the step', value: -2, hours: 4 * 24, stack: 1 },
+  boxesStored: { label: 'Landlord let me store my boxes', value: 3, hours: 7 * 24, stack: 1 },
+  crampedBoxes: { label: 'Living among boxes', value: -2, hours: 4 * 24, stack: 1 },
+  sideHustle: { label: 'Got to start a little business', value: 5, hours: 10 * 24, stack: 1, gossip: true },
+  noHustle: { label: 'Not allowed to work from the flat', value: -3, hours: 5 * 24, stack: 1 },
+  strangersOnStairs: { label: 'Strangers on the stairs all day', value: -2, hours: 3 * 24, stack: 1 },
+  bowlUnderIt: { label: 'A bowl under the radiator', value: -2, hours: 3 * 24, stack: 2 },
+  toldToBleach: { label: 'Told to bleach the mould myself', value: -2, hours: 4 * 24, stack: 1 },
+  draughty: { label: 'Draughty windows', value: -3, hours: 3 * 24, stack: 1 },
+  wateredPlants: { label: 'Landlord watered my plants', value: 4, hours: 7 * 24, stack: 1, gossip: true },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -920,6 +944,11 @@ export const INTEREST = {
   deposit: 1.5,
   squatter: 4,
   badTurn: 2,
+  // chunk b2: the everyday cards. Kind answers get talked about too.
+  praise: 3,
+  lobbyDo: 3,
+  stairTrip: 2.5,
+  washerFlood: 2.5,
 };
 
 // ================================================================== furniture grades

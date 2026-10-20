@@ -127,7 +127,7 @@ const haggle: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))} wants £5 off the rent.`,
   text: (sim, c) => `${first(who(sim, c))} caught you by the bins. £5 off, "for the state of the ${thingName(sim, c.furniture)}".`,
   choices: () => [
-    { label: 'Fine, £5 off', note: 'For good. Others may hear' },
+    { label: 'Fine, £5 off', note: '£5 a week, for good' },
     { label: 'I\'ll fix it', note: 'Within five days' },
   ],
   resolve(sim, c, answer) {
@@ -142,7 +142,7 @@ const haggle: CardDef = {
         const theirs = flatInfo(sim, o.life!.flat).lease;
         return o.life!.flat !== flat && theirs && !theirs.sitting && theirs.rent > now && goingRate(sim, o.life!.flat) <= goingRate(sim, flat);
       });
-      return out([`rent:${flat}:${-5 * POUND}`, `mem:${p.id}:agreedHaggle`, ...dearer.map((o) => `mem:${o.id}:paysMore`)], `${n}'s rent is £5 lower, for good.${dearer.length > 0 ? ' Word will get round.' : ''}`);
+      return out([`rent:${flat}:${-5 * POUND}`, `mem:${p.id}:agreedHaggle`, ...dearer.map((o) => `mem:${o.id}:paysMore`)], `${n}'s rent is £5 lower, for good.`);
     }
     if (answer === 1) return out([`promise:mend:${c.furniture}:5`, `chat:I'll get the ${thingName(sim, c.furniture)} seen to this week.`], `You said you'd fix the ${thingName(sim, c.furniture)} within five days. ${n} will hold you to it.`);
     return out([`mem:${p.id}:refusedHaggle`, `mem:${p.id}:ignored`], `${n} took that as a no, and told the stairs.`);
@@ -202,8 +202,8 @@ const noise: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))}: "${flatName(sim, pawnOf(sim, c.data?.noisy)?.life?.flat)}. Every night."`,
   text: (sim, c) => `${first(who(sim, c))}, ${flatName(sim, c.flat)}: "${flatName(sim, pawnOf(sim, c.data?.noisy)?.life?.flat)}'s noise. Every night. Every. Night."`,
   choices: () => [
-    { label: 'Have a word', note: 'They\'ll know who asked' },
-    { label: 'Sort it yourselves', note: 'Could go either way' },
+    { label: 'Have a word', note: '' },
+    { label: 'Sort it yourselves', note: '' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -281,8 +281,8 @@ const lockout: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))}'s locked out.`,
   text: (sim, c) => `${first(who(sim, c))}'s locked out. It's late. Sat on the front step, waiting.`,
   choices: () => [
-    { label: 'Let them in', note: 'Grateful. Loud on the stairs' },
-    { label: 'Key under the mat', note: 'No more lockouts. For anyone' },
+    { label: 'Let them in', note: '' },
+    { label: 'Key under the mat', note: '' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -292,7 +292,7 @@ const lockout: CardDef = {
     if (answer === 0) return out([`mem:${p.id}:helpedLockout`, `flag:owes:${p.id}:14`, ...sleepers.map((o) => `mem:${o.id}:keptAwake`)], `You let ${name} in. ${name} owes you one.${sleepers.length > 0 ? ' The stairs heard all about it.' : ''}`);
     if (answer === 1) {
       const locks = sim.state.security.locks;
-      return out([`mem:${p.id}:helpedLockout`, 'flag:keyUnderMat', 'risk:burglary:1:14'], locks ? `There's a key under the mat now. Your new locks count for nothing while it's there.` : `There's a key under the mat now. ${name} won't be locked out again. Nor will anyone else.`);
+      return out([`mem:${p.id}:helpedLockout`, 'flag:keyUnderMat', 'risk:burglary:1:14'], locks ? `There's a key under the mat now. Past your new locks, for anyone who looks.` : `There's a key under the mat now. ${name} won't be locked out again. Nor will anyone else.`);
     }
     // Nobody came. Someone awake might let them in; otherwise it's a locksmith, on their money.
     const awake = others(sim, p).find((o) => home(o) && (o.pose !== 'sleep' || has(o.life!, 'nightOwl')));
@@ -342,9 +342,9 @@ const drill: CardDef = {
   },
   hook: (sim, c) => `${first(who(sim, c))} wants to borrow your drill.`,
   text: (sim, c) => `${first(who(sim, c))} wants to put a shelf up. Can they borrow your drill?`,
-  choices: (sim, c) => [
-    { label: 'Lend it', note: has(who(sim, c).life!, 'clumsy') ? 'Mind the pipes' : 'Their shelf, their way' },
-    { label: 'I\'ll send someone', note: '£25, done properly' },
+  choices: () => [
+    { label: 'Lend it', note: '' },
+    { label: 'I\'ll send someone', note: '£25' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -433,9 +433,9 @@ const lodger: CardDef = {
   },
   hook: (sim, c) => `${first(who(sim, c))}: someone's not on the lease.`,
   text: (sim, c) => `${first(who(sim, c))} says someone's living in ${flatName(sim, c.flat)} who isn't on the lease.`,
-  choices: (sim, c) => [
-    { label: 'Knock and ask', note: 'Awkward either way' },
-    { label: 'Let it go', note: `${first(who(sim, c))} won't like it` },
+  choices: () => [
+    { label: 'Knock and ask', note: '' },
+    { label: 'Let it go', note: '' },
   ],
   resolve(sim, c, answer) {
     const b = who(sim, c);
@@ -512,7 +512,7 @@ const paysMore: CardDef = {
   text: (sim, c) => `${first(who(sim, c))} found out ${flatName(sim, String(c.data?.other))} pays £${Math.round(Number(c.data?.gap) / POUND)} a week less. Wants to know why.`,
   choices: (sim, c) => [
     { label: 'Match it', note: `£${Math.round(Number(c.data?.gap) / POUND)} a week less` },
-    { label: `${flatName(sim, String(c.data?.other))} goes up`, note: 'They\'ll hear who started it' },
+    { label: `${flatName(sim, String(c.data?.other))} goes up`, note: '' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -521,7 +521,7 @@ const paysMore: CardDef = {
     const gap = Number(c.data!.gap);
     const them = household(sim, other);
     const name = first(p);
-    if (answer === 0) return out([`rent:${flat}:${-gap}`, `mem:${p.id}:rentCut`], `${name}'s rent matches ${flatName(sim, other)}'s now. The hagglers will hear.`);
+    if (answer === 0) return out([`rent:${flat}:${-gap}`, `mem:${p.id}:rentCut`], `${name}'s rent matches ${flatName(sim, other)}'s now.`);
     if (answer === 1) {
       // A small rise, not the whole gap. An easy-going household shrugs it off; everyone hears who started it.
       const lease = flatInfo(sim, other).lease!;
@@ -582,8 +582,8 @@ const mumVisit: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))}'s mum wants a word.`,
   text: (sim, c) => `${first(who(sim, c))}'s mum is here and would like a word with "the landlord".`,
   choices: () => [
-    { label: 'Pop up, say hello', note: 'She\'ll look round' },
-    { label: 'Send up biscuits', note: '£5. From a distance' },
+    { label: 'Pop up, say hello', note: '' },
+    { label: 'Send up biscuits', note: '£5' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -662,8 +662,8 @@ const shouting: CardDef = {
   text: (sim, c) => `Shouting from ${flatName(sim, c.flat)}. Something just hit the wall.`,
   name: (sim, c) => flatName(sim, c.flat),
   choices: () => [
-    { label: 'Knock and check', note: 'They won\'t thank you' },
-    { label: 'Stay out of it', note: 'Nobody sleeps' },
+    { label: 'Knock and check', note: '' },
+    { label: 'Stay out of it', note: '' },
   ],
   resolve(sim, c, answer) {
     const a = who(sim, c);
@@ -739,8 +739,8 @@ const upFront: CardDef = {
     const lease = flatInfo(sim, c.flat!).lease;
     const f = sim.state.furniture.find((x) => x.id === c.furniture);
     return [
-      { label: 'Deal', note: `£${((lease?.rent ?? 0) * 4) / POUND} now. Fix it by Friday` },
-      { label: 'Fix it today', note: f ? `£${repairCost(f) / POUND}, and keep your money` : 'Keep your money' },
+      { label: 'Deal', note: `£${((lease?.rent ?? 0) * 4) / POUND} up front` },
+      { label: 'Fix it today', note: f ? `£${repairCost(f) / POUND}` : '' },
     ];
   },
   resolve(sim, c, answer) {
@@ -750,7 +750,7 @@ const upFront: CardDef = {
     const lease = flatInfo(sim, flat).lease!;
     const thing = thingName(sim, c.furniture);
     if (answer === 0) return out([`pay:${lease.rent * 4}:Four weeks' rent up front · ${flatName(sim, flat)}`, `act:prepay:${flat}:28`, `promise:mend:${c.furniture}:5`], `${name} paid four weeks up front. The ${thing} had better be working by day ${sim.day + 5}.`);
-    if (answer === 1) return out([`mend:${c.furniture}`, `mem:${p.id}:landlordListened`, 'expect:1', `chat:The ${thing}'s fixed. Same day.`], `The ${thing}'s fixed today. Word gets round: same-day repairs are the bar now.`);
+    if (answer === 1) return out([`mend:${c.furniture}`, `mem:${p.id}:landlordListened`, 'expect:1', `chat:The ${thing}'s fixed. Same day.`], `The ${thing}'s fixed today. Same-day service.`);
     // Left broken. Someone who knows where to write, writes.
     const f = sim.state.furniture.find((x) => x.id === c.furniture);
     const writes = !!f && isBasic(f) && (has(p.life!, 'complainer') || has(p.life!, 'knowsRights'));
@@ -806,8 +806,8 @@ const deposit: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))} wants all the deposit back.`,
   text: (sim, c) => `${first(who(sim, c))} leaves on day ${flatInfo(sim, c.flat!).lease?.notice?.day ?? sim.day}. Wants the whole deposit. The flat disagrees.`,
   choices: (_sim, c) => [
-    { label: 'All of it back', note: 'A kinder review' },
-    { label: `Keep £${Number(c.data?.keep) / POUND}`, note: 'For the wear and tear' },
+    { label: 'All of it back', note: '' },
+    { label: `Keep £${Number(c.data?.keep) / POUND}`, note: '' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -874,9 +874,9 @@ const familyKey: CardDef = {
   },
   hook: (sim, c) => `${first(who(sim, c))}'s family want a key.`,
   text: (sim, c) => `${first(who(sim, c))}'s daughter wants a key to the front door. "In case of a fall."`,
-  choices: (sim) => [
-    { label: 'Cut her a key', note: sim.state.security.locks ? '£5. A key outside your locks' : '£5. One more key about' },
-    { label: 'She can ring', note: 'Like everyone else' },
+  choices: () => [
+    { label: 'Cut her a key', note: '£5' },
+    { label: 'She can ring', note: '' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -930,8 +930,8 @@ const badTurn: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))} had a fall.`,
   text: (sim, c) => `${first(who(sim, c))} had a fall. Sandra the postie heard, and got help. Nobody else knew.`,
   choices: () => [
-    { label: 'Cut a key now', note: 'For the family' },
-    { label: 'Ask a neighbour', note: 'To look in each day' },
+    { label: 'Cut a key now', note: '£5' },
+    { label: 'Ask a neighbour', note: '' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -992,8 +992,8 @@ const parcelGossip: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))} asks about ${first(pawnOf(sim, c.data?.about)!)}'s parcel.`,
   text: (sim, c) => `${first(who(sim, c))} asks if you know what was in ${first(pawnOf(sim, c.data?.about)!)}'s parcel. "Only it rattled."`,
   choices: () => [
-    { label: 'Mind your own', note: 'Not your business' },
-    { label: 'It rattled, apparently', note: 'You\'ll hear things back' },
+    { label: 'Mind your own', note: '' },
+    { label: 'It rattled, apparently', note: '' },
   ],
   resolve(sim, c, answer) {
     const b = who(sim, c);
@@ -1059,8 +1059,8 @@ const informant: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))} has news about ${first(pawnOf(sim, c.data?.about)!)}.`,
   text: (sim, c) => `${first(who(sim, c))} has something to tell you about ${first(pawnOf(sim, c.data?.about)!)} in ${flatName(sim, pawnOf(sim, c.data?.about)!.life?.flat)}. In confidence.`,
   choices: () => [
-    { label: 'Go on then', note: 'You\'ll know something' },
-    { label: 'I\'d rather not', note: 'They\'ll be put out' },
+    { label: 'Go on then', note: '' },
+    { label: 'I\'d rather not', note: '' },
   ],
   resolve(sim, c, answer) {
     const b = who(sim, c);
@@ -1120,15 +1120,15 @@ const kittens: CardDef = {
   hook: (sim, c) => `Kittens in ${first(who(sim, c))}'s laundry basket.`,
   text: (sim, c) => `The cat's had kittens in ${first(who(sim, c))}'s laundry basket. ${first(who(sim, c))} would like one.`,
   choices: () => [
-    { label: 'Let them keep one', note: 'Pets get harder to refuse' },
-    { label: 'Homes for all', note: '£40 and the vet' },
+    { label: 'Let them keep one', note: '' },
+    { label: 'Homes for all', note: '£40' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
     const name = first(p);
     const rest = others(sim, p);
     const fans = rest.filter((o) => has(o.life!, 'petOwner'));
-    if (answer === 0) return out([`act:pet:a kitten`, ...fans.map((o) => `mem:${o.id}:buildingCat`), 'flag:petPrecedent'], `${name} has a kitten. Everyone's seen it. Saying no to pets just got harder.`);
+    if (answer === 0) return out([`act:pet:a kitten`, ...fans.map((o) => `mem:${o.id}:buildingCat`), 'flag:petPrecedent'], `${name} has a kitten. It sleeps in a slipper.`);
     if (answer === 1) return out(['pay:-4000:Vet: the cat done, kittens rehomed', `mem:${p.id}:sadAboutKitten`, 'flag:nextDoorFriendly'], `Homes for all, and no more kittens. Next door took two, and they're delighted.`);
     const minders = rest.filter((o) => !has(o.life!, 'petOwner'));
     return out(
@@ -1181,9 +1181,9 @@ const pet: CardDef = {
   },
   hook: (sim, c) => `${first(who(sim, c))} wants ${String(c.data?.pet ?? 'a pet')}.`,
   text: (sim, c) => `${first(who(sim, c))}: "Could I get ${String(c.data?.pet ?? 'a pet')}? Very well behaved. Mostly."`,
-  choices: (sim) => [
-    { label: 'Yes, go on', note: 'They\'ll love you for it' },
-    { label: 'No pets, sorry', note: sim.state.cat || hasFlag(sim, 'petPrecedent') ? 'With a cat on the stairs?' : 'They won\'t' },
+  choices: () => [
+    { label: 'Yes, go on', note: '' },
+    { label: 'No pets, sorry', note: '' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -1245,8 +1245,8 @@ const heating: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))}: is the heating on?`,
   text: (sim, c) => `${first(who(sim, c))}: "Is the heating on? It's ${Math.round(tempOf(sim, c.flat!))}° in here."`,
   choices: () => [
-    { label: 'Turn the boiler up', note: 'Warmer. Dearer gas all season' },
-    { label: 'Try a jumper', note: 'Free. Unpopular' },
+    { label: 'Turn the boiler up', note: 'Dearer gas' },
+    { label: 'Try a jumper', note: 'Free' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);
@@ -1300,8 +1300,8 @@ const paint: CardDef = {
   hook: (sim, c) => `${first(who(sim, c))} wants to paint the bedroom.`,
   text: (sim, c) => `${first(who(sim, c))}: "Can I paint the bedroom? I'll do it myself."`,
   choices: () => [
-    { label: 'Go for it', note: 'Their colour. The next tenant\'s problem' },
-    { label: 'Magnolia stays', note: 'Easy to let' },
+    { label: 'Go for it', note: '' },
+    { label: 'Magnolia stays', note: '' },
   ],
   resolve(sim, c, answer) {
     const p = who(sim, c);

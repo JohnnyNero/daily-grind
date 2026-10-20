@@ -50,6 +50,11 @@ const TEMPLATES: Record<TaleKind, string[]> = {
   deposit: ['{a} left, and there was a row about the deposit.', '{a} and the deposit: {what}.'],
   squatter: ['Someone had been sleeping in {flat}.', 'It turns out {flat} wasn\'t as empty as it looked.'],
   badTurn: ['{a} had a fall. Sandra the postie found them.'],
+  // From the everyday cards (chunk b2). {what} is what you did, said after "you".
+  praise: ['{a} has been telling everyone you {what}.', 'Word on the stairs is that you {what}. {a} says so, anyway.', '{a} says you {what}. Nobody quite believes it.'],
+  lobbyDo: ['There was a surprise birthday do for {a} in the lobby. {b} organised it. Bunting on the bins.', '{b} threw {a} a birthday do in the lobby. People are still finding balloons.'],
+  stairTrip: ['{a} went flying on the stairs.', '{a} caught a heel on the stairs, and is telling everyone.'],
+  washerFlood: ['{a}\'s washing machine in {flat} came through the ceiling below.', 'A washing machine in {flat} flooded the flat below. {a} is very sorry.'],
 };
 
 const first = (name: string) => name.split(' ')[0];
