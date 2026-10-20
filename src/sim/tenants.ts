@@ -27,7 +27,7 @@ import { post, recently } from './chat';
 import { rememberAbout } from './social';
 import { hhmm } from './time';
 import { stat } from './stat';
-import { DECAY, ITEMS, NEEDS, OUTINGS, SEEK, SHARED_USE, START_NEEDS } from './tuning';
+import { DECAY, ITEMS, NEEDS, OUT_FOR_FUN, OUTINGS, SCHEDULES, SEEK, SHARED_USE, START_NEEDS } from './tuning';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -292,8 +292,10 @@ function decide(sim: Sim, p: Pawn): void {
   if (needs.fun < SEEK.fun) {
     if (tryUse(sim, p, flat, 'fun')) return;
     // Not if it'd make them late for work.
-    if (m >= 10 * 60 && m < 22 * 60 && freeFor(sim, p, 150 + 60)) {
-      leaveFor(sim, p, random(st) < 0.5 ? 'Out at the pub' : 'Out for a walk', m + randInt(st, 60, 150));
+    // A walk any time from eight; the pub once it's open. (Both waiting for ten had everyone who's
+    // home all day out at once, late morning.)
+    if (m >= 8 * 60 && m < 22 * 60 && freeFor(sim, p, OUT_FOR_FUN[1] + 60)) {
+      leaveFor(sim, p, m >= 11 * 60 && random(st) < 0.5 ? 'Out at the pub' : 'Out for a walk', m + randInt(st, OUT_FOR_FUN[0], OUT_FOR_FUN[1]));
       return;
     }
   }
@@ -537,6 +539,16 @@ export function tenantReturns(sim: Sim, p: Pawn): void {
     life.needs.bladder = Math.min(life.needs.bladder, 0.5);
   }
   for (const [need, gain] of Object.entries(OUTINGS[why] ?? {}) as [NeedId, number][]) life.needs[need] = Math.min(1, life.needs[need] + gain);
+  // Out on an errand when it's time for their hours: straight on from there, not home and back.
+  const hours = awayToday(sim, life);
+  const m = sim.minuteOfDay;
+  if (why !== 'At work' && why !== 'At college' && hours && life.workedDay !== sim.day && m >= hours.leave - SCHEDULES.setOff && m < hours.back - 60) {
+    const dayStart = Math.floor(st.tick / TICKS_PER_DAY) * TICKS_PER_DAY;
+    life.workedDay = sim.day;
+    life.away = { until: dayStart + hours.back * TICKS_PER_MINUTE, why: life.job ? 'At work' : 'At college' };
+    p.doing = life.away.why;
+    return;
+  }
   life.away = null;
   p.exit = random(st) < 0.5 ? 0 : 1;
   p.x = p.exit === 0 ? 0 : st.w - 1;

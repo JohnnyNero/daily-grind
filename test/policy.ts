@@ -11,11 +11,15 @@ import { scoreFor } from '../src/sim/impressiveness';
 import type { Sim } from '../src/sim/sim';
 import { mend } from '../src/sim/upkeep';
 import { answerCard, openCards } from '../src/sim/drip';
+import type { Card } from '../src/sim/state';
 
 export type Policy = 'decent' | 'ruthless';
 
+/** How the drip's cards get answered, if not by the policy's button: left alone, or by a function of the test's. */
+export type Cards = 'ignore' | ((sim: Sim, card: Card) => void);
+
 /** Called once a game hour: sets rents, picks applicants, answers letters and cards. */
-export function landlord(sim: Sim, policy: Policy): void {
+export function landlord(sim: Sim, policy: Policy, cards?: Cards): void {
   const st = sim.state;
   for (const f of sim.layout.flats) {
     const info = flatInfo(sim, f.id);
@@ -50,7 +54,11 @@ export function landlord(sim: Sim, policy: Policy): void {
     choose(sim, l.id, policy === 'decent' ? 0 : l.choices.length - 1);
   }
   // The drip's cards: the decent one takes the first button, the ruthless one the second.
-  for (const c of [...openCards(sim)]) answerCard(sim, c.id, policy === 'decent' ? 0 : 1);
+  for (const c of [...openCards(sim)]) {
+    if (cards === 'ignore') continue;
+    if (cards) cards(sim, c);
+    else answerCard(sim, c.id, policy === 'decent' ? 0 : 1);
+  }
   // Both furnish a bare flat with the basics once they can afford it (cheapest first).
   for (const f of sim.layout.flats) {
     if (flatInfo(sim, f.id).lease) continue;
@@ -78,6 +86,19 @@ export function landlord(sim: Sim, policy: Policy): void {
   }
   // Even the ruthless one mends what the council has told them to.
   if (st.council.notice) for (const f of st.furniture) if (f.broken !== undefined) mend(sim, f.id);
+  // Heating: the decent one puts a radiator in any flat that has none, let or about to be (a boiler
+  // with nothing to heat is no heating at all); the ruthless one only once the council says it's too cold.
+  for (const f of sim.layout.flats) {
+    if (itemsIn(sim, f.id, 'radiator') > 0) continue;
+    if (policy === 'ruthless' && !st.council.notice?.issues.some((i) => i.startsWith(`${f.name} is too cold`))) continue;
+    if (st.money < furniturePrice('radiator') + 200 * POUND) continue;
+    const cells = sim.layout.flatCells(f).map((n) => sim.layout.xs(n));
+    for (const [x, s] of cells) {
+      if (typeof furnitureProblem(st, 'radiator', x, s) === 'string') continue;
+      buyFurniture(sim, 'radiator', x, s, false);
+      break;
+    }
+  }
   // Keep a cushion, overpay the rest.
   const cushion = 1500 * POUND;
   if (st.money > cushion + 1000 * POUND) overpay(sim, st.money - cushion);

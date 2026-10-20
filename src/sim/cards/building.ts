@@ -276,10 +276,10 @@ const bins: CardDef = {
         notice: culprit && busy ? `The fox came. ${first(busy)} has told the stairs whose bags they were: ${first(culprit)}'s.` : 'The fox came. The lobby is a state.',
       };
     }
+    // Everyone was left to it (spec 1.6); the house-proud take it personally as well.
     const proud = people.filter((p) => has(p.life!, 'houseProud'));
-    const rest = people.filter((p) => !has(p.life!, 'houseProud'));
     return {
-      effects: ['flag:foxNight::2', 'flag:dumpingSpot::14', ...mems(proud, 'leftToIt'), ...mems(rest, 'brushedOff'), ...gossip],
+      effects: ['flag:foxNight::2', 'flag:dumpingSpot::14', ...mems(people, 'leftToIt'), ...mems(proud, 'brushedOff'), ...gossip],
       notice: 'Two nights of fox. The bins are now where people put things.',
     };
   },
@@ -323,7 +323,7 @@ const chirping: CardDef = {
   id: 'chirping',
   source: 'building',
   kind: 'moment',
-  cooldownDays: 21,
+  cooldownDays: 7,
   turnsOn: ['trait:messy', 'trait:clumsy', 'trait:easyGoing', 'trait:knowsRights', 'inspection'],
   icon: 'alarm',
   when: (sim) => chirps(sim),
@@ -400,7 +400,7 @@ const windowGone: CardDef = {
   id: 'windowGone',
   source: 'building',
   kind: 'moment',
-  cooldownDays: 10,
+  cooldownDays: 7,
   turnsOn: ['tier', 'season', 'trait:knowsRights'],
   when: (sim) => windows(sim),
   hook: (sim, card) => fit(`${flatName(sim, card.flat)}'s window's gone.`, 40),

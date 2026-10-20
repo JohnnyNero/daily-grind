@@ -333,7 +333,7 @@ const drill: CardDef = {
   id: 'drill',
   source: 'tenant',
   kind: 'ask',
-  cooldownDays: 14,
+  cooldownDays: 7,
   turnsOn: ['trait:handy', 'trait:clumsy', 'flatBelow'],
   when(sim) {
     return tenants(sim)
@@ -415,7 +415,7 @@ const lodger: CardDef = {
   id: 'lodger',
   source: 'tenant',
   kind: 'ask',
-  cooldownDays: 14,
+  cooldownDays: 7,
   turnsOn: ['partnerOrLodger', 'trait:busybody'],
   when(sim) {
     const list: CardSubject[] = [];
@@ -439,10 +439,12 @@ const lodger: CardDef = {
   ],
   resolve(sim, c, answer) {
     const b = who(sim, c);
-    const t = pawnOf(sim, c.data?.tenant)!;
+    const t = pawnOf(sim, c.data?.tenant);
     const partner = pawnOf(sim, c.data?.partner);
     const flat = c.flat!;
     const fn = flatName(sim, flat);
+    // They've moved out since: nobody to ask, and nothing to let go.
+    if (!t) return out([`mem:${b.id}:${answer === 'ignored' ? 'ignored' : 'landlordListened'}`], `${fn}'s lot have gone, and whoever it was went with them.`);
     const couple = partner ? [t, partner] : [t];
     if (answer === 0) {
       if (partner) return out([`mem:${t.id}:nosyLandlord`, `mem:${partner.id}:nosyLandlord`, `mem:${b.id}:landlordListened`], `It's ${first(t)}'s partner, ${first(partner)}. They didn't like being asked.`);
@@ -496,8 +498,12 @@ const paysMore: CardDef = {
       const cheaper = sim.layout.flats
         .filter((f) => f.id !== p.life!.flat && household(sim, f.id).length > 0)
         .map((f) => ({ f, lease: flatInfo(sim, f.id).lease }))
-        .filter((x) => x.lease && mine.rent - x.lease.rent > 15 * POUND && goingRate(sim, x.f.id) >= goingRate(sim, p.life!.flat) * 0.9)
-        .sort((a, b) => a.lease!.rent - b.lease!.rent)[0];
+        // Not against a sitting tenant: their rent is from before your time, and everyone knows
+        // it. Matching that would halve a rent at a stroke, for a rise of a fiver the other way.
+        .filter((x) => x.lease && !x.lease.sitting && mine.rent - x.lease.rent > 15 * POUND && goingRate(sim, x.f.id) >= goingRate(sim, p.life!.flat) * 0.9)
+        // The nearest rent under theirs, not the cheapest in the building: matching that one
+        // would walk every rent down to a sitting tenant's, one card at a time.
+        .sort((a, b) => b.lease!.rent - a.lease!.rent)[0];
       if (cheaper) list.push({ pawn: p.id, flat: p.life!.flat, data: { other: cheaper.f.id, gap: mine.rent - cheaper.lease!.rent }, weight: 1.5 });
     }
     return list;
@@ -529,26 +535,25 @@ const paysMore: CardDef = {
   },
   fixtures: [
     {
-      name: 'Bill shrugs nothing off',
+      name: 'next door shrugs nothing off',
       build(seed) {
         const sim = fixtureSim(seed);
-        const [p] = letFlat(sim, 1, [['haggler', 'busybody']], 100 * POUND);
-        settle(p);
+        const [p] = letFlat(sim, 2, [['haggler', 'busybody']], 100 * POUND);
+        const [o] = letFlat(sim, 4, [['lightSleeper', 'keenCook']], 75 * POUND);
+        settle(p, o);
         p.life!.memories.push({ id: 'paysMore', at: sim.state.tick - TICKS_PER_HOUR });
-        const bill = sitting(sim)[1];
-        return { sim, subject: { pawn: p.id, flat: p.life!.flat, data: { other: bill.life!.flat, gap: 100 * POUND - flatInfo(sim, bill.life!.flat).lease!.rent } } };
+        return { sim, subject: { pawn: p.id, flat: p.life!.flat, data: { other: o.life!.flat, gap: 25 * POUND } } };
       },
     },
     {
-      name: 'an easy-going Bill',
+      name: 'an easy-going next door',
       build(seed) {
         const sim = fixtureSim(seed);
-        const [p] = letFlat(sim, 1, [['knowsRights', 'houseProud']], 100 * POUND);
-        settle(p);
+        const [p] = letFlat(sim, 2, [['knowsRights', 'houseProud']], 100 * POUND);
+        const [o] = letFlat(sim, 4, [['easyGoing', 'keenCook']], 75 * POUND);
+        settle(p, o);
         p.life!.memories.push({ id: 'paysMore', at: sim.state.tick - TICKS_PER_HOUR });
-        const bill = sitting(sim)[1];
-        bill.life!.traits = ['easyGoing', 'keenCook'];
-        return { sim, subject: { pawn: p.id, flat: p.life!.flat, data: { other: bill.life!.flat, gap: 100 * POUND - flatInfo(sim, bill.life!.flat).lease!.rent } } };
+        return { sim, subject: { pawn: p.id, flat: p.life!.flat, data: { other: o.life!.flat, gap: 25 * POUND } } };
       },
     },
   ],
@@ -1167,7 +1172,7 @@ const pet: CardDef = {
   id: 'pet',
   source: 'tenant',
   kind: 'ask',
-  cooldownDays: 14,
+  cooldownDays: 10,
   turnsOn: ['catOrDog', 'trait:lightSleeper', 'buildingCat'],
   when(sim) {
     return tenants(sim)
@@ -1285,7 +1290,7 @@ const paint: CardDef = {
   id: 'paint',
   source: 'tenant',
   kind: 'ask',
-  cooldownDays: 14,
+  cooldownDays: 7,
   turnsOn: ['trait:houseProud', 'trait:handy', 'trait:messy', 'trait:clumsy'],
   when(sim) {
     return tenants(sim)
