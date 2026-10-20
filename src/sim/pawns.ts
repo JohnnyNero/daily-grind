@@ -5,12 +5,13 @@
 import { findPath, type Keys } from './layout';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
+import { TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Pawn } from './state';
 import { occupants } from './impressiveness';
 import { minuteOfLife, tenantReturns, tenantThink } from './tenants';
 import { guestThink } from './events';
 import { guideThink } from './handover';
 import { burglarThink } from './crime';
+import { visitorKeys, visitorsSpawn, visitorThink } from './visitors';
 
 /** Tiles per tick at a stroll: about two tiles a second at normal speed. */
 const WALK = 0.08;
@@ -28,6 +29,7 @@ export function keysOf(p: Pawn): Keys {
   if (p.kind === 'guest') return p.flat ? { flats: [p.flat] } : {};
   if (p.kind === 'burglar') return p.burgle?.stage === 'in' || (p.burgle?.stage === 'out' && p.burgle.entry === 'door') ? { all: true } : {};
   if (p.life) return { flats: p.partyAt ? [p.life.flat, p.partyAt] : [p.life.flat] };
+  if (p.kind === 'visitor' || p.kind === 'animal') return visitorKeys(p);
   return {};
 }
 
@@ -56,15 +58,18 @@ function spawn(sim: Sim): void {
   const st = sim.state;
   const hour = Math.floor(sim.minuteOfDay / 60);
   if (st.tick >= st.timers.passerby) {
+    // Passers-by are there to be watched, so they come by in real time, not game time:
+    // every 2 to 11 real seconds by day (at 1x), now and then at night.
     const busy = hour >= 7 && hour < 23;
-    const gap = busy ? randInt(st, 2, 12) : randInt(st, 20, 90);
-    st.timers.passerby = st.tick + gap * TICKS_PER_MINUTE;
+    const gap = busy ? randInt(st, 2, 11) : randInt(st, 18, 80);
+    st.timers.passerby = st.tick + seconds(gap);
     addPawn(sim, 'passerby');
   }
   if (st.tick >= st.timers.agent && !st.pawns.some((p) => p.kind === 'agent')) {
     if (hour >= 9 && hour < 18 && emptyFlats(sim).length > 0) addPawn(sim, 'agent');
     else st.timers.agent = st.tick + TICKS_PER_HOUR;
   }
+  visitorsSpawn(sim);
 }
 
 export function addPawn(sim: Sim, kind: Pawn['kind']): Pawn {
@@ -115,6 +120,9 @@ function step(sim: Sim, p: Pawn): void {
       if (p.goal) setGoal(sim, p, p.goal);
     }
   }
+  // Part way along the pavement with nowhere to go (something cleared their path mid-step):
+  // the pavement isn't somewhere you can stand, so finish the step before anything else.
+  if (p.front && p.path.length === 0 && p.frontTo !== undefined) p.path = [[p.frontTo, Math.round(p.s)]];
   // Stopped to talk.
   if (p.talkUntil !== undefined) {
     if (st.tick < p.talkUntil) return;
@@ -194,6 +202,7 @@ function think(sim: Sim, p: Pawn): void {
   if (p.kind === 'agent' && guideThink(sim, p)) return;
   if (p.kind === 'guest' && guestThink(sim, p)) return;
   if (p.kind === 'burglar' && burglarThink(sim, p)) return;
+  if ((p.kind === 'visitor' || p.kind === 'animal') && visitorThink(sim, p)) return;
   if (p.task === 'leave') {
     if (Math.round(p.x) === edge && Math.round(p.s) === 0) {
       removePawn(sim, p);

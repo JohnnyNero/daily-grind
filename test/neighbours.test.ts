@@ -30,6 +30,10 @@ function noisyNeighbours(insulated: boolean, seed = 11): { sim: Sim; sleeper: Re
   sim.state.flats[two.id] = { ...sim.state.flats[two.id], lease: { rent: 11000, startDay: 1, endDay: 99, deposit: 0, owed: 0, paid: 0, late: 0 }, listed: false };
   const sleeper = tenantsOf(sim).find((p) => p.life!.flat === four.id)!;
   sleeper.life!.traits = ['lightSleeper'];
+  // Bill's shower now starts nearly worn out (for the first week's leak), so the storyteller's
+  // breakdowns, which nobody mends here, land on him and drown the noise out. This is about
+  // noise: nothing breaks down.
+  sim.state.story.cooldowns.repair = Number.MAX_SAFE_INTEGER;
   if (insulated) {
     // The floor between them: Flat 4's floor, over Flat 2.
     for (const n of four.rooms.flatMap((r) => sim.layout.rooms[r].nodes)) {

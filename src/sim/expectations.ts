@@ -9,6 +9,7 @@ import { landlordRating } from './leases';
 import type { Sim } from './sim';
 import type { Thought } from './thoughts';
 import { EXPECT } from './tuning';
+import { readFlags } from './flags';
 
 export const EXPECT_NAMES = ['Low', 'Moderate', 'High', 'Very high'] as const;
 
@@ -46,7 +47,9 @@ export function expectParts(sim: Sim): { label: string; points: number }[] {
 }
 
 export function expectTarget(sim: Sim): number {
-  return expectParts(sim).reduce((n, p) => n + p.points, 0);
+  // Good service sets the bar (the drip's `expect` effect, through flags.ts).
+  const target = expectParts(sim).reduce((n, p) => n + p.points, 0);
+  return readFlags(sim, 'expect.target', target);
 }
 
 /** One line on why tenants expect what they do. */

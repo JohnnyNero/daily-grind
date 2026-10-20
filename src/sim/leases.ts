@@ -17,6 +17,7 @@ import { likingTarget, missingThoughts, rentThought, thoughtsOf, tierThought, ty
 import { rollTraits, traitDef, touchiness, has } from './traits';
 import { tale } from './tales';
 import { EVICTION_ARREARS_WEEKS, EVICTION_NOTICE_DAYS, LETTING as L, LISTING_PACE, MEMORIES, RENT as R } from './tuning';
+import { readFlags } from './flags';
 
 const JOBS: { title: string; leave: number; back: number }[] = [
   { title: 'Office manager', leave: 8 * 60, back: 17 * 60 + 30 },
@@ -120,7 +121,8 @@ export function applicantsHour(sim: Sim): void {
     // A flat without the basics (a bed, a loo, a wash, a kitchen) only draws the desperate, and rarely.
     const basics = scoreFor(sim, f.id, 1).has;
     const liveable = basics.bed && basics.toilet && basics.wash && basics.kitchen;
-    const meanHours = Math.max(L.fewestHours, Math.min(L.mostHours, L.meanHours * ratio ** 3)) * (liveable ? 1 : L.unliveableSlower) * LISTINGS[info.style ?? 'plain'].pace * ratingPace(sim);
+    // Word that nobody answers the door gets round (flags.ts).
+    const meanHours = readFlags(sim, 'letting.hours', Math.max(L.fewestHours, Math.min(L.mostHours, L.meanHours * ratio ** 3)) * (liveable ? 1 : L.unliveableSlower) * LISTINGS[info.style ?? 'plain'].pace * ratingPace(sim), { flat: f.id });
     info.nextApplicant = st.tick + Math.round(-Math.log(1 - random(st) * 0.999) * meanHours * TICKS_PER_HOUR);
     if (waiting < L.maxWaiting && ratio < L.tooDear - L.tooDearPerGrade * expectGrade(sim)) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
   }

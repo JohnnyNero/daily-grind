@@ -37,6 +37,19 @@ const TEMPLATES: Record<TaleKind, string[]> = {
   moveOut: ['{names} moved out of {flat}, leaving {what}.'],
   grant: ['The council sent you {what} you never applied for.'],
   broken: ['The {what} in {flat} gave up.', 'The {what} in {flat} broke.'],
+  // From the drip's cards. {what} is whatever the card says it was.
+  parcelNicked: ['{a}\'s parcel walked out of the lobby.', 'Someone helped themselves to {a}\'s parcel.'],
+  lockout: ['{a} got locked out. {what}', '{a} spent part of the night on the front step. {what}'],
+  cowboy: ['A man in a van did the {what} in {flat}. He isn\'t answering his phone.', 'The {what} in {flat} was done for cash. It shows.'],
+  leak: ['{a}\'s shower came through the ceiling of {flat}.', 'Water through the ceiling of {flat}. {a}\'s shower again.'],
+  cat: ['A ginger cat moved in. Nobody asked it to.', 'The cat has made itself at home on the stairs.'],
+  kittens: ['The cat had kittens in {a}\'s laundry basket.'],
+  brokePromise: ['You told {a} you\'d sort the {what}. You didn\'t.'],
+  pritchard: ['Mr Pritchard\'s post caught up with you. {what}'],
+  fakeMeterMan: ['The man from the gas was not from the gas. {what}'],
+  deposit: ['{a} left, and there was a row about the deposit.', '{a} and the deposit: {what}.'],
+  squatter: ['Someone had been sleeping in {flat}.', 'It turns out {flat} wasn\'t as empty as it looked.'],
+  badTurn: ['{a} had a fall. Sandra the postie found them.'],
 };
 
 const first = (name: string) => name.split(' ')[0];

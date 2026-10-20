@@ -18,7 +18,7 @@ import { addPawn, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
 import { chemistry, opinion, rememberAbout } from './social';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Happening, type Pawn } from './state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Happening, type Pawn } from './state';
 import { remember } from './thoughts';
 import { has } from './traits';
 import { burglaryRisk, startBurglary } from './crime';
@@ -27,6 +27,7 @@ import { tale } from './tales';
 import { noticeTrait } from './outcomes';
 import { quietFor } from './handover';
 import { AFFAIR, BURGLARY, CAP, COOLDOWN, COOLDOWN_OTHER, FIGHT, FIRST_DAY, PARTY, POINTS, STORY } from './tuning';
+import { readFlags } from './flags';
 
 // How often things happen, and how big, is in tuning.ts.
 export { CAP, FIRST_DAY } from './tuning';
@@ -122,13 +123,15 @@ export function storyHour(sim: Sim): void {
   if (easy) chance *= STORY.strugglingChance;
   if (random(st) > chance) return;
   const options: Option[] = [];
+  // A card's `risk` moves these weights for a few days, never starts anything itself (flags.ts).
+  const W = readFlags(sim, 'story.weights', STORY.weights);
   const pair = affairPair(sim);
-  if (pair) options.push({ tags: ['romance'], weight: STORY.weights.romance, run: () => startAffair(sim, pair[0], pair[1]) });
+  if (pair) options.push({ tags: ['romance'], weight: W.romance, run: () => startAffair(sim, pair[0], pair[1]) });
   const hour = hourOf(sim);
-  if (hour >= 1 && hour <= 3) options.push({ tags: ['crime'], weight: burglaryRisk(sim) * STORY.weights.crime, run: () => startBurglary(sim) });
-  options.push({ tags: ['council'], weight: STORY.weights.council * push, run: () => surpriseInspection(sim) });
-  if (worn(sim).length > 0) options.push({ tags: ['repair'], weight: STORY.weights.repair, run: () => breakDown(sim) });
-  options.push({ tags: ['money'], good: true, weight: STORY.weights.grant, run: () => grant(sim) });
+  if (hour >= 1 && hour <= 3) options.push({ tags: ['crime'], weight: burglaryRisk(sim) * W.crime, run: () => startBurglary(sim) });
+  options.push({ tags: ['council'], weight: W.council * push, run: () => surpriseInspection(sim) });
+  if (worn(sim).length > 0) options.push({ tags: ['repair'], weight: W.repair, run: () => breakDown(sim) });
+  options.push({ tags: ['money'], good: true, weight: W.grant, run: () => grant(sim) });
   const usable = options
     .filter((o) => canStart(sim, o.tags) && o.weight > 0)
     .map((o) => ({ ...o, weight: o.weight * (o.good ? (easy ? STORY.goodWhenStruggling : 1) : easy ? STORY.badWhenStruggling : flush(sim) ? STORY.badWhenFlush : 1) }));
@@ -171,7 +174,7 @@ function maybeParty(sim: Sim): void {
     const people = household(sim, f.id).filter((p) => !p.life!.leaving);
     if (people.length === 0) continue;
     const animal = people.some((p) => has(p.life!, 'partyAnimal'));
-    const chance = animal ? (st.story.busy ? PARTY.animalBusy : PARTY.animalQuiet) : people.length > 1 ? PARTY.household : PARTY.alone;
+    const chance = readFlags(sim, 'story.party', animal ? (st.story.busy ? PARTY.animalBusy : PARTY.animalQuiet) : people.length > 1 ? PARTY.household : PARTY.alone, { flat: f.id });
     if (random(st) > chance || !canStart(sim, ['party', `party:${f.id}`])) continue;
     startParty(sim, f.id);
     return;
@@ -255,7 +258,7 @@ function partyMinute(sim: Sim, h: Happening): void {
     h.phase = phase;
     if (phase === 'winding' && (h.volume ?? 1) > 1) {
       h.volume = 1;
-      if (host) host.bubble = { text: 'Shh', until: st.tick + 4 * TICKS_PER_MINUTE };
+      if (host) host.bubble = { text: 'Shh', until: st.tick + seconds(4) };
     }
     if (phase === 'leaving') {
       h.queue = 0;
@@ -390,36 +393,37 @@ function perform(sim: Sim, p: Pawn, h: Happening): void {
   const act = p.act ?? 'mingle';
   delete p.act;
   const host = p.id === h.host;
-  const wait = randInt(st, 8, 20) * TICKS_PER_MINUTE;
+  // What you watch at a party is timed in real seconds, so it reads the same whatever the clock does.
+  const wait = seconds(randInt(st, 7, 18));
   p.waitUntil = st.tick + wait;
   const say = (text: string, ticks = wait) => (p.bubble = { text, until: st.tick + ticks });
   switch (act) {
     case 'dance':
       p.pose = 'dance';
       p.doing = 'Dancing at the party';
-      say('♪', 5 * TICKS_PER_MINUTE);
+      say('♪', seconds(5));
       return;
     case 'landing':
       p.doing = 'Out on the landing';
-      say(pick(st, ['ha ha', '…']), 6 * TICKS_PER_MINUTE);
+      say(pick(st, ['ha ha', '…']), seconds(5));
       return;
     case 'smoke':
       p.doing = 'Having a smoke out the front';
-      say('~', 6 * TICKS_PER_MINUTE);
+      say('~', seconds(5));
       return;
     case 'greet':
-      p.waitUntil = st.tick + 3 * TICKS_PER_MINUTE;
+      p.waitUntil = st.tick + seconds(3);
       p.doing = 'Greeting guests';
-      say('Hiya!', 3 * TICKS_PER_MINUTE);
+      say('Hiya!', seconds(3));
       return;
     case 'seeOff':
-      p.waitUntil = st.tick + 4 * TICKS_PER_MINUTE;
+      p.waitUntil = st.tick + seconds(4);
       p.doing = 'Seeing people off';
-      say('Bye!', 4 * TICKS_PER_MINUTE);
+      say('Bye!', seconds(4));
       return;
     default:
       p.doing = h.phase === 'winding' || h.phase === 'leaving' ? 'Winding down at the party' : host ? 'Hosting the party' : 'Mingling at the party';
-      if (random(st) < 0.4) say(pick(st, ['haha', '…', 'cheers', '!?']), 4 * TICKS_PER_MINUTE);
+      if (random(st) < 0.4) say(pick(st, ['haha', '…', 'cheers', '!?']), seconds(4));
   }
 }
 
@@ -439,8 +443,8 @@ function sendHome(sim: Sim, h: Happening): void {
       g.task = 'leave';
     }
     g.doing = g.life ? 'Heading home' : 'Getting their coat';
-    g.waitUntil = st.tick + Math.round(i++ * 1.5 * TICKS_PER_MINUTE);
-    if (i < 4) g.bubble = { text: 'Night!', until: st.tick + 3 * TICKS_PER_MINUTE };
+    g.waitUntil = st.tick + seconds(i++ * 1.5);
+    if (i < 4) g.bubble = { text: 'Night!', until: st.tick + seconds(3) };
   }
 }
 
@@ -451,7 +455,7 @@ function partyHour(sim: Sim, h: Happening): void {
   if (h.phase === 'swing' && h.volume === undefined && hour >= 21 && hour <= 23 && random(st) < PARTY.louder) {
     h.volume = 2;
     const host = byId(sim, h.host);
-    if (host) host.bubble = { text: '♪♪', until: st.tick + 5 * TICKS_PER_MINUTE };
+    if (host) host.bubble = { text: '♪♪', until: st.tick + seconds(5) };
   }
   if (h.flag || !(hour >= 23 || hour < 3)) return;
   const made = sim.noise();
@@ -491,17 +495,17 @@ function knockAnswered(sim: Sim, h: Happening, host: Pawn | undefined): void {
     return;
   }
   const name = lay.flat(h.flat!)?.name ?? 'next door';
-  n.talkUntil = st.tick + 3 * TICKS_PER_MINUTE;
+  n.talkUntil = st.tick + seconds(3);
   n.bubble = { text: '!', until: n.talkUntil };
   n.doing = `Knocking on ${name} about the noise`;
   n.facing = dx >= n.x ? 1 : -1;
   const calm = has(host.life!, 'partyAnimal') ? PARTY.calmPartyAnimal : PARTY.calm;
   if (random(st) < calm) {
     h.volume = 0.5;
-    host.bubble = { text: 'Sorry!', until: st.tick + 4 * TICKS_PER_MINUTE };
+    host.bubble = { text: 'Sorry!', until: st.tick + seconds(4) };
     sim.notify(`${first(n)} knocked on ${name} about the noise. The music went down.`);
   } else {
-    host.bubble = { text: '♪♪', until: st.tick + 4 * TICKS_PER_MINUTE };
+    host.bubble = { text: '♪♪', until: st.tick + seconds(4) };
     rememberAbout(sim, n, 'slight', host);
     complain(sim, h, n);
   }
@@ -567,20 +571,21 @@ export function maybeFight(sim: Sim, a: Pawn, b: Pawn): boolean {
   const rows = a.life!.social.filter((m) => m.about === b.id && m.id === 'row').length;
   const bad = Math.min(opinion(sim, a, b), opinion(sim, b, a));
   if (rows < FIGHT.rows && bad > FIGHT.hate) return false;
-  if (random(st) > FIGHT.chance || !canStart(sim, ['fight'])) return false;
+  if (random(st) > readFlags(sim, 'story.fight', FIGHT.chance, { pawn: a, other: b }) || !canStart(sim, ['fight'])) return false;
   startFight(sim, a, b);
   return true;
 }
 
 export function startFight(sim: Sim, a: Pawn, b: Pawn): void {
   const st = sim.state;
-  const h = begin(sim, 'fight', ['fight'], 1 / 3, [a, b]);
+  // A fight is something you watch: about twenty real seconds, whatever the clock does.
+  const h = begin(sim, 'fight', ['fight'], seconds(18) / TICKS_PER_HOUR, [a, b]);
   rememberAbout(sim, a, 'fight', b);
   rememberAbout(sim, b, 'fight', a);
   remember(sim, a.life!, 'cantStand');
   remember(sim, b.life!, 'cantStand');
   for (const [p, q] of [[a, b], [b, a]]) {
-    p.talkUntil = st.tick + 15 * TICKS_PER_MINUTE;
+    p.talkUntil = st.tick + seconds(14);
     p.bubble = { text: '!!', until: p.talkUntil };
     p.doing = `Fighting with ${first(q)}`;
   }
@@ -623,10 +628,10 @@ function bystanders(sim: Sim, h: Happening, a: Pawn, b: Pawn, seen: Pawn[]): Paw
       rememberAbout(sim, side, 'favour', w);
       remember(sim, life, 'brokeItUp');
       w.doing = `Breaking up ${first(a)} and ${first(b)}`;
-      w.bubble = { text: 'Oi!', until: st.tick + 3 * TICKS_PER_MINUTE };
-      w.waitUntil = st.tick + 3 * TICKS_PER_MINUTE;
+      w.bubble = { text: 'Oi!', until: st.tick + seconds(3) };
+      w.waitUntil = st.tick + seconds(3);
       // It stops soon after they get there.
-      h.until = st.tick + 2 * TICKS_PER_MINUTE;
+      h.until = st.tick + seconds(2);
       for (const p of [a, b]) {
         p.talkUntil = h.until;
         p.bubble = { text: '…', until: h.until };
@@ -642,8 +647,8 @@ function bystanders(sim: Sim, h: Happening, a: Pawn, b: Pawn, seen: Pawn[]): Paw
       const nodes = flat ? flat.rooms.flatMap((r) => lay.rooms[r].nodes).filter((n) => !lay.isDoorNode(n)) : [];
       if (nodes.length > 0 && setGoal(sim, w, lay.xs(pick(st, nodes)))) {
         w.doing = 'Hiding in their flat';
-        w.bubble = { text: '!?', until: st.tick + 3 * TICKS_PER_MINUTE };
-        w.waitUntil = st.tick + 8 * TICKS_PER_MINUTE;
+        w.bubble = { text: '!?', until: st.tick + seconds(3) };
+        w.waitUntil = st.tick + seconds(7);
       }
     }
   }

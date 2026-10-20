@@ -22,6 +22,7 @@ import { stat } from './stat';
 import { gradeOf } from './grades';
 import { itemsIn, SHARED } from './environment';
 import { BURGLARY as B, GRADES, ITEMS, RISK_WORDS } from './tuning';
+import { readFlags } from './flags';
 
 const first = (p: Pawn) => p.name.split(' ')[0];
 /** What a thing would cost new, at its grade: what it's worth to a burglar. */
@@ -85,7 +86,8 @@ export function waysIn(sim: Sim): WayIn[] {
       }
     }
   }
-  return out;
+  // Bars on a window take it out (flags.ts).
+  return readFlags(sim, 'crime.ways', out);
 }
 
 /** How likely a break-in is, about 0 to 1: what's worth taking, how easy it is to get in, and what's in the way. */
@@ -101,7 +103,9 @@ export function burglaryRisk(sim: Sim): number {
   // How tempting, times how easy (never more than certain), then whatever's in the way.
   const tempting = Math.min(1, stat(B.base, [B.perWorth * worth], [B.easyBase + easy * B.perEasy]));
   const cameras = Math.min(ITEMS.mostCameras, itemsIn(sim, SHARED, 'cctv'));
-  return stat(tempting, [], [st.security.locks ? B.locks : 1, st.security.alarm ? B.alarm : 1, ITEMS.cctvRisk ** cameras]);
+  const risk = stat(tempting, [], [st.security.locks ? B.locks : 1, st.security.alarm ? B.alarm : 1, ITEMS.cctvRisk ** cameras]);
+  // A key under the mat, a taped window, a key nobody can account for (flags.ts).
+  return readFlags(sim, 'crime.risk', risk);
 }
 
 export function riskWord(risk: number): string {

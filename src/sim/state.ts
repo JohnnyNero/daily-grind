@@ -10,11 +10,24 @@ export const TILE = 16;
 /** Tallest the building can go, in rows. */
 export const MAX_ROWS = 32;
 
-export const TICKS_PER_MINUTE = 60;
+/**
+ * The clock. People walk the same number of tiles a tick whatever the clock does, so a walk
+ * takes the same real time; the game clock runs at 20 ticks a game minute.
+ */
+export const TICKS_PER_MINUTE = 20;
 export const TICKS_PER_HOUR = 60 * TICKS_PER_MINUTE;
 export const TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
 
-export const SAVE_VERSION = 9;
+/**
+ * Ticks in a real second at 1x (20 ticks a game minute, 0.3 real seconds a game minute).
+ * Anything you watch on screen (a bubble, a talk, a pose, a moment) is timed in these, not
+ * in game minutes, so it lasts as long whatever speed the clock runs at.
+ */
+export const TICKS_PER_SECOND = 200 / 3;
+/** Real seconds at 1x, in ticks. */
+export const seconds = (n: number): number => Math.round(n * TICKS_PER_SECOND);
+
+export const SAVE_VERSION = 10;
 
 /**
  * What a cell holds. Walls hold things up and keep people, heat and noise out; a window is
@@ -59,7 +72,17 @@ export interface Furniture {
 /** How good a piece of furniture is: dearer is nicer to have and lasts longer. */
 export type Grade = 'cheap' | 'standard' | 'posh';
 
-export type PawnKind = 'agent' | 'passerby' | 'tenant' | 'guest' | 'burglar';
+/** `visitor`: someone from outside who comes in, does one thing and goes (visitors.ts). `animal`: the building cat, pets, the fox. */
+export type PawnKind = 'agent' | 'passerby' | 'tenant' | 'guest' | 'burglar' | 'visitor' | 'animal';
+
+/** How someone poses: sitting, lying down, dancing, reading, on the phone, carrying something, mopping, waving (standing if missing). */
+export type Pose = 'sit' | 'sleep' | 'dance' | 'read' | 'phone' | 'carry' | 'mop' | 'wave';
+
+/**
+ * When someone's in (schedules.ts): office hours, an early or a late shift, nights, working
+ * from home, a student's odd hours, or retired.
+ */
+export type Schedule = 'office' | 'early' | 'late' | 'nights' | 'home' | 'student' | 'retired';
 
 export type NeedId = 'sleep' | 'food' | 'hygiene' | 'bladder' | 'fun' | 'comfort' | 'warmth' | 'quiet';
 
@@ -149,6 +172,12 @@ export interface Life {
   affair?: number;
   /** A break (kicking off where you can see it) or an inspiration (a good turn): see breaks.ts. */
   breakState?: BreakState;
+  /** When they're in (schedules.ts). Old saves get one from their job. */
+  schedule: Schedule;
+  /** One or two habits (schedules.ts), by id; empty until the first morning. */
+  habits: string[];
+  /** An ambient moment they're in (moments.ts): what, until when (a tick), how far through, with whom, and where. */
+  moment?: { kind: string; until: number; step: number; with?: number; at?: [number, number] };
 }
 
 export type BreakKind = 'sulk' | 'slam' | 'bins' | 'bed' | 'tantrum' | 'music' | 'boxes' | 'tidy' | 'bbq' | 'mend' | 'paint' | 'plant';
@@ -194,12 +223,21 @@ export interface Pawn {
   front?: boolean;
   /** The column at the far end of the pavement walk. */
   frontTo?: number;
-  /** How they're posed: sitting or lying down (standing if missing). */
-  pose?: 'sit' | 'sleep' | 'dance';
+  /** How they're posed (standing if missing). */
+  pose?: Pose;
   /** Stopped to talk until this tick. */
   talkUntil?: number;
-  /** A speech bubble over their head, and when it goes. */
-  bubble?: { text: string; until: number };
+  /**
+   * A speech bubble over their head, and when it goes (a tick: the renderer holds it at
+   * least BUDGET.bubbleSeconds). `icon` draws a pixel icon instead of the text (art.ts), and
+   * `kind` is its place in the bubble budget: card markers, then talk, then moments, then
+   * habits (talk if missing).
+   */
+  bubble?: { text: string; until: number; icon?: string; kind?: 'talk' | 'moment' | 'habit' };
+  /** A visitor's job (visitors.ts: 'postie', 'courier', 'cleaner', 'cat', ...). */
+  role?: string;
+  /** Something in their hand, one at most: 'parcel', 'bucket', 'toolbox', 'ladder', 'paper', 'box', 'mop'. */
+  prop?: string;
   /** At a party in this flat (its id): the door's open to them, and they mingle rather than go about their day. */
   partyAt?: string;
   /** What they're off to do at the party (dance, mingle, landing, smoke, greet), done on arrival. */
@@ -273,11 +311,74 @@ export interface State {
   chronicle: { next: number; tales: Tale[] };
   /** The day posh furniture opened up (it stays open). */
   poshFrom?: number;
+  /** The drip: the little decisions (drip.ts). */
+  drip: Drip;
+  /** The building cat, once you've let it stay: its pawn, the tenant it likes best, and the day it moved in. */
+  cat?: { pawn: number; favourite?: number; since: number };
+  /** Visitors (visitors.ts): the next time each kind is due, by role. */
+  visitors: { next: Record<string, number> };
+  /** The next thing to save for (project.ts): one you've pinned, by id, and whether Denise has said her piece. */
+  project: { pinned?: string; praised?: boolean };
+}
+
+/**
+ * A little decision in the tray (drip.ts). `def` is the card's id in the catalogue
+ * (cards/). Who and what it's about is copied from the subject its `when` found.
+ */
+export interface Card {
+  id: number;
+  def: string;
+  /** Tick it appeared, and when it resolves by itself (its worst, 1.6). */
+  tick: number;
+  until: number;
+  /** The tick the UI says 10 real seconds have passed: it never resolves before this (1.1). */
+  seenBy?: number;
+  /** A tenant's ask, which waits and sours: how many times they've got more fed up (0 to 3). */
+  waits?: boolean;
+  step?: number;
+  pawn?: number;
+  flat?: string;
+  furniture?: number;
+  visitor?: number;
+  data?: Record<string, string | number>;
+}
+
+/** A fact about the building a card left behind (flags.ts): for good, or until a tick. */
+export interface Flag {
+  id: string;
+  subject?: string;
+  until?: number;
+}
+
+export interface Drip {
+  /** Open cards, newest last; at most DRIP.maxOpen. */
+  open: Card[];
+  /** Cards left today (set at 07:00), and the day it's for. */
+  budget: number;
+  day: number;
+  /** Tick the last card appeared (for DRIP.minGap). */
+  lastCard: number;
+  /** Resolved by being ignored, in a row. */
+  ignoredRun: number;
+  /** Not again until this tick: by card id, and by "pawn:<id>". */
+  cooldowns: Record<string, number>;
+  /** Follow-ups on their way: the card, when it's due (a tick), and who and what it's about. */
+  threads: { card: string; due: number; data: Record<string, string | number> }[];
+  /** Things you said you'd do: what (a kind), its argument, the day, and who you promised. */
+  promises: { what: string; arg: string; byDay: number; pawn: number }[];
+  /** At most DRIP.maxFlags; the oldest timed one goes first. */
+  flags: Flag[];
+  /** The last 50 resolved, for tests and the recap. */
+  log: { tick: number; card: string; chose: number | 'ignored' }[];
+  /** Money from cards in the first week, in pence. */
+  income: number;
 }
 
 export type TaleKind =
   | 'affair' | 'repossessed' | 'fight' | 'burglary' | 'councilFine' | 'missedMortgage' | 'breakup' | 'partyShutDown' | 'burglaryFoiled'
-  | 'couple' | 'gaveNotice' | 'councilNotice' | 'partyDamage' | 'party' | 'moveIn' | 'moveOut' | 'grant' | 'broken';
+  | 'couple' | 'gaveNotice' | 'councilNotice' | 'partyDamage' | 'party' | 'moveIn' | 'moveOut' | 'grant' | 'broken'
+  // From the drip's cards (1.4).
+  | 'parcelNicked' | 'lockout' | 'cowboy' | 'leak' | 'cat' | 'kittens' | 'brokePromise' | 'pritchard' | 'fakeMeterMan' | 'deposit' | 'squatter' | 'badTurn';
 
 /** Something that happened, as people will tell it. */
 export interface Tale {
@@ -447,6 +548,8 @@ export type ListingStyle = 'plain' | 'agent' | 'honest' | 'professionals' | 'pet
 export interface Person {
   name: string;
   job: { title: string; leave: number; back: number } | null;
+  /** When they're in (schedules.ts); from the job if missing. */
+  schedule?: Schedule;
   /** How they describe themselves (their job, or "Retired"). */
   note: string;
   look: Pawn['look'];

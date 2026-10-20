@@ -13,10 +13,10 @@ import { household, newApplicant } from './leases';
 import { setGoal } from './pawns';
 import type { Sim } from './sim';
 import { BASE } from './start';
-import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from './state';
+import { TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Pawn } from './state';
 
-/** Minutes Denise talks at each stop before moving on by herself. */
-const TALK_MINUTES = 4;
+/** Real seconds Denise talks at each stop before moving on by herself. */
+const TALK_SECONDS = 3.6;
 
 const DENISE = 'Denise from the letting agent';
 const AGENT = 'Denise, Harrowgate Lettings';
@@ -176,7 +176,7 @@ function arrive(sim: Sim, p: Pawn): void {
   st.handover.at = true;
   p.path = [];
   p.goal = null;
-  p.waitUntil = st.tick + TALK_MINUTES * TICKS_PER_MINUTE;
+  p.waitUntil = st.tick + seconds(TALK_SECONDS);
   p.bubble = { text: '…', until: p.waitUntil };
 }
 

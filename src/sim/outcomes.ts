@@ -18,6 +18,7 @@ import { remember, thoughtsOf, type Thought } from './thoughts';
 import { has, reveal, touchiness, traitDef } from './traits';
 import { tale } from './tales';
 import { LINES, OUTCOME_ODDS as O } from './tuning';
+import { readFlags } from './flags';
 
 // The lines and the odds are in tuning.ts.
 export { LINES } from './tuning';
@@ -51,7 +52,8 @@ export function outcomesHour(sim: Sim, p: Pawn): void {
     return;
   }
   if (life.liking >= O.goodLiking) {
-    const meanDays = O.goodDaysBest + ((100 - life.liking) / (100 - O.goodLiking)) * O.goodDaysSpread;
+    // Someone who owes you one does a good turn sooner (flags.ts).
+    const meanDays = readFlags(sim, 'outcomes.goodDays', O.goodDaysBest + ((100 - life.liking) / (100 - O.goodLiking)) * O.goodDaysSpread, { pawn: p });
     if (random(st) < 1 / (meanDays * 24)) goodTurn(sim, p);
   }
 }
@@ -198,7 +200,7 @@ function goodTurn(sim: Sim, p: Pawn): void {
   const lease = flatInfo(sim, life.flat).lease;
   const name = p.name.split(' ')[0];
   const options: (() => void)[] = [];
-  if (lease && !lease.prepaid) {
+  if (lease && !lease.prepaid && readFlags(sim, 'outcomes.payEarly', true, { pawn: p })) {
     const early = () => {
       lease.prepaid = 7;
       book(sim, `Rent paid a week early · ${sim.layout.flat(life.flat)?.name ?? 'Flat'}`, lease.rent);
