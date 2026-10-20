@@ -113,7 +113,7 @@ describe('flag hooks', () => {
     setFlag(b, 'nobodyReadsThis');
     a.run(2 * TICKS_PER_DAY);
     b.run(2 * TICKS_PER_DAY);
-    b.state.drip.flags = [];
+    b.state.drip.flags = b.state.drip.flags.filter((f) => f.id !== 'nobodyReadsThis');
     expect(serialize(b)).toBe(serialize(a));
   });
 

@@ -11,7 +11,9 @@
 // and hands back effects. Visitors (a courier, the meter man, the van) are the drip's and
 // visitors.ts's to put on the map when the card opens; `when` only notices one if it's about.
 
-import { POUND, flatInfo } from '../economy';
+import { flatInfo } from '../economy';
+// POUND from tuning.ts (which imports nothing): CASH below is worked out at load time, maybe before economy.ts has loaded.
+import { POUND } from '../tuning';
 import { SHARED, itemsIn } from '../environment';
 import { gradeOf } from '../grades';
 import { scoreFor } from '../impressiveness';

@@ -48,3 +48,4 @@ function act(sim: Sim, text: string): void {
       return;
   }
 }
+export { act as postAct };

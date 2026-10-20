@@ -850,9 +850,7 @@ export const EXPECT = {
 
 /** Real seconds per game minute at 1x (a day is 24 * 60 of these: about 7 minutes). Must match TICKS_PER_SECOND in state.ts. */
 export const SECONDS_PER_GAME_MINUTE = 0.3;
-/** A quiet night runs this many times faster than the speed you picked. */
-export const NIGHT_BOOST = 4;
-/** Night is from this hour to this one. */
+/** Night, for the Skip to morning button, is from this hour to this one. */
 export const QUIET_NIGHT_FROM = 23;
 export const QUIET_NIGHT_TO = 6;
 /** Never simulate more than this per frame, so a slow phone can't spiral (about 5ms here; the fastest real frame needs under 600). */
@@ -1035,6 +1033,38 @@ export const DRIP = {
   logSize: 50,
   /** Money from cards in the first week, at most. */
   firstWeekIncome: 150 * POUND,
+  /** A first-week beat that can't come at its time (the tray's full) waits this long, then it's skipped. */
+  beatWait: 120,
+  /** Cards that touch something live (a thread's or promise's person) weigh this much more. */
+  liveWeight: 1.5,
+  /**
+   * What a step of `risk` is worth: burglary risk (0 to 1) goes up this much a step, and the
+   * storyteller's chance of a fight, a break-up or a party goes up this share a step.
+   */
+  riskStep: { burglary: 0.12, story: 0.5 },
+};
+
+/** What the drip's flags do where they're read (flags.ts READERS). */
+export const FLAG_EFFECTS = {
+  /** `slowLet`: hours added to the wait for that flat's next applicant. */
+  slowLetHours: 24,
+  /** Planning: next door pleased is a touch likelier yes; next door sore is 15 points less likely. */
+  friendlyPlanning: 0.05,
+  sorePlanning: 0.15,
+  /** Burglary risk steps: a key under the mat (and locks then count for nothing), the family's key, a key nobody can account for, a taped window. */
+  keyUnderMat: 1,
+  familyKey: 0.25,
+  strayKey: 0.5,
+  tape: 1,
+  /** `owes`: a good turn comes this much sooner (days times this). */
+  owesSooner: 0.5,
+  /** `estimated`: the gas bill times this. */
+  estimatedGas: 1.1,
+  /** `lobbySofa`: dirt on the stairs times this. `squatter`: wear in that flat times this, and wear and dirt it adds each hour to an empty flat. */
+  lobbySofaDirt: 1.2,
+  squatterWear: 1.5,
+  squatterWearHour: 0.002,
+  squatterDirtHour: 0.005,
 };
 
 /** How worn Bill's shower is at the start, so the first leak (card 5) has something to go on. */

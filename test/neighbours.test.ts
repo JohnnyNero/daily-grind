@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { useCatalogue } from '../src/sim/drip';
 import { insulate } from '../src/sim/build';
 import { tempOf } from '../src/sim/environment';
 import { makePerson } from '../src/sim/leases';
@@ -8,6 +9,11 @@ import { TICKS_PER_DAY, TICKS_PER_HOUR, key } from '../src/sim/state';
 import { moveIn } from '../src/sim/tenants';
 import { landlord } from './policy';
 import { skipHandover } from '../src/sim/handover';
+
+// These watch other systems on seeded games with nobody answering: the drip's cards (which an
+// absent landlord ignores, at a cost) are left out so they don't decide the outcome.
+beforeAll(() => useCatalogue([]));
+afterAll(() => useCatalogue(null));
 
 const tenantsOf = (sim: Sim) => sim.state.pawns.filter((p) => p.life && !p.life.leaving);
 

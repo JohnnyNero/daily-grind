@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { expectGrade, expectName, expectThought, expectationsMorning, EXPECT_START } from '../src/sim/expectations';
-import { MAX_TICKS_PER_FRAME, NIGHT_BOOST, BASE_TICKS_PER_SECOND, planTicks, quietNight } from '../src/sim/pace';
+import { MAX_TICKS_PER_FRAME, BASE_TICKS_PER_SECOND, planTicks, quietNight } from '../src/sim/pace';
 import { flatInfo } from '../src/sim/economy';
 import { deserialize, serialize } from '../src/sim/save';
 import { Sim } from '../src/sim/sim';
@@ -102,16 +102,16 @@ describe('pace', () => {
     expect(minutes).toBeLessThan(7.5);
   });
 
-  it('runs quiet nights faster, but not by day, and not when paused', () => {
-    const plain = planTicks(0.1, 1, false, 0).ticks;
-    expect(planTicks(0.1, 1, true, 0).ticks).toBeGreaterThanOrEqual(plain * NIGHT_BOOST - 1);
-    expect(planTicks(0.1, 0, true, 0).ticks).toBe(0);
+  it('runs at the speed you picked and nothing else (Skip to morning is a button, not a boost)', () => {
+    expect(planTicks(0.1, 1, 0).ticks).toBe(Math.floor(0.1 * BASE_TICKS_PER_SECOND));
+    expect(planTicks(0.1, 3, 0).ticks).toBe(Math.floor(0.3 * BASE_TICKS_PER_SECOND));
+    expect(planTicks(0.1, 0, 0).ticks).toBe(0);
   });
 
   it('caps a frame so a slow phone stays smooth, and does not owe the lost time', () => {
-    const p = planTicks(0.25, 8, true, 0);
+    const p = planTicks(0.25, 8, 0);
     expect(p.ticks).toBeLessThanOrEqual(MAX_TICKS_PER_FRAME);
-    expect(planTicks(10, 8, true, 0).carry).toBe(0);
+    expect(planTicks(10, 8, 0).carry).toBe(0);
   });
 
   it('only skips when everyone is asleep or out and nothing is happening', () => {

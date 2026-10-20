@@ -115,3 +115,4 @@ function act(sim: Sim, text: string, fromId: number): void {
       return;
   }
 }
+export { act as chatAct };
