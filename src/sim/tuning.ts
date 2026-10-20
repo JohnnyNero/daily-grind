@@ -488,11 +488,12 @@ export const OPINION = {
 export const TALK = {
   /**
    * Minutes between someone's conversations, and the chance each minute that someone free starts
-   * one. (The chance was 1/6 when a minute was 60 ticks: passing on the stairs takes the same
-   * ticks, so three times the minutes, and it's a third a minute to give the same odds a meeting.)
+   * one. (It was 1/6 when a minute was 60 ticks. Passing on the stairs takes the same ticks, so
+   * three times the minutes, and with everyone home more that came to nearly three times the chats
+   * a day. A third, 1/18, was too few for neighbours to become friends; 1/10 sits between.)
    */
   gapMinutes: 25,
-  chance: 1 / 18,
+  chance: 1 / 10,
   /** How far apart (in tiles) people can be to talk. */
   reach: 3,
   /** How often each kind of talk comes up, before what they think of each other. */

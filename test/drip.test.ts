@@ -6,6 +6,7 @@ import type { CardDef, CardSubject, Outcome } from '../src/sim/cards/types';
 import { answerCard, cardSeen, dayBudget, dripDayStart, dripMorning, FLAGS, HOLD, openCard, openCards, READERS, resolveCard, setFlag, hasFlag, useCatalogue } from '../src/sim/drip';
 import { hooksOf, HOOK_NAMES, readFlags } from '../src/sim/flags';
 import { mend } from '../src/sim/upkeep';
+import { flatInfo } from '../src/sim/economy';
 import { burglaryRisk, waysIn } from '../src/sim/crime';
 import * as pace from '../src/sim/pace';
 import { planTicks, quietNight, skipToMorning } from '../src/sim/pace';
@@ -144,6 +145,9 @@ describe('cadence', () => {
   it('never more than 2 open when nobody answers anything, asks and all', () => {
     useCatalogue([tBuilding, tAsk, tMoment, tNight]);
     const sim = fixtureSim(2, 2, 7);
+    // Nobody's letting either: unanswered applicants would take the day's budget (1.2) and
+    // leave the tray nothing to show.
+    for (const f of sim.layout.flats) if (!flatInfo(sim, f.id).lease) flatInfo(sim, f.id).listed = false;
     const cards = watch(sim, 14);
     expect(cards.length).toBeGreaterThan(5);
   });

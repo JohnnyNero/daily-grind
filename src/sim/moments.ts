@@ -514,11 +514,14 @@ export const MOMENT_KINDS: readonly string[] = CATALOGUE.map((d) => d.id);
 
 // ------------------------------------------------------------------ the scheduler
 
+/** Mixed into the game's seed for the moments' own dice. Any number does; it only has to differ from the game's. */
+const MOMENT_DICE = 6;
+
 /** When the next one is due, when each kind last started, and the moments' own dice, so they never move the rest of the game's (saved with the game). */
 function paceOf(sim: Sim): NonNullable<State['moments']> {
   const st = sim.state;
   if (!st.moments) {
-    const dice = { rng: (st.seed ^ 6) | 0 };
+    const dice = { rng: (st.seed ^ MOMENT_DICE) | 0 };
     st.moments = { next: st.tick + minutes(randInt(dice, MOMENTS.gap[0], MOMENTS.gap[1])), last: {}, rng: dice.rng };
   }
   return st.moments;
