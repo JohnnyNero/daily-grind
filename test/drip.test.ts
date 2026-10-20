@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { tenants } from '../src/sim/chat';
 import { cardDef } from '../src/sim/cards';
 import { fixtureSim, sitting } from '../src/sim/cards/rule';
@@ -73,6 +73,47 @@ function watch(sim: Sim, days: number, each?: (sim: Sim) => void): { def: string
   expect(most).toBeLessThanOrEqual(DRIP.maxOpen);
   return [...seen.values()];
 }
+
+// The engine is tested at the old pace (a card a day for sure, two at most), so its rules show
+// up on every day; the turned-down numbers have their own test below.
+const TURNED_DOWN = { dayChance: DRIP.dayChance, perDay: DRIP.perDay };
+beforeAll(() => {
+  DRIP.dayChance = 1;
+  DRIP.perDay = 2;
+});
+afterAll(() => Object.assign(DRIP, TURNED_DOWN));
+
+describe('turned down', () => {
+  it('a day gets a card about every other day, and fewer while works are drawn or going', () => {
+    useCatalogue([tNever]);
+    Object.assign(DRIP, TURNED_DOWN);
+    try {
+      const mean = (building: boolean) => {
+        let total = 0;
+        const sim = fixtureSim(1, 9, 7);
+        const st = sim.state;
+        for (let i = 0; i < 400; i++) {
+          st.story.running = [];
+          st.applicants = [];
+          st.post = [];
+          delete st.council.visitDay;
+          st.drip.ignoredRun = 0;
+          st.works.job = building ? { cells: {}, furniture: [], insulated: {} } : null;
+          total += dayBudget(sim);
+        }
+        return total / 400;
+      };
+      const quiet = mean(false);
+      const building = mean(true);
+      expect(quiet).toBeGreaterThan(0.45);
+      expect(quiet).toBeLessThan(0.75);
+      expect(building).toBeLessThan(quiet - 0.1);
+    } finally {
+      DRIP.dayChance = 1;
+      DRIP.perDay = 2;
+    }
+  });
+});
 
 describe('the day\'s budget', () => {
   it('is 2 on a quiet day, and 0 with a happening and two letters waiting', () => {

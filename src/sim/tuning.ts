@@ -335,7 +335,7 @@ export const MEMORIES: Record<string, MemoryDef> = {
   tookParcel: { label: 'Landlord took a parcel in for me', value: 3, hours: 5 * 24, stack: 2, gossip: true },
   missedParcel: { label: 'Missed a parcel', value: -2, hours: 3 * 24, stack: 1 },
   parcelNicked: { label: 'Parcel got nicked from the lobby', value: -4, hours: 5 * 24, stack: 1, gossip: true },
-  leftToIt: { label: 'Left to sort it out myself', value: -4, hours: 7 * 24, stack: 2, gossip: true },
+  leftToIt: { label: 'Left to sort it out myself', value: -6, hours: 7 * 24, stack: 2, gossip: true },
   keptWaiting: { label: 'Kept waiting for an answer', value: -2, hours: 3 * 24, stack: 3 },
   buildingCat: { label: 'There\'s a cat in the building', value: 3, hours: 7 * 24, stack: 1 },
   shooedCat: { label: 'Landlord shooed the cat out', value: -3, hours: 5 * 24, stack: 1, gossip: true },
@@ -1050,8 +1050,11 @@ export const ITEMS = {
 /** The little decisions: nought to two a day, each worth having (spec 1.2). Times in game minutes. */
 export const DRIP = {
   /** Cards a day before anything takes one off, and the most open at once. */
-  perDay: 2,
+  perDay: 1,
   maxOpen: 2,
+  /** Turned down: the chance a day gets a card at all, and how much of that is left while works are drawn or going. */
+  dayChance: 0.5,
+  buildingFactor: 0.5,
   /** Waking hours, when the drip tries every `tryEvery` minutes with this chance (doubled after `lateFrom` if nothing's come). */
   wakeFrom: 7 * 60,
   wakeTo: 23 * 60,

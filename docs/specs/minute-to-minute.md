@@ -41,14 +41,14 @@ waking hours (07:00 to 23:00) about 4.8. At 1x a game minute is 0.3 real seconds
 
 | Measure | Target |
 | --- | --- |
-| Drip cards a game day | 0 to 2; a mean of 1 to 1.6 over a week. 0 is fine on a day with a happening, a council visit, or letters and applicants waiting |
+| Drip cards a game day | 0 or 1 (turned down, see the end); a mean of 0.4 to 0.7 over a week. 0 is fine on any day |
 | Drip cards, real time | about one every 4 to 7 real minutes at 1x on an ordinary day; 1.5 to 2.5 at 3x |
-| Decisions of any kind (drip cards, letters with choices, new applicants) | 2 to 5 a game day once there are flats to let |
+| Decisions of any kind (drip cards, letters with choices, new applicants) | no target now (turned down); cards are secondary to layout and building |
 | Open drip cards at once | never more than 2 |
 | Every card's choices | pass the consequence rule (1.0) |
 | People visible and awake (on the map, not away, not asleep), waking hours | at least 2 in 95% of sampled minutes |
 | Something new starting on screen (a bubble, an arrival, a moment) | 90th percentile gap at most 20 real seconds at 1x (67 game minutes) |
-| First week, days 1 to 7 | 2 to 3 scripted cards a day, plus applicants and letters; something to watch from minute one |
+| First week, days 1 to 7 | 0 or 1 scripted card a day (day 1: one, in the evening), plus applicants and letters; something to watch from minute one |
 
 The feel: an ant farm with opinions. You can put the phone down and watch. Every few
 minutes someone wants a word, and it's a word that matters.
@@ -1004,3 +1004,23 @@ With them, measures 1 to 5 above pass on every seed and policy and are switched 
 passes against the decent landlord and is on; against the ruthless one it still fails (now only
 seed 1, week three), because averaging who's left rewards churn: ignoring makes tenants leave,
 and their replacements are new and happy. See the comment in `test/pace.soak.test.ts`.
+
+---
+
+## Turned down
+
+The owner's verdict: the cards are "interesting to an extent but should very much be
+secondary". The core is layout and building. So the drip is occasional now.
+
+- **Rate.** A morning's budget is one card with a 50% chance (`DRIP.dayChance`), or none; half
+  that chance while works are drawn or going (`DRIP.buildingFactor`). The old reductions still
+  apply, and there is no day-after rule at one a day. Night cards and follow-ups still come, one
+  of each at most. Measured in the pacing soak (decent, ruthless, random; weeks 2 and 3): 0.43 to 0.71 a day in any one week, about 0.55 on average. An ignored ask costs more (`leftToIt` -6, was -4) now there are fewer to ignore.
+- **First week.** The script is thinned to one card a day at most. Day 1 has only the evening
+  key on the mat: the handover and the building come first.
+- **Targets changed.** Cards: a mean of 0.4 to 0.7 a day per week across runs, no single week
+  empty or over 5 in 7, never more than one from the budget in a day. A Sunday's recap has 1 tale
+  from cards, not 2. The "2 to 5 decisions a day" and "at least one card a day" measures are
+  dropped (letters and applicants still arrive; they are just not a target). "Decent answers
+  come back" is now per two weeks. Kept: never more than 2 open, ignoring leaves a memory,
+  visibility, street cards at most 30%.
