@@ -485,6 +485,13 @@ function knockAnswered(sim: Sim, h: Happening, host: Pawn | undefined): void {
     h.flag = 'complained';
     return;
   }
+  // Something else took over on the way (a break of their own, a trip out): they put it in the chat instead.
+  if (n.life.breakState || !n.doing.startsWith('Going to knock')) {
+    delete h.knock;
+    h.flag = 'complained';
+    complain(sim, h, n);
+    return;
+  }
   if (n.path.length > 0) return;
   delete h.knock;
   h.flag = 'complained';

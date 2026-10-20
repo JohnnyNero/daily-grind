@@ -18,7 +18,7 @@ import { MEMORIES, remember } from './thoughts';
 import { has } from './traits';
 import { maybeFight } from './events';
 import { tale } from './tales';
-import { GOSSIP, OPINION, REQUESTS, ROMANCE, SOCIAL, TALK } from './tuning';
+import { GOSSIP, OPINION, ROMANCE, SOCIAL, TALK } from './tuning';
 import { readFlags } from './flags';
 
 // What each social memory is worth, and the odds of each kind of talk, are in tuning.ts.
@@ -339,37 +339,13 @@ function compareRent(sim: Sim, a: Pawn, b: Pawn): boolean {
 
 // ------------------------------------------------------------------ requests
 
-/** Once a day per tenant (at a random hour): maybe ask for something in the chat. */
-export function requestsHour(sim: Sim): void {
-  const st = sim.state;
-  for (const p of tenants(sim)) {
-    const life = p.life!;
-    if (random(st) > REQUESTS.perHour || sim.day - life.since < REQUESTS.settleDays) continue;
-    if (has(life, 'petOwner') && life.pet === undefined && random(st) < REQUESTS.pet) {
-      const pet = pick(st, ['a cat', 'a small dog', 'a rabbit called Nigel']);
-      life.pet = 'asked';
-      post(sim, p, `Would it be all right if I got ${pet}? Very well behaved. Mostly.`, [
-        { label: 'Yes, go on', note: `They'll love you for it`, act: `pet:${pet}` },
-        { label: 'No pets, sorry', note: 'They won\'t', act: 'noPet' },
-      ]);
-      continue;
-    }
-    if (life.needs.warmth < REQUESTS.coldUnder && !recently(sim, 'Is the heating on', 2)) {
-      const temp = Math.round(st.temps[life.flat] ?? 15);
-      post(sim, p, `Is the heating on? It's ${temp}° in here`, [
-        { label: 'Turn the boiler up', note: 'Warmer, dearer gas', act: 'boilerUp' },
-        { label: 'Try a jumper', note: 'Free. Unpopular.', act: 'jumper' },
-      ]);
-      continue;
-    }
-    if ((has(life, 'houseProud') || has(life, 'handy')) && random(st) < REQUESTS.paint && !recently(sim, 'Can I paint', 7)) {
-      post(sim, p, 'Can I paint the bedroom? Thinking "Elephant\'s Breath". I\'ll do it myself.', [
-        { label: 'Go for it', note: 'They\'ll be pleased', act: 'paint' },
-        { label: 'Magnolia stays', note: 'They won\'t', act: 'noPaint' },
-      ]);
-    }
-  }
-}
+/**
+ * Once an hour. Tenants used to ask here for a pet, the heating or a lick of paint, in the
+ * chat. Those asks are drip cards now (cards/tenant.ts: pet, heating, paint), so decisions
+ * arrive in one place and wait their turn in the day's budget. Your answer still goes in the
+ * chat for everyone to see. Kept as the hook the sim calls, in case asks come back here.
+ */
+export function requestsHour(_sim: Sim): void {}
 
 /** Someone's moving out: their friends will miss them. */
 export function friendsLeaving(sim: Sim, leaving: Pawn[]): void {
