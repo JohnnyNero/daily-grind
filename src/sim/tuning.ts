@@ -1303,7 +1303,7 @@ export const ACOUSTICS = {
   /** How much noise matters in a room, by what it's for. */
   listen: { bedroomNight: 1, bedroomDay: 0.4, sit: 0.5, cook: 0.3, wash: 0.1 },
   /** How loud what reaches a room feels to someone in it, before what they shrug off. */
-  loudness: 2,
+  loudness: 1.8,
   /** What everyone shrugs off, whatever their nature. */
   tolerance: 0.3,
   /** Noise from a neighbour you think this well of (opinion) bothers you this much. */
