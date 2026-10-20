@@ -3,11 +3,18 @@ import { placeFurniture, removeFurniture } from '../src/sim/build';
 import { flatScore } from '../src/sim/impressiveness';
 import { deserialize, serialize } from '../src/sim/save';
 import { Sim } from '../src/sim/sim';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE } from '../src/sim/state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from '../src/sim/state';
 import { BASELINE, likingTarget, thoughtsOf } from '../src/sim/thoughts';
 import { skipHandover } from '../src/sim/handover';
 
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life);
+
+/** Flat 1's sitting tenant works from home now; for this, make them someone who goes out to work, as they used to. */
+function goesToWork(p: Pawn): Pawn {
+  p.life!.schedule = 'office';
+  p.life!.job = { title: 'Office manager', leave: 8 * 60, back: 17 * 60 + 30 };
+  return p;
+}
 
 describe('tenants', () => {
   it('the building comes with sitting tenants: one in Flat 1 and one in Flat 4', () => {
@@ -26,6 +33,7 @@ describe('tenants', () => {
   it('live a month without getting stuck, and every point of liking is a listed thought', () => {
     for (const seed of [1, 2, 3]) {
       const sim = Sim.create(seed);
+      goesToWork(tenants(sim)[0]);
       let workdays = 0;
       let sleptInBed = 0;
       for (let t = 0; t < 30 * TICKS_PER_DAY; t += 10 * TICKS_PER_MINUTE) {

@@ -17,6 +17,7 @@ import { BILL_SHOWER_WEAR } from './tuning';
 import { SAVE_VERSION, TICKS_PER_DAY, TICKS_PER_HOUR, isDoor, key, type CellKind, type Grade, type State } from './state';
 
 const STREET = 10;
+const BILLS_HABITS = ['paper', 'shops', 'telly', 'cuppa', 'earlyNight'];
 const PLOT_W = 28;
 const STOREYS = 3;
 
@@ -154,21 +155,26 @@ function buildShell(st: State): void {
 
 /**
  * The sitting tenants the building comes with, on old cheap rolling tenancies: someone
- * who works in the ground-floor one-bed and someone retired in the top-floor studio.
- * The other three flats stand empty, so the first let comes early.
+ * who works from home in the ground-floor one-bed and someone retired in the top-floor
+ * studio, so there are two people in all day from the first morning. The other three flats
+ * stand empty, so the first let comes early.
  */
 export function startingTenants(sim: Sim): void {
   const st = sim.state;
   const flats = sim.layout.flats;
-  // Pays on the dot (the last landlord's words), so always pays early.
-  const first = makePerson(st, undefined, true);
+  // Works from home, and pays on the dot (the last landlord's words), so always pays early.
+  const first = makePerson(st, undefined, 'home');
   first.traits = ['paysEarly', ...first.traits.filter((t) => t !== 'paysEarly' && t !== 'haggler')].slice(0, 3);
   // Bill, who's been here longer than the carpets.
-  const bill = makePerson(st, undefined, false);
+  const bill = makePerson(st, undefined, 'retired');
   bill.name = `Bill ${bill.name.split(' ').slice(1).join(' ')}`;
+  // Up with the lark, Bill: never a night owl.
+  if (bill.traits.includes('nightOwl')) bill.traits = [...bill.traits.filter((t) => t !== 'nightOwl'), bill.traits.includes('friendly') ? 'handy' : 'friendly'];
   bill.note = 'Retired';
   if (flats[0]) sittingTenants(sim, flats[0].id, [first], 70 * POUND);
-  if (flats[3]) sittingTenants(sim, flats[3].id, [bill], 55 * POUND);
+  // Bill's routines, which you could set a watch by: the paper at half eight, the shops at
+  // eleven, the telly up loud at two, tea at half five, bed at ten.
+  if (flats[3]) for (const p of sittingTenants(sim, flats[3].id, [bill], 55 * POUND)) p.life!.habits = [...BILLS_HABITS];
   // Bill's shower has seen better days: the first leak (card 5) comes through the ceiling below.
   const lay = sim.layout;
   const billsFlat = flats[3] ? new Set(lay.flatCells(flats[3])) : new Set<number>();
