@@ -11,6 +11,7 @@ import { minuteOfLife, tenantReturns, tenantThink } from './tenants';
 import { guestThink } from './events';
 import { guideThink } from './handover';
 import { burglarThink } from './crime';
+import { VISITORS } from './tuning';
 import { visitorKeys, visitorsSpawn, visitorThink } from './visitors';
 
 /** Tiles per tick at a stroll: about two tiles a second at normal speed. */
@@ -63,7 +64,11 @@ function spawn(sim: Sim): void {
     const busy = hour >= 7 && hour < 23;
     const gap = busy ? randInt(st, 2, 11) : randInt(st, 18, 80);
     st.timers.passerby = st.tick + seconds(gap);
+    // Never more than a few on the street at once (the timer still runs, so they thin out rather than bunch up).
+    const crowded = st.pawns.filter((o) => o.kind === 'passerby').length >= VISITORS.mostPassersBy;
     addPawn(sim, 'passerby');
+    // A crowded street gets no one new. (They're made and dropped so the random stream and ids run on as before.)
+    if (crowded) st.pawns.pop();
   }
   if (st.tick >= st.timers.agent && !st.pawns.some((p) => p.kind === 'agent')) {
     if (hour >= 9 && hour < 18 && emptyFlats(sim).length > 0) addPawn(sim, 'agent');

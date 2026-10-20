@@ -65,6 +65,11 @@ export const FLAGS: Record<string, FlagDef> = {
   scaffolding: { about: 'Next door\'s scaffolding is up on your wall: top-floor windows are an easy way in', readBy: ['crime.risk', 'render'] },
   meterRead: { about: 'The gas meter has been read: the bill is right again', readBy: ['bills.gas'] },
   buildingCat: { about: 'You let the ginger cat stay: the building cat (visitors.ts makes it, state.cat holds it)', readBy: ['visitors.cat', 'card:cat'] },
+  // --- added by chunk 2b ---
+  tired: { about: 'The plumber said this is next to go: the leak card picks it first', subject: 'furniture', readBy: ['render', 'card:ceilingDrip'] },
+  foxNight: { about: 'The fox has been at the bins: more dirt in the lobby and on the stairs', readBy: ['dirt.shared'] },
+  alarmChecked: { about: 'Someone has seen to this flat\'s smoke alarm lately', subject: 'flat', readBy: ['card:chirping'] },
+  batteryOut: { about: 'A smoke alarm with its battery out: the council counts it as broken', subject: 'flat', readBy: ['council.issues', 'card:chirping'], grudge: true },
 };
 
 // ------------------------------------------------------------------ the hooks
@@ -233,3 +238,12 @@ export function expireFlags(sim: Sim): void {
 READERS.goodWord = { 'letting.hours': (_sim, flag, hours, ctx) => (ctx.flat === flag.subject ? hours * 0.8 : hours) };
 READERS.scaffolding = { 'crime.risk': (_sim, _flag, risk) => Math.min(1, risk * 1.25) };
 READERS.meterRead = { 'bills.gas': (sim, _flag, bill) => (hasFlag(sim, 'estimated') ? Math.round(bill / 1.1) : bill) };
+// --- added by chunk 2b ---
+// The two flags with a reader of their own (the others are read by the cards that set them).
+READERS.foxNight = { 'dirt.shared': (_sim, _flag, dirt) => dirt * 3 };
+READERS.batteryOut = {
+  'council.issues': (sim, flag, issues) => {
+    const flat = flag.subject ? sim.layout.flat(flag.subject) : undefined;
+    return flat ? [...issues, `${flat.name} has a smoke alarm with no battery`] : issues;
+  },
+};

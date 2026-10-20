@@ -292,7 +292,7 @@ export class Panels {
     const life = p.life;
     if (!life) {
       const party = p.kind === 'guest' ? sim.layout.flat(p.flat)?.name : undefined;
-      this.head(p.name, p.kind === 'agent' ? 'Shows flats to people. Has keys to everything.' : p.kind === 'guest' ? `Here for the party in ${party ?? 'a flat'}.` : p.kind === 'burglar' ? 'Up to no good.' : 'Just walking past.');
+      this.head(p.name, p.kind === 'agent' ? 'Shows flats to people. Has keys to everything.' : p.kind === 'guest' ? `Here for the party in ${party ?? 'a flat'}.` : p.kind === 'burglar' ? 'Up to no good.' : (p.note ?? 'Just walking past.'));
       this.fill([id, p.doing], () => [h('p', { className: 'doing' }, p.doing)]);
       return;
     }
