@@ -49,6 +49,11 @@ export const FLAGS: Record<string, FlagDef> = {
   dumpingSpot: { about: 'The spot by the bins is a dumping spot: fly-tips likelier', readBy: ['card:mattress'], grudge: true },
   lobbySofa: { about: 'A sofa in the lobby: people sit and meet on the stairs', readBy: ['render', 'moments', 'dirt.shared'] },
   squatter: { about: 'Someone\'s been sleeping in an empty flat: wear and dirt creep up', subject: 'flat', readBy: ['upkeep.wear', 'card:pizza'] },
+  // --- added by chunk 2a ---
+  lodger: { about: 'Someone not on the lease is living in a flat: it wears faster, and they count for the council\'s "overcrowded"', subject: 'flat', readBy: ['upkeep.wear', 'council.issues', 'card:lodger'] },
+  petWear: { about: 'A pet lives in a flat: it wears faster', subject: 'flat', readBy: ['upkeep.wear'] },
+  diyShelf: { about: 'A tenant put a shelf up themselves: no more asking for the drill', subject: 'flat', readBy: ['card:drill'] },
+  painted: { about: 'A tenant painted the flat their colour: once they\'ve gone, it lets slower', subject: 'flat', readBy: ['letting.hours', 'card:paint'] },
 };
 
 // ------------------------------------------------------------------ the hooks
@@ -110,7 +115,26 @@ export type FlagReader<H extends FlagHook> = (sim: Sim, flag: Flag, value: FlagH
  * `risk:<kind>` effects can be stored as flags too (id `risk:burglary`, `risk:fight`...), with
  * readers on the story hooks.
  */
-export const READERS: Record<string, { [H in FlagHook]?: FlagReader<H> }> = {};
+export const READERS: Record<string, { [H in FlagHook]?: FlagReader<H> }> = {
+  // --- added by chunk 2a ---
+  lodger: {
+    'upkeep.wear': (_sim, flag, wear, ctx) => (flag.subject === ctx.flat ? wear * 1.25 : wear),
+    // One more person in the flat for the council's "fewer tiles each" check.
+    'council.issues': (sim, flag, list) => {
+      const flat = sim.layout.flat(flag.subject ?? null);
+      if (!flat || !sim.state.flats[flat.id]?.lease) return list;
+      const people = sim.state.pawns.filter((p) => p.life?.flat === flat.id && !p.life.leaving).length;
+      const line = `${flat.name} is overcrowded`;
+      return list.includes(line) || sim.layout.flatNodes(flat).length / (people + 1) >= LODGER_CROWDED ? list : [...list, line];
+    },
+  },
+  petWear: { 'upkeep.wear': (_sim, flag, wear, ctx) => (flag.subject === ctx.flat ? wear * 1.3 : wear) },
+  // Half of applicants hate someone else's colours: a slower let while it's empty.
+  painted: { 'letting.hours': (sim, flag, hours, ctx) => (flag.subject !== undefined && flag.subject === ctx.flat && !sim.state.flats[flag.subject]?.lease ? hours * 1.5 : hours) },
+};
+
+/** COUNCIL.overcrowded, kept here so this file imports only types. */
+const LODGER_CROWDED = 3;
 
 /** The value a system should use, after any live flags have had their say. */
 export function readFlags<H extends FlagHook>(sim: Sim, hook: H, value: FlagHooks[H], ctx: FlagContext = {}): FlagHooks[H] {
