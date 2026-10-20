@@ -8,6 +8,7 @@
 // column: a flight is FLIGHT cells tall, from one floor up through the floor above.
 
 import { furnitureDef, isGraded } from './defs';
+import { risersOf, wetOf } from './risers';
 import { DOOR_ROWS, MAX_ROWS, isDoor, isSolid, key, type BuildPartsData, type CellKind, type Furniture, type Grade, type State } from './state';
 
 export type BuildParts = BuildPartsData;
@@ -17,7 +18,7 @@ export const MAX_OVERHANG = 4;
 
 /** The parts that can change in build mode, as a copy (for undo). */
 export function snapshot(s: State): string {
-  const parts: BuildParts = { cells: s.cells, furniture: s.furniture, insulated: s.insulated };
+  const parts: BuildParts = { cells: s.cells, furniture: s.furniture, insulated: s.insulated, risers: risersOf(s) };
   return JSON.stringify(parts);
 }
 
@@ -26,6 +27,7 @@ export function restore(s: State, json: string): void {
   s.cells = parts.cells;
   s.furniture = parts.furniture;
   s.insulated = parts.insulated ?? {};
+  if (parts.risers) wetOf(s).risers = [...parts.risers];
 }
 
 const inPlot = (st: State, x: number) => x >= st.plot.x0 && x <= st.plot.x1;

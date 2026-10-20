@@ -23,15 +23,16 @@ import { tale } from './tales';
 import { stat } from './stat';
 import { COUNCIL, UPKEEP } from './tuning';
 import { readFlags } from './flags';
+import { pipeWear } from './risers';
 
 /** Wear from one go on something: about 430 goes from new to broken. */
 export const WEAR_PER_USE = UPKEEP.wearPerUse;
 
-/** Wear from a go on a piece of furniture. Clumsy people are harder on things; handy ones gentler. */
+/** Wear from a go on a piece of furniture. Clumsy people are harder on things; handy ones gentler; far from the pipes, it goes sooner. */
 export function useUp(sim: Sim, f: Furniture, p: Pawn): void {
   if (f.broken) return;
   const life = p.life!;
-  const rate = readFlags(sim, 'upkeep.wear', stat(WEAR_PER_USE, [], [has(life, 'clumsy') ? UPKEEP.clumsy : 1, has(life, 'handy') ? UPKEEP.handy : 1, wearFactor(f)]), { flat: life.flat });
+  const rate = readFlags(sim, 'upkeep.wear', stat(WEAR_PER_USE, [], [has(life, 'clumsy') ? UPKEEP.clumsy : 1, has(life, 'handy') ? UPKEEP.handy : 1, wearFactor(f), pipeWear(sim.state, f)]), { flat: life.flat });
   f.wear = Math.min(1, (f.wear ?? 0) + rate);
   if (f.wear >= 1) {
     breakIt(sim, f);

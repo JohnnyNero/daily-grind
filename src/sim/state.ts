@@ -326,6 +326,22 @@ export interface State {
   moments?: { next: number; last: Record<string, number>; rng: number };
   /** The next thing to save for (project.ts): one you've pinned, by id, and whether Denise has said her piece. */
   project: { pinned?: string; praised?: boolean };
+  /** The wet stack (risers.ts): the risers, building control, the risers' own dice. Missing: the one riser the building came with. */
+  wet?: Wet;
+}
+
+/** The risers, by column, and building control's say on new ones. */
+export interface Wet {
+  /** Columns with a riser in, up every floor. */
+  risers: number[];
+  /** Columns building control have said yes to (it lasts). */
+  approved: number[];
+  /** An application waiting on building control: which columns, and the day they decide. */
+  applied?: { cols: number[]; decideDay: number };
+  /** The last time a riser leaked: where, how far up, and the day (for the damp). */
+  leak?: { x: number; storey: number; day: number };
+  /** The risers' own dice, so they never move the rest of the game's. */
+  rng: number;
 }
 
 /**
@@ -500,6 +516,8 @@ export interface BuildPartsData {
   cells: Record<string, CellKind>;
   furniture: Furniture[];
   insulated: Record<string, true>;
+  /** Riser columns (missing: as the building has them). */
+  risers?: number[];
 }
 
 export interface ChatMessage {

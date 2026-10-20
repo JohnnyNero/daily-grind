@@ -398,6 +398,8 @@ export const MEMORIES: Record<string, MemoryDef> = {
   toldToBleach: { label: 'Told to bleach the mould myself', value: -2, hours: 4 * 24, stack: 1 },
   draughty: { label: 'Draughty windows', value: -3, hours: 3 * 24, stack: 1 },
   wateredPlants: { label: 'Landlord watered my plants', value: 4, hours: 7 * 24, stack: 1, gossip: true },
+  // layout L4
+  riserLeak: { label: 'Water down the wall', value: -4, hours: 3 * 24, stack: 1, gossip: true },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -1275,4 +1277,36 @@ export const LAYOUT = {
   tooFewBedrooms: -6,
   /** Sharers or a family (people who don't share a bed) with nowhere to sit but the beds. */
   nowhereToSit: -3,
+};
+
+// --- layout L4 ---
+
+/** The wet stack (risers.ts; docs/specs/layout.md section 3). */
+export const RISERS = {
+  /**
+   * The riser the building comes with: this many columns in from the left of the plot, up the
+   * stairwell's far side, against the one-beds. Their front rooms are by it; their bathrooms
+   * at the far end, and the studios' kitchens and bathrooms, are a walk from it.
+   */
+  startColumn: 12,
+  /** Pieces this many cells from a riser or nearer cost nothing extra to plumb in. */
+  freeReach: 2,
+  /** Each cell further: this much more to fit, and this much faster wear (and so leaks). */
+  perCell: 20 * POUND,
+  wearPerCell: 0.1,
+  /** The furthest it counts: past this, it's no worse. */
+  mostCells: 10,
+  /**
+   * A new riser, a storey of the building at a time. (The spec started at £600; at that a
+   * second riser lost to moving the bathroom by the stairs by about £750 over twelve weeks.)
+   */
+  perStorey: 400 * POUND,
+  /** Building control: the fee, the days they take, and the chance they say yes. */
+  controlFee: 50 * POUND,
+  controlDays: 3,
+  approve: 0.95,
+  /** Chance a day that a riser springs a leak, what it does to the most worn thing in each room it wets, and the plumber. */
+  leakChance: 0.006,
+  leakWear: 0.2,
+  leakPlumber: 90 * POUND,
 };

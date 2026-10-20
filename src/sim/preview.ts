@@ -8,6 +8,7 @@ import { rentScore } from './impressiveness';
 import { flatKind, type FlatKind } from './rooms';
 import { Sim } from './sim';
 import type { CellKind, Furniture } from './state';
+import { pipeCost } from './risers';
 
 export interface Fact {
   text: string;
@@ -62,6 +63,13 @@ export function changeFacts(sim: Sim, before: Change, after: Change): Fact[] {
   const sum = (m: Map<string, Seen>) => [...m.values()].reduce((n, s) => n + s.rate, 0);
   const delta = sum(b) - sum(a);
   const rent: Fact[] = delta === 0 ? [] : [{ text: `Going rates ${delta > 0 ? '+' : '−'}£${Math.abs(delta) / POUND} a week`, tone: delta > 0 ? 'up' : 'down' }];
+  // Something that needs the water going in (or moving) far from a riser (risers.ts).
+  const was = new Map((before.furniture ?? sim.state.furniture).map((f) => [f.id, f]));
+  const far = (after.furniture ?? []).some((f) => {
+    const old = was.get(f.id);
+    return (!old || old.x !== f.x || old.s !== f.s) && pipeCost(sim.state, f.def, f.x) > 0;
+  });
+  const pipes: Fact[] = far ? [{ text: 'Far from the pipes: dearer to fit', tone: 'down' }] : [];
   // The money first if there's room, then what changed.
-  return [...rent, ...facts].slice(0, 3);
+  return [...rent, ...pipes, ...facts].slice(0, 3);
 }
