@@ -131,12 +131,15 @@ function play(sim: Sim): void {
     focusCard = id;
   };
   tray.cardAt = (x, y) => renderer.cardAt(x, y);
+  /** Where the camera was before a card took it, so it goes back when the card's done with. */
+  let before: { scale: number; ox: number; oy: number } | null = null;
   function startPan(id: number, now: number): void {
     const c = openCards(sim).find((x) => x.id === id);
     const spot = c ? renderer.spotOf(c) : null;
     if (!c || !spot) return;
     const cam = renderer.camera;
     const from = { ...cam };
+    before ??= { scale: cam.scale, ox: cam.ox, oy: cam.oy };
     const box = viewBox();
     const p = c.pawn !== undefined ? sim.state.pawns.find((x) => x.id === c.pawn) : undefined;
     const flat = sim.layout.flat(c.flat ?? p?.life?.flat ?? '');
@@ -292,6 +295,11 @@ function play(sim: Sim): void {
       el('end-body').textContent = `Four missed mortgage payments, and on day ${sim.state.repossessed} Northfold Building Society took the building. The tenants have been told. Some of them are pleased.`;
       speed = 0;
       hud.showSpeed(speed);
+    }
+    // The card's answered or folded away: back to where you were looking.
+    if (before && tray.openId === null && focusCard === null && !pan) {
+      pan = { from: { scale: renderer.camera.scale, ox: renderer.camera.ox, oy: renderer.camera.oy }, to: before, start: now };
+      before = null;
     }
     if (pan) {
       const t = Math.min(1, (now - pan.start) / 400);
