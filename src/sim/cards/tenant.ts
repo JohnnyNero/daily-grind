@@ -497,7 +497,9 @@ const paysMore: CardDef = {
         .filter((f) => f.id !== p.life!.flat && household(sim, f.id).length > 0)
         .map((f) => ({ f, lease: flatInfo(sim, f.id).lease }))
         .filter((x) => x.lease && mine.rent - x.lease.rent > 15 * POUND && goingRate(sim, x.f.id) >= goingRate(sim, p.life!.flat) * 0.9)
-        .sort((a, b) => a.lease!.rent - b.lease!.rent)[0];
+        // The nearest rent under theirs, not the cheapest in the building: matching that one
+        // would walk every rent down to a sitting tenant's, one card at a time.
+        .sort((a, b) => b.lease!.rent - a.lease!.rent)[0];
       if (cheaper) list.push({ pawn: p.id, flat: p.life!.flat, data: { other: cheaper.f.id, gap: mine.rent - cheaper.lease!.rent }, weight: 1.5 });
     }
     return list;

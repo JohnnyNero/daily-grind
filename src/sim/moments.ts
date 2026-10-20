@@ -19,11 +19,11 @@ import { hasFlag } from './flags';
 import { findPath, type Flat } from './layout';
 import { keysOf, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
-import { awayToday, homeAndAwake } from './schedules';
+import { awayToday, freeFor, homeAndAwake } from './schedules';
 import type { Sim } from './sim';
 import { opinion, rememberAbout } from './social';
 import { TICKS_PER_MINUTE, seconds, type Life, type Pawn, type Pose, type State } from './state';
-import { MOMENTS, SEEK, SOCIAL } from './tuning';
+import { MOMENTS, SCHEDULES, SEEK, SOCIAL } from './tuning';
 import { has } from './traits';
 
 type Moment = NonNullable<Life['moment']>;
@@ -588,6 +588,9 @@ function tryStart(sim: Sim, leader: Pawn): boolean {
   let r = random(pace) * options.reduce((n, o) => n + o.weight, 0);
   const chosen = options.find((o) => (r -= o.weight) < 0) ?? options[0];
   const { def, cast } = chosen;
+  // Nobody is kept from work by it: it has to be over, with their spare minutes for the stairs to
+  // come, before they'd set off (schedules.ts). Cut short by the clock it would be no scene at all.
+  if (!def.passive && !cast.every((p) => freeFor(sim, p, runsFor(def) + SCHEDULES.spare))) return false;
   // Every beat has to be somewhere they can get to.
   if (!def.passive && !cast.every((p, i) => def.beats(sim, p, cast[1 - i], i).every((b, k) => canGet(sim, p, spotFor(sim, b.to, p, cast[1 - i], k))))) return false;
   begin(sim, def, cast);
@@ -596,6 +599,9 @@ function tryStart(sim: Sim, leader: Pawn): boolean {
   pace.next = st.tick + minutes(randInt(pace, MOMENTS.gap[0], MOMENTS.gap[1]));
   return true;
 }
+
+/** Game minutes a moment can run at most. */
+const runsFor = (def: MomentDef): number => Math.ceil(seconds(def.seconds ?? MOMENTS.seconds[1]) / TICKS_PER_MINUTE);
 
 const PAIR_DAYS = 3;
 const pairKey = (cast: Pawn[]): string => `pair:${Math.min(cast[0].id, cast[1].id)}-${Math.max(cast[0].id, cast[1].id)}`;

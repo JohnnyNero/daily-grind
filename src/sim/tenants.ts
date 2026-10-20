@@ -27,7 +27,7 @@ import { post, recently } from './chat';
 import { rememberAbout } from './social';
 import { hhmm } from './time';
 import { stat } from './stat';
-import { DECAY, ITEMS, NEEDS, OUTINGS, SEEK, SHARED_USE, START_NEEDS } from './tuning';
+import { DECAY, ITEMS, NEEDS, OUTINGS, SCHEDULES, SEEK, SHARED_USE, START_NEEDS } from './tuning';
 
 export const NEED_NAMES: Record<NeedId, string> = {
   sleep: 'Sleep',
@@ -537,6 +537,16 @@ export function tenantReturns(sim: Sim, p: Pawn): void {
     life.needs.bladder = Math.min(life.needs.bladder, 0.5);
   }
   for (const [need, gain] of Object.entries(OUTINGS[why] ?? {}) as [NeedId, number][]) life.needs[need] = Math.min(1, life.needs[need] + gain);
+  // Out on an errand when it's time for their hours: straight on from there, not home and back.
+  const hours = awayToday(sim, life);
+  const m = sim.minuteOfDay;
+  if (why !== 'At work' && why !== 'At college' && hours && life.workedDay !== sim.day && m >= hours.leave - SCHEDULES.setOff && m < hours.back - 60) {
+    const dayStart = Math.floor(st.tick / TICKS_PER_DAY) * TICKS_PER_DAY;
+    life.workedDay = sim.day;
+    life.away = { until: dayStart + hours.back * TICKS_PER_MINUTE, why: life.job ? 'At work' : 'At college' };
+    p.doing = life.away.why;
+    return;
+  }
   life.away = null;
   p.exit = random(st) < 0.5 ? 0 : 1;
   p.x = p.exit === 0 ? 0 : st.w - 1;
