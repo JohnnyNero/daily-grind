@@ -1168,8 +1168,8 @@ export const VISITORS = {
 export const MOMENTS = {
   /** Most running at once. */
   most: 2,
-  /** Game minutes between one starting and the next, in waking hours. */
-  gap: [50, 100] as [number, number],
+  /** Game minutes between one starting and the next, in waking hours (the spec says no more than 100; the rest is slack for when everyone is busy at the moment it is due). */
+  gap: [50, 85] as [number, number],
   /** How long one runs, in real seconds. */
   seconds: [5, 30] as [number, number],
 };

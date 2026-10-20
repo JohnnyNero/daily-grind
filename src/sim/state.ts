@@ -176,8 +176,8 @@ export interface Life {
   schedule: Schedule;
   /** One or two habits (schedules.ts), by id; empty until the first morning. */
   habits: string[];
-  /** An ambient moment they're in (moments.ts): what, until when (a tick), how far through, with whom, and where. */
-  moment?: { kind: string; until: number; step: number; with?: number; at?: [number, number] };
+  /** An ambient moment they're in (moments.ts): what, until when (a tick), how far through, with whom (and whether they lead it), and where. */
+  moment?: { kind: string; until: number; step: number; with?: number; at?: [number, number]; lead?: boolean };
 }
 
 export type BreakKind = 'sulk' | 'slam' | 'bins' | 'bed' | 'tantrum' | 'music' | 'boxes' | 'tidy' | 'bbq' | 'mend' | 'paint' | 'plant';
@@ -317,6 +317,8 @@ export interface State {
   cat?: { pawn: number; favourite?: number; since: number };
   /** Visitors (visitors.ts): the next time each kind is due, by role. */
   visitors: { next: Record<string, number> };
+  /** Ambient moments (moments.ts): the tick the next is due, when each kind last started, and its own dice (so it never moves the rest of the game's). Missing until the first. */
+  moments?: { next: number; last: Record<string, number>; rng: number };
   /** The next thing to save for (project.ts): one you've pinned, by id, and whether Denise has said her piece. */
   project: { pinned?: string; praised?: boolean };
 }
