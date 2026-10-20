@@ -341,6 +341,15 @@ table.people { width: 100%; border-collapse: collapse; font-size: 12px; min-widt
 .overlays button { min-height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid #4a4d55; background: #1d1f23d9; color: var(--bar-ink); font-size: 11px; cursor: pointer; }
 .overlays button[aria-pressed="true"] { background: var(--accent); color: #1d1f23; border-color: var(--accent); }
 body.building .overlays, body.panel-open .overlays { display: none; }
+.overlays button { padding: 0 9px; }
+.lens {
+  position: fixed; left: 8px; top: calc(var(--top-h) + 48px); z-index: 4; max-width: 250px; padding: 8px 10px;
+  display: grid; gap: 3px; background: #1d1f23ea; color: var(--bar-ink); border: 1px solid #4a4d55; border-radius: 10px; font-size: 12px;
+}
+.lens[hidden], body.building .lens, body.panel-open .lens { display: none; }
+.lens b { font-size: 13px; }
+.lens ul { margin: 0; padding-left: 16px; }
+.lens button { justify-self: start; min-height: 28px; padding: 0 10px; border-radius: 14px; border: 1px solid #4a4d55; background: transparent; color: var(--bar-ink); font-size: 11px; cursor: pointer; }
 
 /* chat */
 .chat { display: flex; flex-direction: column; gap: 8px; background: #ece4d5; border-radius: 10px; padding: 10px; }

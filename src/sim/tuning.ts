@@ -1276,3 +1276,13 @@ export const LAYOUT = {
   /** Sharers or a family (people who don't share a bed) with nowhere to sit but the beds. */
   nowhereToSit: -3,
 };
+
+// --- layout L6 ---
+
+/** The overlay bar's colour scales (sim/lens.ts). */
+export const LENS = {
+  /** Noise reaching a room (per minute) that paints it fully red. Matches the old per-flat overlay. */
+  noiseFull: 3,
+  /** A going rate, in pence, that paints a room fully green on the Rent overlay. */
+  rentFull: 30000,
+};

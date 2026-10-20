@@ -3,7 +3,8 @@ import { deserialize, serialize } from './sim/save';
 import { Sim } from './sim/sim';
 import { planTicks, quietNight, skipToMorning } from './sim/pace';
 import { BuildUi } from './ui/buildUi';
-import { el } from './ui/dom';
+import { el, h } from './ui/dom';
+import { readRoom } from './sim/lens';
 import { Hud } from './ui/hud';
 import { Panels } from './ui/panels';
 import { attachInput } from './ui/input';
@@ -72,9 +73,33 @@ function play(sim: Sim): void {
   };
   hud.onBuild = () => build.start();
   const handover = new HandoverUi(sim);
+  const lensBox = el('lens');
+  const closeLens = () => {
+    lensBox.hidden = true;
+    renderer.lensRoom = null;
+  };
+  /** With an overlay on, a tap on a room says what's behind its colour. */
+  const showLens = (room: number): boolean => {
+    const r = readRoom(sim, renderer.overlay, room);
+    const flat = sim.layout.rooms[room]?.flat;
+    if (!r || !flat) return false;
+    renderer.lensRoom = room;
+    lensBox.replaceChildren(
+      h('b', {}, `${r.flat} · ${r.room}`),
+      h('span', {}, r.word),
+      ...(r.why.length ? [h('ul', {}, ...r.why.map((w) => h('li', {}, w)))] : []),
+      h('button', { type: 'button', onclick: () => { closeLens(); panels.show({ kind: 'flat', id: flat }); } }, `${r.flat} ›`),
+    );
+    lensBox.hidden = false;
+    return true;
+  };
   hud.onOverlay = (mode) => {
     renderer.overlay = mode;
+    closeLens();
   };
+  setInterval(() => {
+    if (renderer.lensRoom !== null && !lensBox.hidden) showLens(renderer.lensRoom);
+  }, 1000);
 
   /** The part of the screen between the chips along the top and the dock along the bottom. */
   function viewBox(): { x: number; y: number; w: number; h: number } {
@@ -183,6 +208,11 @@ function play(sim: Sim): void {
         return;
       }
       const cell = renderer.cellAt(x, y);
+      if (renderer.overlay !== 'none') {
+        const room = cell ? sim.layout.roomOf[sim.layout.node(cell.x, cell.s)] : -1;
+        if (room >= 0 && showLens(room)) return;
+        closeLens();
+      }
       // Furniture brings up its card (tap it again, or anywhere else, to put the card away).
       const piece = cell ? furnitureAt(sim.state, cell.x, cell.s) : undefined;
       if (piece && was !== piece.id) {
