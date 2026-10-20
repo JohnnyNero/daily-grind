@@ -720,8 +720,12 @@ export const RISK_WORDS = { low: 0.15, some: 0.35, high: 0.6 };
 // ================================================================== upkeep and the council
 
 export const UPKEEP = {
-  /** Wear from one go on something: about 250 goes from new to broken. */
-  wearPerUse: 0.004,
+  /**
+   * Wear from one go on something: about 430 goes from new to broken. (It was 250, when three
+   * in four tenants were out at work all day; with schedules they're home half as long again,
+   * and use the loo and the cooker nearly twice as often a day, so a go wears less.)
+   */
+  wearPerUse: 0.0023,
   /** Clumsy people are this much harder on things; handy ones this much gentler. */
   clumsy: 2.5,
   handy: 0.7,

@@ -23,7 +23,7 @@ import { stat } from './stat';
 import { COUNCIL, UPKEEP } from './tuning';
 import { readFlags } from './flags';
 
-/** Wear from one go on something: about 250 goes from new to broken. */
+/** Wear from one go on something: about 430 goes from new to broken. */
 export const WEAR_PER_USE = UPKEEP.wearPerUse;
 
 /** Wear from a go on a piece of furniture. Clumsy people are harder on things; handy ones gentler. */

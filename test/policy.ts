@@ -86,6 +86,19 @@ export function landlord(sim: Sim, policy: Policy, cards?: Cards): void {
   }
   // Even the ruthless one mends what the council has told them to.
   if (st.council.notice) for (const f of st.furniture) if (f.broken !== undefined) mend(sim, f.id);
+  // Heating: the decent one puts a radiator in any flat that has none, let or about to be (a boiler
+  // with nothing to heat is no heating at all); the ruthless one only once the council says it's too cold.
+  for (const f of sim.layout.flats) {
+    if (itemsIn(sim, f.id, 'radiator') > 0) continue;
+    if (policy === 'ruthless' && !st.council.notice?.issues.some((i) => i.startsWith(`${f.name} is too cold`))) continue;
+    if (st.money < furniturePrice('radiator') + 200 * POUND) continue;
+    const cells = sim.layout.flatCells(f).map((n) => sim.layout.xs(n));
+    for (const [x, s] of cells) {
+      if (typeof furnitureProblem(st, 'radiator', x, s) === 'string') continue;
+      buyFurniture(sim, 'radiator', x, s, false);
+      break;
+    }
+  }
   // Keep a cushion, overpay the rest.
   const cushion = 1500 * POUND;
   if (st.money > cushion + 1000 * POUND) overpay(sim, st.money - cushion);

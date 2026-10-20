@@ -496,7 +496,9 @@ const paysMore: CardDef = {
       const cheaper = sim.layout.flats
         .filter((f) => f.id !== p.life!.flat && household(sim, f.id).length > 0)
         .map((f) => ({ f, lease: flatInfo(sim, f.id).lease }))
-        .filter((x) => x.lease && mine.rent - x.lease.rent > 15 * POUND && goingRate(sim, x.f.id) >= goingRate(sim, p.life!.flat) * 0.9)
+        // Not against a sitting tenant: their rent is from before your time, and everyone knows
+        // it. Matching that would halve a rent at a stroke, for a rise of a fiver the other way.
+        .filter((x) => x.lease && !x.lease.sitting && mine.rent - x.lease.rent > 15 * POUND && goingRate(sim, x.f.id) >= goingRate(sim, p.life!.flat) * 0.9)
         // The nearest rent under theirs, not the cheapest in the building: matching that one
         // would walk every rent down to a sitting tenant's, one card at a time.
         .sort((a, b) => b.lease!.rent - a.lease!.rent)[0];
@@ -531,26 +533,25 @@ const paysMore: CardDef = {
   },
   fixtures: [
     {
-      name: 'Bill shrugs nothing off',
+      name: 'next door shrugs nothing off',
       build(seed) {
         const sim = fixtureSim(seed);
-        const [p] = letFlat(sim, 1, [['haggler', 'busybody']], 100 * POUND);
-        settle(p);
+        const [p] = letFlat(sim, 2, [['haggler', 'busybody']], 100 * POUND);
+        const [o] = letFlat(sim, 4, [['lightSleeper', 'keenCook']], 75 * POUND);
+        settle(p, o);
         p.life!.memories.push({ id: 'paysMore', at: sim.state.tick - TICKS_PER_HOUR });
-        const bill = sitting(sim)[1];
-        return { sim, subject: { pawn: p.id, flat: p.life!.flat, data: { other: bill.life!.flat, gap: 100 * POUND - flatInfo(sim, bill.life!.flat).lease!.rent } } };
+        return { sim, subject: { pawn: p.id, flat: p.life!.flat, data: { other: o.life!.flat, gap: 25 * POUND } } };
       },
     },
     {
-      name: 'an easy-going Bill',
+      name: 'an easy-going next door',
       build(seed) {
         const sim = fixtureSim(seed);
-        const [p] = letFlat(sim, 1, [['knowsRights', 'houseProud']], 100 * POUND);
-        settle(p);
+        const [p] = letFlat(sim, 2, [['knowsRights', 'houseProud']], 100 * POUND);
+        const [o] = letFlat(sim, 4, [['easyGoing', 'keenCook']], 75 * POUND);
+        settle(p, o);
         p.life!.memories.push({ id: 'paysMore', at: sim.state.tick - TICKS_PER_HOUR });
-        const bill = sitting(sim)[1];
-        bill.life!.traits = ['easyGoing', 'keenCook'];
-        return { sim, subject: { pawn: p.id, flat: p.life!.flat, data: { other: bill.life!.flat, gap: 100 * POUND - flatInfo(sim, bill.life!.flat).lease!.rent } } };
+        return { sim, subject: { pawn: p.id, flat: p.life!.flat, data: { other: o.life!.flat, gap: 25 * POUND } } };
       },
     },
   ],
