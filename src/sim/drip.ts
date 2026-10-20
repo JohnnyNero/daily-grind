@@ -440,6 +440,8 @@ export function applyEffect(sim: Sim, card: Card, e: Effect): void {
     }
     case 'flag':
       setFlag(sim, a, b || undefined, c ? st.tick + Number(c) * TICKS_PER_DAY : undefined, DRIP.maxFlags);
+      // The building cat: visitors.ts brings its pawn on the hour once State.cat exists.
+      if (a === 'buildingCat' && !st.cat) st.cat = { pawn: -1, since: sim.day };
       return;
     case 'reveal': {
       const p = pawnOf(sim, a);
@@ -493,9 +495,10 @@ export function applyEffect(sim: Sim, card: Card, e: Effect): void {
 const POST_ACTS = ['rent', 'refuse', 'fine', 'advance', 'inspect'];
 
 /**
- * Existing chat and post acts, so nothing's written twice, plus `row:<a>:<b>`: two tenants
- * have it out, and if it turns into a fight that's the storyteller's, through its cap and
- * cooldowns (events.ts `maybeFight`), so a card never piles a happening on.
+ * Existing chat and post acts, so nothing's written twice. Also `prepay:<flat>:<days>` (rent
+ * paid ahead), and `row:<a>:<b>`: two tenants have it out, and if it turns into a fight that's
+ * the storyteller's, through its cap and cooldowns (events.ts `maybeFight`), so a card never
+ * piles a happening on.
  */
 function act(sim: Sim, card: Card, kind: string, args: string[]): void {
   if (kind === 'row') {
@@ -505,6 +508,12 @@ function act(sim: Sim, card: Card, kind: string, args: string[]): void {
     rememberAbout(sim, p, 'row', q);
     rememberAbout(sim, q, 'row', p);
     maybeFight(sim, p, q);
+    return;
+  }
+  if (kind === 'prepay') {
+    // Rent paid ahead: those days are already paid for.
+    const lease = flatInfo(sim, args[0]).lease;
+    if (lease) lease.prepaid = (lease.prepaid ?? 0) + (Number(args[1]) || 0);
     return;
   }
   if (POST_ACTS.includes(kind)) postAct(sim, [kind, ...args].join(':'));
