@@ -17,7 +17,8 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type HouseholdKind, type Life, type NeedId, type Pawn, type Person } from './state';
 import { forget, likingTarget, remember, thoughtsOf } from './thoughts';
 import { has } from './traits';
-import { SHARED, dirtOf, isNight, itemsIn, outdoorTemp, noiseReaching, tempOf, tidy, warmthOf } from './environment';
+import { SHARED, dirtOf, isNight, itemsIn, outdoorTemp, tempOf, tidy, warmthOf } from './environment';
+import { STREET, noiseFelt } from './acoustics';
 import { noticeTrait } from './outcomes';
 import { breakThink } from './breaks';
 import { onKnock } from './events';
@@ -150,19 +151,18 @@ function buildingNeeds(sim: Sim, p: Pawn): void {
   if (life.away) return;
   const warm = warmthOf(tempOf(sim, life.flat));
   life.needs.warmth += (warm - life.needs.warmth) * NEEDS.warmthEase;
-  const { amount, loudest } = noiseReaching(sim, sim.noise(), life.flat);
+  // Noise felt where they are, room by room (acoustics.ts): a bedroom at night most.
+  const { felt, loudest } = noiseFelt(sim, p);
   const night = isNight(sim);
-  // Noise felt: what gets through, more for light sleepers, more at night.
-  const felt = stat(amount, [], [has(life, 'lightSleeper') ? NEEDS.lightSleeper : 1, night ? NEEDS.night : 1]);
   const quiet = 1 - Math.min(1, felt / NEEDS.quietGone);
   life.needs.quiet += (quiet - life.needs.quiet) * (quiet < life.needs.quiet ? NEEDS.quietFalls : NEEDS.quietRises);
   if (p.pose === 'sleep' && night && felt >= NEEDS.keptAwake && loudest) {
     const recent = life.memories.some((m) => m.id === 'keptAwake' && sim.state.tick - m.at < NEEDS.keptAwakeHours * TICKS_PER_HOUR);
     if (recent) return;
-    const from = loudest === SHARED ? 'the stairwell' : (sim.layout.flat(loudest)?.name ?? 'next door');
+    const from = loudest === SHARED ? 'the stairwell' : loudest === STREET ? 'the street' : loudest === life.flat ? 'the rest of the household' : (sim.layout.flat(loudest)?.name ?? 'next door');
     life.memories.push({ id: 'keptAwake', at: sim.state.tick, note: `Kept awake by ${from}` });
     if (has(life, 'lightSleeper')) noticeTrait(sim, p, 'lightSleeper');
-    if (loudest !== SHARED) {
+    if (loudest !== SHARED && loudest !== STREET && loudest !== life.flat) {
       for (const n of sim.state.pawns.filter((o) => o.life?.flat === loudest)) rememberAbout(sim, p, 'noise', n);
       if (!recently(sim, 'Some of us are trying to sleep')) {
         post(sim, p, `Some of us are trying to sleep. ${from}, it's ${hhmm(sim.minuteOfDay)}`, [

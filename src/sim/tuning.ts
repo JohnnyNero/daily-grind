@@ -1276,3 +1276,39 @@ export const LAYOUT = {
   /** Sharers or a family (people who don't share a bed) with nowhere to sit but the beds. */
   nowhereToSit: -3,
 };
+
+// --- layout L2 ---
+
+/** Noise by room (acoustics.ts; docs/specs/layout.md 2.1). */
+export const ACOUSTICS = {
+  /** Room to room, the per-tile figures in NOISE count this much more than flat to flat; and at most this much gets through. */
+  roomScale: 5,
+  mostThrough: 0.75,
+  /** Within a flat, noise passes at this much. */
+  withinFlat: 0.5,
+  /** Feet on the stairs, each (more at night); a use of the street door, and of a flat's front door. */
+  stair: 0.8,
+  stairNight: 1.5,
+  streetDoor: 0.8,
+  flatDoor: 0.4,
+  /** The street, heard in the ground-floor rooms, by day and at night. */
+  street: 0.5,
+  streetNight: 0.3,
+  /** A washing machine going. */
+  washer: 0.6,
+  /** How much noise matters in a room, by what it's for. */
+  listen: { bedroomNight: 1, bedroomDay: 0.4, sit: 0.5, cook: 0.3, wash: 0.1 },
+  /** How loud what reaches a room feels to someone in it, before what they shrug off. */
+  loudness: 2,
+  /** What everyone shrugs off, whatever their nature. */
+  tolerance: 0.3,
+  /** Noise from a neighbour you think this well of (opinion) bothers you this much. */
+  liked: 20,
+  likedHalves: 0.5,
+  /** The rolling average of bedroom noise at night, for a flat's Quiet: how fast it moves each hour. */
+  averageRate: 0.08,
+  /** For the building preview: what each kind of room tends to make, as built. */
+  /** The building preview says a bedroom's louder or quieter when it's open to this much more or less noise. */
+  previewChange: 0.15,
+  typical: { sit: 1, cook: 0.5, wash: 0.2, sleep: 0.1, stairs: 0.8, shared: 0.3, street: 0.5, frontDoor: 0.3 } as Record<string, number> & { stairs: number; shared: number; street: number; frontDoor: number },
+};

@@ -8,7 +8,8 @@ import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, seconds, type Card, type CellKind, type Grade, type Pawn } from '../sim/state';
-import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
+import { SHARED, tempOf, warmthOf } from '../sim/environment';
+import { roomNoise } from '../sim/acoustics';
 import { FLAT_WALLS, LIGHTS, PAL, box, dark, edge, drawAnimal, drawFurniture, drawIcon, drawPerson, drawSleeper, iconName, light, mix, pawnHeight, rect, PERSON_H } from './art';
 import { BUDGET } from '../sim/tuning';
 import { spacesOf } from '../sim/shared';
@@ -723,13 +724,15 @@ export class Renderer {
   }
 
   private drawOverlay(ctx: CanvasRenderingContext2D): void {
+    if (this.overlay === 'noise') {
+      this.drawNoiseOverlay(ctx);
+      return;
+    }
     const sim = this.sim;
     const lay = sim.layout;
-    const made = sim.noise();
     for (const f of lay.flats) {
       let v: number;
-      if (this.overlay === 'noise') v = 1 - Math.min(1, noiseReaching(sim, made, f.id).amount / 3);
-      else if (this.overlay === 'warmth') v = warmthOf(tempOf(sim, f.id));
+      if (this.overlay === 'warmth') v = warmthOf(tempOf(sim, f.id));
       else {
         const people = sim.state.pawns.filter((p) => p.life?.flat === f.id && !p.life.leaving);
         if (people.length === 0) continue;
@@ -745,6 +748,23 @@ export class Renderer {
       }
       ctx.globalAlpha = 1;
     }
+  }
+
+  /** Noise, room by room (acoustics.ts): every room in a flat coloured by what reaches it now. */
+  private drawNoiseOverlay(ctx: CanvasRenderingContext2D): void {
+    const sim = this.sim;
+    const lay = sim.layout;
+    ctx.globalAlpha = 0.45;
+    for (const room of lay.rooms) {
+      if (room.flat === null) continue;
+      const v = 1 - Math.min(1, roomNoise(sim, room.id) / 2);
+      const colour = v >= 0.6 ? '#5f9a4c' : v >= 0.4 ? '#d6a63c' : v >= 0.25 ? '#d9813a' : '#c4523f';
+      for (const n of room.cells) {
+        const [x, s] = lay.xs(n);
+        rect(ctx, x * TILE, floorY(s) - TILE, TILE, TILE, colour);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ------------------------------------------------------------------ evening light
