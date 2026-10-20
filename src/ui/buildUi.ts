@@ -10,6 +10,8 @@
 import { applyForPlanning, needsPlanning, topRow } from '../sim/planning';
 import { PLANNING_FEE, flatInfo } from '../sim/economy';
 import { flatNeeds } from '../sim/impressiveness';
+import { changeFacts, type Fact } from '../sim/preview';
+import { flatKind } from '../sim/rooms';
 import {
   FLIGHT,
   cellProblem,
@@ -211,11 +213,24 @@ export class BuildUi {
     const why = el('place-why');
     why.textContent = problem ?? 'Tap where it should go, or drag it.';
     why.classList.toggle('bad', problem !== null);
+    // What it would do, in a few words: facts, not advice.
+    el('place-facts').replaceChildren(...(problem === null ? this.pendingFacts() : []).map(factSpan));
     const ok = el('place-ok') as HTMLButtonElement;
     ok.disabled = problem !== null;
     ok.textContent = p.id === undefined ? `Place ${pounds(furniturePrice(p.def, p.grade))}` : 'Place';
     el('place-cancel').textContent = p.id === undefined ? 'Done' : 'Cancel';
     this.bump();
+  }
+
+  /** The flats as they'd be with the piece where the ghost is, against as they are. */
+  private pendingFacts(): Fact[] {
+    const p = this.pending;
+    if (!p) return [];
+    const st = this.sim.state;
+    const moving = p.id === undefined ? undefined : st.furniture.find((f) => f.id === p.id);
+    const piece = { ...(moving ?? { id: -1, def: p.def }), def: p.def, x: p.x, s: p.s, flip: p.flip };
+    const after = [...st.furniture.filter((f) => f.id !== p.id), piece];
+    return changeFacts(this.sim, { cells: this.draft.cells }, { cells: this.draft.cells, furniture: after });
   }
 
   /** Place: buy it and put it in, or move it there. */
@@ -292,7 +307,7 @@ export class BuildUi {
     const row = (n: (typeof list)[number]) =>
       h('button', { type: 'button', class: `need ${n.done ? 'done' : ''}`, disabled: n.done, onclick: () => { const g = GROUPS.find((x) => x.id === n.group); this.needsFolded = true; if (g) this.pickGroup(g); this.updateNeeds(); } }, h('span', { class: 'tick' }, n.done ? '✓' : ''), n.label);
     this.needs.replaceChildren(
-      h('button', { type: 'button', class: 'needs-head', 'aria-expanded': String(!this.needsFolded), onclick: () => { this.needsFolded = !this.needsFolded; this.updateNeeds(); } }, h('b', {}, `${flat!.name} needs`), h('span', {}, ready ? 'Liveable' : `${got} of ${must.length}`)),
+      h('button', { type: 'button', class: 'needs-head', 'aria-expanded': String(!this.needsFolded), onclick: () => { this.needsFolded = !this.needsFolded; this.updateNeeds(); } }, h('b', {}, `${flat!.name} · ${flatKind(this.sim, flat!.id).name}`), h('span', {}, ready ? 'Liveable' : `${got} of ${must.length}`)),
       ...(this.needsFolded
         ? []
         : [
@@ -396,7 +411,9 @@ export class BuildUi {
     const applied = st.planning.applied;
     sign.textContent = planning && !applied ? `Apply for planning ${pounds(PLANNING_FEE)}` : `Sign off ${pounds(cost)}`;
     sign.disabled = red > 0 || (planning ? applied !== undefined || st.money < PLANNING_FEE : cost > st.money);
+    const facts = red > 0 ? [] : changeFacts(this.sim, {}, { cells: plan.cells });
     out.append(
+      ...facts.map((f) => h('span', { class: `fact${f.tone ? ` ${f.tone}` : ''}` }, f.text)),
       h('strong', {}, pounds(cost)),
       red > 0
         ? h('span', { class: 'down' }, `${red} cell${red === 1 ? " isn't" : "s aren't"} held up (in red)`)
@@ -940,4 +957,9 @@ function toolPrice(t: Tool): string {
   if (t === 'insulate') return `${pounds(INSULATE_PRICE)} a cell`;
   if (t === 'stair') return `${pounds(CELL_PRICE.stair * FLIGHT)} a flight`;
   return `${pounds(CELL_PRICE[t])}${t === 'wall' || t === 'window' ? ' a cell' : ''}`;
+}
+
+/** One fact about a change, coloured up or down. */
+function factSpan(f: Fact): HTMLElement {
+  return h('span', { class: f.tone ?? '' }, f.text);
 }

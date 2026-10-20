@@ -27,7 +27,7 @@ export const TICKS_PER_SECOND = 200 / 3;
 /** Real seconds at 1x, in ticks. */
 export const seconds = (n: number): number => Math.round(n * TICKS_PER_SECOND);
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 
 /**
  * What a cell holds. Walls hold things up and keep people, heat and noise out; a window is
@@ -116,10 +116,15 @@ export interface Using {
   until: number;
 }
 
+/** Who moved in together: someone on their own, a couple, sharers (a bedroom each), or a family (two bedrooms at least). */
+export type HouseholdKind = 'single' | 'couple' | 'sharers' | 'family';
+
 /** Everything about a tenant beyond walking about. */
 export interface Life {
   /** The flat they live in (its id). */
   flat: string;
+  /** Who they moved in as (version 11; older saves get one from who they live with). */
+  household: HouseholdKind;
   needs: Record<NeedId, number>;
   memories: Memory[];
   /** How much they like living here, as shown; it eases towards the total of their thoughts. */
@@ -563,6 +568,8 @@ export interface Person {
 export interface Applicant {
   id: number;
   flat: string;
+  /** Who they are together: on their own, a couple, sharers or a family. */
+  household: HouseholdKind;
   people: Person[];
   traits: string[];
   /** The one you know about. */

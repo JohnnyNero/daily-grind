@@ -399,6 +399,10 @@ body.building .furn-card { bottom: calc(var(--tab-h) + var(--buildbar-h, 0px) + 
 .place-info strong { font-size: 14px; }
 .place-info span { font-size: 12px; color: var(--sheet-muted); }
 .place-info span.bad { color: var(--bad); }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--sheet-muted); }
+.facts:empty { display: none; }
+.facts .up, .quote .fact.up { color: #2f7a4a; font-weight: 600; }
+.facts .down, .quote .fact.down { color: var(--bad); font-weight: 600; }
 .place-bar .actions { display: flex; gap: 6px; }
 .place-bar .actions button { flex: 1; min-height: 48px; border: 0; border-radius: 10px; background: #ece5d8; color: var(--sheet-ink); font-weight: 600; font-size: 14px; cursor: pointer; }
 .place-bar .actions .primary { flex: 1.6; background: var(--accent); }

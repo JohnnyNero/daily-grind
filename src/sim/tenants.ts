@@ -14,7 +14,7 @@ import { findPath } from './layout';
 import { keysOf, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type Life, type NeedId, type Pawn, type Person } from './state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Furniture, type HouseholdKind, type Life, type NeedId, type Pawn, type Person } from './state';
 import { forget, likingTarget, remember, thoughtsOf } from './thoughts';
 import { has } from './traits';
 import { SHARED, dirtOf, isNight, itemsIn, outdoorTemp, noiseReaching, tempOf, tidy, warmthOf } from './environment';
@@ -54,7 +54,12 @@ export type { Person };
 // ------------------------------------------------------------------ moving in
 
 /** A household moves into a flat. `revealed` are the traits you already know about (the first person's). */
-export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: string[] = []): Pawn[] {
+/**
+ * People move in. Who they are together defaults to someone alone or sharers; a couple (and
+ * a family's parents) move in as partners.
+ */
+export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: string[] = [], household?: HouseholdKind): Pawn[] {
+  const together: HouseholdKind = household ?? (people.length === 1 ? 'single' : 'sharers');
   const st = sim.state;
   const lay = sim.layout;
   const flat = lay.flat(flatId);
@@ -65,6 +70,7 @@ export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: str
     const [x, s] = lay.xs(pick(st, nodes));
     const life: Life = {
       flat: flatId,
+      household: together,
       needs: { ...START_NEEDS },
       social: [],
       memories: [],
@@ -102,6 +108,10 @@ export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: str
     st.pawns.push(p);
     out.push(p);
   });
+  if ((together === 'couple' || together === 'family') && out.length >= 2) {
+    out[0].life!.partner = out[1].id;
+    out[1].life!.partner = out[0].id;
+  }
   for (const p of out) p.life!.liking = likingTarget(thoughtsOf(sim, p));
   return out;
 }

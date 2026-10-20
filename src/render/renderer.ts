@@ -12,6 +12,7 @@ import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, box, dark, edge, drawAnimal, drawFurniture, drawIcon, drawPerson, drawSleeper, iconName, light, mix, pawnHeight, rect, PERSON_H } from './art';
 import { BUDGET } from '../sim/tuning';
 import { spacesOf } from '../sim/shared';
+import { flatKind } from '../sim/rooms';
 import { flightOf, unsupportedCells, type BuildParts } from '../sim/build';
 import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
 
@@ -1190,11 +1191,33 @@ export class Renderer {
       const row = nodes.filter(([, s]) => s === topS).map(([x]) => x);
       const mid = (Math.min(...row) + Math.max(...row) + 1) / 2;
       const [sx, sy] = toScreen(mid * TILE, floorY(topS) - 2 * TILE - 2);
-      const w = ctx.measureText(f.name).width + 8;
+      // "Flat 3 · Two-bed": what kind of flat it is, from its bedrooms.
+      const label = `${f.name} · ${flatKind(this.sim, f.id).name}`;
+      const w = ctx.measureText(label).width + 8;
       ctx.fillStyle = '#1d1f23b0';
       ctx.fillRect(sx - w / 2, sy, w, size + 4);
       ctx.fillStyle = '#f3efe6';
-      ctx.fillText(f.name, sx, sy + 2);
+      ctx.fillText(label, sx, sy + 2);
+    }
+    // In build mode, what each room is for, on its floor.
+    if (this.build.active) {
+      const small = Math.max(8, Math.min(11, c.scale * 4));
+      ctx.font = `500 ${small}px system-ui, sans-serif`;
+      for (const f of lay.flats) {
+        for (const r of flatKind(this.sim, f.id).rooms) {
+          const nodes = lay.rooms[r.room].nodes.map((n) => lay.xs(n));
+          if (nodes.length === 0) continue;
+          const low = Math.min(...nodes.map(([, s]) => s));
+          const xs = nodes.filter(([, s]) => s === low).map(([x]) => x);
+          const [sx, sy] = toScreen(((Math.min(...xs) + Math.max(...xs) + 1) / 2) * TILE, floorY(low) + 1);
+          const w = ctx.measureText(r.name).width + 6;
+          ctx.fillStyle = r.bedroom ? '#2d3a52c0' : '#3b3530b0';
+          ctx.fillRect(sx - w / 2, sy, w, small + 3);
+          ctx.fillStyle = '#f3efe6';
+          ctx.fillText(r.name, sx, sy + 1.5);
+        }
+      }
+      ctx.font = `600 ${size}px system-ui, sans-serif`;
     }
     // Laundry rooms, bike stores and gardens, named the same way (a little greener).
     const named = new Set<number>();

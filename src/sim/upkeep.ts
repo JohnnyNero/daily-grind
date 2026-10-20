@@ -10,6 +10,7 @@ import { SHARED, dirtOf, itemsIn, tempOf } from './environment';
 import { furnitureDef } from './defs';
 import { gradeOf, wearFactor } from './grades';
 import { scoreFor } from './impressiveness';
+import { flatKind } from './rooms';
 import { household } from './leases';
 import { pick, random } from './rng';
 import type { Sim } from './sim';
@@ -149,7 +150,9 @@ export function issues(sim: Sim): string[] {
     if (!f.enclosed) out.push(`${f.name} is open to the weather`);
     if (itemsIn(sim, f.id, 'smokeAlarm') === 0) out.push(`${f.name} has no smoke alarm`);
     if (tempOf(sim, f.id) < COUNCIL.tooCold) out.push(`${f.name} is too cold to live in (${Math.round(tempOf(sim, f.id))}°)`);
-    if (s.perPerson < COUNCIL.overcrowded) out.push(`${f.name} is overcrowded`);
+    // Too few tiles each, or more people than the beds sleep.
+    const sleeps = flatKind(sim, f.id).sleeps;
+    if (s.perPerson < COUNCIL.overcrowded || (sleeps > 0 && people.length > sleeps)) out.push(`${f.name} is overcrowded`);
     const longBroken = brokenIn(sim, f.id).filter((b) => sim.day - (b.broken ?? sim.day) >= COUNCIL.brokenDays);
     if (longBroken.length > 0) out.push(`${f.name}: ${furnitureDef(longBroken[0].def).name.toLowerCase()} broken for over a week`);
   }

@@ -17,6 +17,7 @@ import { CLEANER_WEEKLY, flatClimate, gasBill, outdoorTemp, seasonName } from '.
 import { answer } from '../sim/chat';
 import { opinionParts, relationships } from '../sim/social';
 import { FACTOR_NAMES, flatScore, scoreFor, type FactorId } from '../sim/impressiveness';
+import { flatKind, flatKindName, householdName } from '../sim/rooms';
 import { accept, changeRent, giveNotice, household, householdLiking, noticeProblem, turnAway } from '../sim/leases';
 import { choose } from '../sim/post';
 import type { Sim } from '../sim/sim';
@@ -163,13 +164,16 @@ export class Panels {
     const people = household(sim, id);
     const going = goingRate(sim, id);
     const applicants = sim.state.applicants.filter((a) => a.flat === id);
-    this.head(flat.name, `${flat.rooms.length === 1 ? 'one room' : `${flat.rooms.length} rooms`} · ${flat.area} tiles`);
+    const kind = flatKind(sim, id);
+    this.head(flat.name, `${flatKindName(kind)} · ${flat.area} tiles`);
     const draft = this.draftRent?.flat === id ? this.draftRent.rent : null;
-    this.fill([id, score, info, people.map((p) => p.id), applicants.length, furniture.length, draft, sim.day], () => {
+    this.fill([id, score, info, people.map((p) => p.id), applicants.length, furniture.length, kind.rooms.map((r) => r.name), draft, sim.day], () => {
       const out: (Node | string)[] = [];
       out.push(
         h('div', { className: 'score-head' }, h('div', { className: 'tier-box' }, String(score.score)), h('div', {}, h('b', {}, score.tier), h('p', {}, 'How it comes across'))),
         h('div', { className: 'meters sec' }, ...(Object.keys(FACTOR_NAMES) as FactorId[]).map((f) => meter(FACTOR_NAMES[f], score.factors[f]))),
+        // Its rooms, by what's in them.
+        h('div', { className: 'sec' }, h('h3', {}, 'Rooms', h('em', {}, kind.sleeps > 0 ? `sleeps ${kind.sleeps}` : 'no beds')), h('div', { className: 'chips' }, ...kind.rooms.map((r) => h('span', { className: 'chip' }, r.name)))),
       );
       // Warmth, noise and dirt.
       const cl = flatClimate(sim, id);
@@ -193,7 +197,7 @@ export class Panels {
       );
       // Rent.
       const rent = h('div', { className: 'rentbox' });
-      const gr = h('div', { className: 'row' }, h('span', {}, `Going rate for "${info.tier}"`), h('b', {}, `${pounds(going)} a week`));
+      const gr = h('div', { className: 'row' }, h('span', {}, `Going rate for ${/^[AEIOU]/.test(info.tier) ? 'an' : 'a'} ${info.tier.toLowerCase()} ${kind.name.toLowerCase()}`), h('b', {}, `${pounds(going)} a week`));
       rent.append(gr);
       if (info.belowSince !== undefined) rent.append(h('p', { className: 'small note' }, `It looks more ${score.tier.toLowerCase()} than it did.`));
       const current = lease ? (lease.rise?.rent ?? lease.rent) : info.asking;
@@ -679,7 +683,7 @@ export class Panels {
             return h(
               'article',
               { className: 'card' },
-              h('div', { className: 'top-line' }, face({ look: lead.look, kind: 'tenant' }), h('div', {}, h('h4', {}, a.people.map((p) => p.name.split(' ')[0]).join(' & ') + ' ' + lead.name.split(' ').slice(1).join(' ')), h('p', { className: 'muted' }, [lead.note, ...others.map((o) => o.note)].join(', ') + (a.people.length > 1 ? ` · ${a.people.length} people` : ' · lives alone')))),
+              h('div', { className: 'top-line' }, face({ look: lead.look, kind: 'tenant' }), h('div', {}, h('h4', {}, a.people.map((p) => p.name.split(' ')[0]).join(' & ') + ' ' + lead.name.split(' ').slice(1).join(' ')), h('p', { className: 'muted' }, [lead.note, ...others.map((o) => o.note)].join(', ') + ` · ${householdName(a.household ?? 'single', a.people.length).toLowerCase()}`))),
               h('dl', { className: 'kv' }, h('dt', {}, 'Offers'), h('dd', {}, `${pounds(a.offer)} a week`), h('dt', {}, 'Deposit'), h('dd', {}, pounds(a.offer * 4)), h('dt', {}, 'Known trait'), h('dd', {}, h('span', { className: 'chip' }, traitDef(a.shown).name))),
               h('p', { className: 'small muted' }, traitDef(a.shown).says),
               ...a.hints.map((t) => h('div', { className: 'hintline' }, '? ', t)),

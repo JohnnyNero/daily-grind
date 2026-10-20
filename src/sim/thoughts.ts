@@ -18,7 +18,8 @@ import { brokenIn } from './upkeep';
 import { furnitureDef } from './defs';
 import { poshGroups } from './grades';
 import { amenities, hasOwnWasher } from './shared';
-import { AMENITIES, BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, ITEMS, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, POSH_PROUD, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
+import { bedroomsWanted, flatKind } from './rooms';
+import { AMENITIES, BASELINE, EASY_GOING_BAD, HEARD, HOUSE_PROUD_TIER, ITEMS, LAYOUT, KEEN_COOK_MEAL, LIVE_THOUGHTS as LIVE, MEMORIES, MISSING, NEED_THOUGHTS, POSH_PROUD, RENT_THOUGHTS, STACK_FACTOR, TIER_THOUGHTS } from './tuning';
 
 // The memories, need bands and what each thought is worth are in tuning.ts.
 export { BASELINE, MEMORIES, type MemoryDef } from './tuning';
@@ -78,6 +79,12 @@ function placeThoughts(sim: Sim, life: Life, flatId: string): Thought[] {
     if (has(life, 'knowsRights')) out.push({ label: 'Camera pointed at the lobby', value: ITEMS.cctvKnowsRights });
     else if (has(life, 'busybody')) out.push({ label: 'Can see who comes and goes', value: ITEMS.cctvBusybody });
   }
+  // The flat against who lives in it: sharers want a bedroom each, a family two, and more
+  // than one person wants somewhere to sit that isn't a bed.
+  const kind = flatKind(sim, flatId);
+  const mates = sim.state.pawns.filter((o) => o.life?.flat === flatId && !o.life.leaving).length;
+  if (kind.bedrooms < bedroomsWanted(life.household, mates)) out.push({ label: 'Not enough bedrooms', value: LAYOUT.tooFewBedrooms });
+  if (mates >= 2 && !kind.sitting) out.push({ label: 'Nowhere to sit but the bed', value: LAYOUT.nowhereToSit });
   if (life.pet && life.pet !== 'asked') out.push({ label: `Has ${life.pet}`, value: LIVE.hasPet });
   for (const f of brokenIn(sim, flatId).slice(0, LIVE.broken.most)) out.push({ label: `Broken ${furnitureDef(f.def).name.toLowerCase()}`, value: LIVE.broken.value });
   if (proud) {

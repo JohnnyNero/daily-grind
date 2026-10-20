@@ -18,7 +18,7 @@ export const MORTGAGE = { balance: 30000 * POUND, payment: 250 * POUND, rate: 0.
 /** Payments missed in a row before the bank takes the building. */
 export const MISSES_ALLOWED = 4;
 
-/** Weekly going rate for a flat in each tier. */
+/** Weekly going rate for a studio in each tier; bigger flats get more (LAYOUT.sizeRent). */
 export const TIER_RENT: Record<string, number> = {
   Grim: 60 * POUND,
   Shabby: 85 * POUND,
@@ -103,10 +103,7 @@ export const LETTING = {
   reviewsCounted: 8,
   ratingPaceBase: 1.45,
   ratingPacePerStar: 0.15,
-  /** Households: chance of one person, else chance of two (else three). One person per five tiles, up to three. */
-  single: 0.55,
-  couple: 0.7,
-  tilesPerPerson: 5,
+  /** Who applies (singles, couples, sharers, families) is in LAYOUT.households, by the flat's size. */
   /** Chance someone works: anyone, the lead in a household, the rest of it. */
   working: 0.75,
   leadWorking: 0.8,
@@ -1242,4 +1239,30 @@ export const BUDGET = {
 export const PROJECT = {
   /** Weeks of this week's rent less the bills the guess looks ahead. */
   horizonWeeks: 12,
+};
+
+// ================================================================== layout (chunk L1: carving it up)
+
+/** Rooms, flat sizes and who wants which (rooms.ts; docs/specs/layout.md). */
+export const LAYOUT = {
+  /**
+   * A flat's going rate is a studio's for how good it is (TIER_RENT), times this for its size.
+   * Each bedroom adds less than the one before, but more bedrooms in the same floor space
+   * still fetch more: that's the temptation.
+   */
+  sizeRent: { bare: 1, studio: 1, oneBed: 1.15, twoBed: 1.75, threeBed: 2.3, fourBed: 2.8 } as Record<string, number>,
+  /** Who applies for each size of flat: weights, before the households it can't sleep are dropped. */
+  households: {
+    studio: { single: 85, couple: 15, sharers: 0, family: 0 },
+    oneBed: { single: 45, couple: 55, sharers: 0, family: 0 },
+    bigger: { single: 5, couple: 15, sharers: 45, family: 35 },
+  } as Record<string, Record<'single' | 'couple' | 'sharers' | 'family', number>>,
+  /** Floor tiles a room needs to count as a bedroom (a single bed and somewhere to stand); smaller is a box room. */
+  bedroomTiles: 3,
+  /** Chance a family has two children rather than one (if it has the beds). */
+  secondChild: 0.4,
+  /** Sharers or a family with fewer bedrooms than they need. */
+  tooFewBedrooms: -6,
+  /** Two or more people and nowhere to sit but the beds. */
+  nowhereToSit: -3,
 };

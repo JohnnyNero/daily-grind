@@ -5,9 +5,9 @@
 // ordinary, but the ground-floor sofa is the cheap sort.
 
 import { placeFurniture } from './build';
-import { MORTGAGE, POUND, START_MONEY, TIER_RENT, flatInfo } from './economy';
+import { MORTGAGE, POUND, START_MONEY, flatInfo, goingRate } from './economy';
 import { EXPECT_START } from './expectations';
-import { flatScore, scoreFor } from './impressiveness';
+import { rentScore, scoreFor } from './impressiveness';
 import { makePerson, sittingTenants } from './leases';
 import type { Sim } from './sim';
 import { furnitureDef } from './defs';
@@ -185,9 +185,9 @@ export function startingTenants(sim: Sim): void {
   // basics in it goes on the market; the bare ones wait until you've furnished them.
   for (const f of flats) {
     const info = flatInfo(sim, f.id);
-    info.tier = flatScore(sim, f.id).tier;
+    info.tier = rentScore(sim, f.id).tier;
     if (info.lease) continue;
-    info.asking = TIER_RENT[info.tier];
+    info.asking = goingRate(sim, f.id);
     const has = scoreFor(sim, f.id, 1).has;
     info.listed = has.bed && has.toilet && has.wash && has.kitchen;
   }

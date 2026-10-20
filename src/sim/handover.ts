@@ -371,7 +371,7 @@ export function handoverHour(sim: Sim): void {
     letter(sim, {
       from: AGENT,
       title: `An idea for ${gutted.name}`,
-      body: `It's big for one. Two studios would let for more: a wall down the middle, a front door each, and a bed, a loo, a shower and a cooker in both. Just a thought.`,
+      body: `It's big for one. A wall across the big room and a bed each side, and it's a two-bed: two-beds let for more. Less room to sit, mind, and more of them to keep happy. Just a thought.`,
       flat: gutted.id,
     });
   }

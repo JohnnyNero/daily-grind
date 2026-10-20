@@ -85,6 +85,17 @@ function normalize(raw: Partial<State>): State {
     p.life.schedule ??= scheduleFromJob(p.life.job);
     p.life.habits ??= [];
   }
+  // Version 11 added households: who moved in together, worked out from who lives with whom.
+  if (from < 11) {
+    for (const p of st.pawns) {
+      if (!p.life || p.life.household) continue;
+      const mates = st.pawns.filter((o) => o.life?.flat === p.life!.flat && !o.life.leaving);
+      const partnered = mates.some((o) => o.life!.partner !== undefined && mates.some((q) => q.id === o.life!.partner));
+      p.life.household = mates.length <= 1 ? 'single' : partnered ? (mates.length === 2 ? 'couple' : 'family') : 'sharers';
+    }
+    for (const a of st.applicants ?? []) a.household ??= a.people.length === 1 ? 'single' : a.people.length === 2 && a.people[0].name.split(' ').pop() === a.people[1].name.split(' ').pop() ? 'couple' : 'sharers';
+  }
+  for (const p of st.pawns) if (p.life) p.life.household ??= 'single';
   st.nextId = Math.max(st.nextId ?? 1, ...st.furniture.map((f) => f.id + 1), ...st.pawns.map((p) => p.id + 1));
   return st;
 }

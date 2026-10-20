@@ -10,6 +10,7 @@ import { furnitureValue } from './grades';
 import type { Sim } from './sim';
 import { warmthOf } from './environment';
 import { amenities, hasOwnWasher } from './shared';
+import { flatKind, scoredFor } from './rooms';
 import { curve } from './stat';
 import { AMENITIES, IMPRESSIVE, TIERS, WARMTH } from './tuning';
 
@@ -65,6 +66,14 @@ export function scoreFor(sim: Sim, flatId: string, people: number): FlatScore {
   return computeScore(sim, flatId, people);
 }
 
+/**
+ * How good a flat is for its going rate: scored with one person to a bedroom, whoever lives
+ * there. Squeezing more people in doesn't make it a worse one-bed; it makes them cramped.
+ */
+export function rentScore(sim: Sim, flatId: string): FlatScore {
+  return scoreFor(sim, flatId, scoredFor(flatKind(sim, flatId)));
+}
+
 function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatScore {
   const lay = sim.layout;
   const flat = lay.flat(flatId);
@@ -74,7 +83,8 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
   const defs = furniture.map((f) => furnitureDef(f.def));
   // Broken things don't count as having one.
   const working = furniture.filter((f) => f.broken === undefined).map((f) => furnitureDef(f.def));
-  const people = Math.max(1, peopleOverride ?? occupants(sim, flatId));
+  // An empty flat is scored as it would be lived in: one to a bedroom.
+  const people = Math.max(1, peopleOverride ?? (occupants(sim, flatId) || scoredFor(flatKind(sim, flatId))));
   const perPerson = nodes.length / people;
   const has = {
     bed: working.some((d) => d.id === 'bed' || d.id === 'doubleBed'),

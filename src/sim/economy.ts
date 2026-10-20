@@ -3,7 +3,8 @@
 // and it's yours. All amounts are in pence. The numbers to tune are in tuning.ts.
 
 import { furnitureDef, isGraded } from './defs';
-import { flatScore, TIERS } from './impressiveness';
+import { rentScore, TIERS } from './impressiveness';
+import { flatKind, type FlatType } from './rooms';
 import type { Sim } from './sim';
 import { gasBill } from './environment';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type FlatInfo, type Grade, type Letter, type CellKind } from './state';
@@ -16,6 +17,7 @@ import {
   FURNITURE_LEAST_POUNDS,
   FURNITURE_POUNDS_PER_VALUE,
   GRADES,
+  LAYOUT,
   LETTING,
   MISSES_ALLOWED,
   OVERDRAFT_CHARGE,
@@ -96,21 +98,27 @@ export function flatInfo(sim: Sim, id: string): FlatInfo {
   const st = sim.state;
   let info = st.flats[id];
   if (!info) {
-    const tier = flatScore(sim, id).tier;
-    info = { asking: TIER_RENT[tier], listed: true, tier, lease: null, nextApplicant: st.tick + LETTING.firstLookHours * TICKS_PER_HOUR };
+    const tier = rentScore(sim, id).tier;
+    info = { asking: rateFor(flatKind(sim, id).type, tier), listed: true, tier, lease: null, nextApplicant: st.tick + LETTING.firstLookHours * TICKS_PER_HOUR };
     st.flats[id] = info;
   }
   return info;
 }
 
+/** What a flat of this size and tier fetches a week: a studio's rate times its size, to the nearest £5. */
+export function rateFor(type: FlatType, tier: string): number {
+  return Math.round((TIER_RENT[tier] * (LAYOUT.sizeRent[type] ?? 1)) / (5 * POUND)) * 5 * POUND;
+}
+
+/** A flat's going rate: its size (studio, one-bed...) and how good it is. */
 export function goingRate(sim: Sim, id: string): number {
-  return TIER_RENT[flatInfo(sim, id).tier];
+  return rateFor(flatKind(sim, id).type, flatInfo(sim, id).tier);
 }
 
 /** A flat's going-rate tier catches up with how impressive it is: straight away going up, after a few days going down. */
 function updateTier(sim: Sim, id: string): void {
   const info = flatInfo(sim, id);
-  const now = flatScore(sim, id).tier;
+  const now = rentScore(sim, id).tier;
   const rank = (t: string) => TIERS.length - TIERS.findIndex((x) => x.name === t);
   if (rank(now) >= rank(info.tier)) {
     info.tier = now;
@@ -122,7 +130,7 @@ function updateTier(sim: Sim, id: string): void {
       delete info.belowSince;
     }
   }
-  if (!info.lease && info.listed && info.asking <= 0) info.asking = TIER_RENT[info.tier];
+  if (!info.lease && info.listed && info.asking <= 0) info.asking = goingRate(sim, id);
 }
 
 // ------------------------------------------------------------------ the week
@@ -132,7 +140,7 @@ export function raiseTiers(sim: Sim): void {
   const rank = (t: string) => TIERS.length - TIERS.findIndex((x) => x.name === t);
   for (const f of sim.layout.flats) {
     const info = flatInfo(sim, f.id);
-    if (rank(flatScore(sim, f.id).tier) > rank(info.tier)) updateTier(sim, f.id);
+    if (rank(rentScore(sim, f.id).tier) > rank(info.tier)) updateTier(sim, f.id);
   }
 }
 
