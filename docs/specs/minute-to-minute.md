@@ -1021,6 +1021,16 @@ secondary". The core is layout and building. So the drip is occasional now.
   opened, the next deal weighs cards whose yes (the first answer) can open one
   `DRIP.tailWeight` (8) times as much; anything else eligible can still come. Each card lists
   the answers that can open something (`CardDef.opens`), checked against its fixtures.
+- **The drip's own dice.** When a card comes and which one is drawn roll the drip's own dice
+  (saved as `drip.rng`, from the seed in older saves), as the moments do, so a change elsewhere
+  doesn't reshuffle the cards. What an answer does still rolls the game's dice.
+- **Measured over all the runs.** At about three cards a week, one seed's week is noise, so the
+  pacing soak's fragile measures are judged in aggregate, with the same targets: the drip's mean
+  over all runs and weeks 2 and 3 together; answers coming back in 80% of seed-fortnights
+  (decent and random runs) and at least one a fortnight on average; a card tale on most
+  Sundays; random answers' marks pooled (over 10 a seed on average); and the absent landlord
+  below the decent one each week on the mean across seeds. Hard caps (two open, one a day, no
+  week over 5 in 7, none bare) stay per run.
 - **First week.** The script is thinned to one card a day at most. Day 1 has only the evening
   key on the mat: the handover and the building come first.
 - **Targets changed.** Cards: a mean of 0.4 to 0.7 a day per week across runs, no single week

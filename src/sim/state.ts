@@ -381,6 +381,8 @@ export interface Drip {
   income: number;
   /** The tick a thread or a promise was last opened (DRIP.tailDays); the start if missing. */
   lastOpened?: number;
+  /** The drip's own dice (drip.ts); from the seed if missing (older saves). */
+  rng?: number;
 }
 
 export type TaleKind =

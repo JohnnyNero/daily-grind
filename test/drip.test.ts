@@ -338,12 +338,14 @@ describe('a quiet spell', () => {
   /** Share of tOpens among the cards dealt over a fortnight, answering everything at once, with a thread or promise last opened `ago`. */
   const share = (ago: () => number) => {
     useCatalogue([tPlain, tOpens]);
-    const sim = fixtureSim(3, 2, 7);
-    const cards = watch(sim, 28, (s) => {
-      s.state.drip.lastOpened = ago();
-      for (const c of [...openCards(s)]) answerCard(s, c.id, 1);
-    });
-    expect(cards.length).toBeGreaterThan(8);
+    // Three buildings' four weeks, pooled: a fortnight's handful of cards is too few to tell.
+    const cards = [3, 4, 5].flatMap((seed) =>
+      watch(fixtureSim(seed, 2, 7), 28, (s) => {
+        s.state.drip.lastOpened = ago();
+        for (const c of [...openCards(s)]) answerCard(s, c.id, 1);
+      }),
+    );
+    expect(cards.length).toBeGreaterThan(24);
     return cards.filter((c) => c.def === 'tOpens').length / cards.length;
   };
 

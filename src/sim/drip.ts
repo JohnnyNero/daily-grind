@@ -18,7 +18,7 @@ import { postAct } from './post';
 import { random } from './rng';
 import type { Sim } from './sim';
 import { rememberAbout } from './social';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Card, type Drip, type Pawn, type TaleKind } from './state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Card, type Drip, type Pawn, type State, type TaleKind } from './state';
 import { tale } from './tales';
 import { addVisitor, visitorRoom } from './visitors';
 import { remember } from './thoughts';
@@ -80,10 +80,23 @@ export function scriptActive(sim: Sim): boolean {
  * running or due, two letters waiting, two applicants waiting, someone moving in or out today,
  * and three cards in a row ignored.
  */
+/**
+ * The drip's own dice, like the moments': when a card comes and which one never moves the
+ * rest of the game's, and the rest never moves them. (What a card does when answered still
+ * rolls the game's dice.) Saved; an older save starts them from the seed.
+ */
+const DRIP_DICE = 7;
+function dripRoll(st: State): number {
+  const dice = { rng: st.drip.rng ?? ((st.seed ^ DRIP_DICE) | 0) };
+  const r = random(dice);
+  st.drip.rng = dice.rng;
+  return r;
+}
+
 export function dayBudget(sim: Sim): number {
   const st = sim.state;
   const building = !!(st.works.job || st.works.plan);
-  let n = random(st) < DRIP.dayChance * (building ? DRIP.buildingFactor : 1) ? DRIP.perDay : 0;
+  let n = dripRoll(st) < DRIP.dayChance * (building ? DRIP.buildingFactor : 1) ? DRIP.perDay : 0;
   if (st.story.running.length > 0 || st.council.visitDay === sim.day) n--;
   if (st.post.filter((l) => l.choices && l.chosen === undefined).length >= 2) n--;
   if (st.applicants.length >= 2) n--;
@@ -129,7 +142,7 @@ export function dripHour(sim: Sim): void {
     const tonight = m >= DRIP.wakeTo ? st.tick - (m - DRIP.wakeTo) * TICKS_PER_MINUTE : st.tick - (m + 24 * 60 - DRIP.wakeTo) * TICKS_PER_MINUTE;
     if ((d.cooldowns.night ?? -1) < tonight) {
       const options = candidates(sim, true);
-      if (options.length > 0 && random(st) < DRIP.nightChance && deal(sim, options)) d.cooldowns.night = st.tick;
+      if (options.length > 0 && dripRoll(st) < DRIP.nightChance && deal(sim, options)) d.cooldowns.night = st.tick;
     }
   }
   followUps(sim);
@@ -166,7 +179,7 @@ export function dripMinute(sim: Sim): void {
   const options = candidates(sim, false);
   if (options.length === 0) return;
   const late = m >= DRIP.lateFrom && d.lastCard < dripDayStart(sim);
-  if (random(st) >= DRIP.tryChance * (late ? 2 : 1)) return;
+  if (dripRoll(st) >= DRIP.tryChance * (late ? 2 : 1)) return;
   if (!deal(sim, options)) return;
   d.budget--;
   d.cooldowns.dealt = d.cooldowns.dealtDay === sim.day ? (d.cooldowns.dealt ?? 0) + 1 : 1;
@@ -238,7 +251,7 @@ function deal(sim: Sim, options: Option[]): Card | null {
   const leanOn = (def: CardDef) => quiet && (def.opens ?? []).includes(0);
   const cards = [...byCard.values()].map((os) => ({ os, weight: Math.max(...os.map((o) => o.weight)) * (DRIP.sourceWeight[os[0].def.source] ?? 1) * (leanOn(os[0].def) ? DRIP.tailWeight : 1) }));
   const draw = <T extends { weight: number }>(xs: T[]): T => {
-    let r = random(sim.state) * xs.reduce((n, x) => n + x.weight, 0);
+    let r = dripRoll(sim.state) * xs.reduce((n, x) => n + x.weight, 0);
     return xs.find((x) => (r -= x.weight) < 0) ?? xs[xs.length - 1];
   };
   const { os } = draw(cards);
