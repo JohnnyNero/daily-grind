@@ -331,6 +331,41 @@ describe('flags', () => {
   });
 });
 
+describe('a quiet spell', () => {
+  // Two cards alike, but saying yes to one opens a thread.
+  const tPlain: CardDef = { ...tBuilding, id: 'tPlain', resolve: () => ({ effects: ['flag:bigBins'], notice: 'Done.' }) };
+  const tOpens: CardDef = { ...tBuilding, id: 'tOpens', opens: [0], resolve: () => ({ effects: ['flag:bigBins'], notice: 'Done.' }) };
+  /** Share of tOpens among the cards dealt over a fortnight, answering everything at once, with a thread or promise last opened `ago`. */
+  const share = (ago: () => number) => {
+    useCatalogue([tPlain, tOpens]);
+    const sim = fixtureSim(3, 2, 7);
+    const cards = watch(sim, 28, (s) => {
+      s.state.drip.lastOpened = ago();
+      for (const c of [...openCards(s)]) answerCard(s, c.id, 1);
+    });
+    expect(cards.length).toBeGreaterThan(8);
+    return cards.filter((c) => c.def === 'tOpens').length / cards.length;
+  };
+
+  it(`after ${DRIP.tailDays} days with nothing opened, the drip leans on cards whose yes can open something`, () => {
+    // Something opened just now, every minute (a tick far ahead never counts as long ago); or never.
+    const recent = share(() => Number.MAX_SAFE_INTEGER);
+    const quiet = share(() => 0);
+    // Alike, they come about half and half; leaning, the one that can open something comes most.
+    expect(recent).toBeLessThan(0.7);
+    expect(quiet).toBeGreaterThan(0.7);
+    expect(quiet - recent).toBeGreaterThan(0.25);
+  });
+
+  it('opening a thread or a promise starts the clock again', () => {
+    useCatalogue(ALL);
+    const sim = fixtureSim(1, 9, 10);
+    const c = openCard(sim, 'tBuilding')!;
+    resolveCard(sim, c.id, 0);
+    expect(sim.state.drip.lastOpened).toBe(sim.state.tick);
+  });
+});
+
 describe('what cards lead to', () => {
   beforeEach(() => useCatalogue(ALL));
 

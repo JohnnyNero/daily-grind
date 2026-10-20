@@ -177,6 +177,7 @@ function lateWhy(p: Pawn): string {
 /** Money now against goodwill. A party animal let off a week spends it on a party; told no, they can't afford one. */
 const lateRent: CardDef = {
   id: 'lateRent',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 14,
@@ -283,6 +284,7 @@ const rentBack: CardDef = {
 /** A friend between flats. Kindness to one tenant against the flat, and the neighbours' sleep. */
 const friendStaying: CardDef = {
   id: 'friendStaying',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 10,
@@ -533,6 +535,7 @@ const parcelMixup: CardDef = {
 /** A tenant offers to do the odd jobs round the building for money off. Trust them with it, or don't. */
 const oddJobs: CardDef = {
   id: 'oddJobs',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 21,
@@ -650,6 +653,7 @@ const lobbyDo: CardDef = {
 /** One tenant's curry, another's wardrobe. Pay to fix it, or take a side. */
 const cookingSmells: CardDef = {
   id: 'cookingSmells',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 14,
@@ -713,6 +717,7 @@ const hasWasher = (sim: Sim): boolean => sim.state.furniture.some((f) => f.def =
 /** Their machine in your flat: a happy tenant against the ceiling below. */
 const washer: CardDef = {
   id: 'washer',
+  opens: [0, 'ignored'],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 21,
@@ -825,6 +830,7 @@ const washerLeak: CardDef = {
 /** An unhappy tenant says so. What would keep them, against letting them go. */
 const thinkingOfLeaving: CardDef = {
   id: 'thinkingOfLeaving',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 14,
@@ -937,6 +943,7 @@ const stayingOn: CardDef = {
 /** Nobody does the stairs. A rota puts it on the tenants, and some will mind; no rota, and one tenant minds a lot. */
 const rota: CardDef = {
   id: 'rota',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 21,
@@ -1047,6 +1054,7 @@ const rotaSlips: CardDef = {
 /** A smoker's habit against a neighbour's window. */
 const smokingOnStep: CardDef = {
   id: 'smokingOnStep',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 14,
@@ -1165,6 +1173,7 @@ const tradeOf = (p: Pawn): string => TRADES.find(([t]) => has(p.life!, t))?.[1] 
 /** A tenant's living against the neighbours' stairs: strangers up and down all day. */
 const sideHustle: CardDef = {
   id: 'sideHustle',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 28,
@@ -1513,6 +1522,7 @@ const lettings = (sim: Sim): { flat: string; p: Pawn }[] =>
 
 const radiatorValve: CardDef = {
   id: 'radiatorValve',
+  opens: [1, 'ignored'],
   source: 'building',
   kind: 'moment',
   cooldownDays: 12,
@@ -1685,6 +1695,7 @@ const tapDrip: CardDef = {
 
 const frontDoor: CardDef = {
   id: 'frontDoor',
+  opens: [1],
   source: 'building',
   kind: 'moment',
   cooldownDays: 21,
@@ -1785,6 +1796,7 @@ const doorJams: CardDef = {
 
 const mould: CardDef = {
   id: 'mould',
+  opens: [1],
   source: 'building',
   kind: 'moment',
   cooldownDays: 21,
@@ -1892,6 +1904,7 @@ const mouldBack: CardDef = {
 
 const gutter: CardDef = {
   id: 'gutter',
+  opens: [0],
   source: 'building',
   kind: 'moment',
   cooldownDays: 28,
@@ -2005,6 +2018,7 @@ const roofSlates: CardDef = {
 
 const stairCarpet: CardDef = {
   id: 'stairCarpet',
+  opens: [1],
   source: 'building',
   kind: 'moment',
   cooldownDays: 28,

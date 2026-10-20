@@ -231,7 +231,12 @@ function candidates(sim: Sim, night: boolean): Option[] {
 function deal(sim: Sim, options: Option[]): Card | null {
   const byCard = new Map<CardDef, Option[]>();
   for (const o of options) byCard.set(o.def, [...(byCard.get(o.def) ?? []), o]);
-  const cards = [...byCard.values()].map((os) => ({ os, weight: Math.max(...os.map((o) => o.weight)) * (DRIP.sourceWeight[os[0].def.source] ?? 1) }));
+  // After a quiet spell with nothing opened that could come back, lean on cards where saying
+  // yes (the first answer) can open a thread or a promise, so being decent keeps coming back
+  // when cards are rare. Anything else can still come.
+  const quiet = sim.state.tick - (sim.state.drip.lastOpened ?? 0) >= DRIP.tailDays * TICKS_PER_DAY;
+  const leanOn = (def: CardDef) => quiet && (def.opens ?? []).includes(0);
+  const cards = [...byCard.values()].map((os) => ({ os, weight: Math.max(...os.map((o) => o.weight)) * (DRIP.sourceWeight[os[0].def.source] ?? 1) * (leanOn(os[0].def) ? DRIP.tailWeight : 1) }));
   const draw = <T extends { weight: number }>(xs: T[]): T => {
     let r = random(sim.state) * xs.reduce((n, x) => n + x.weight, 0);
     return xs.find((x) => (r -= x.weight) < 0) ?? xs[xs.length - 1];
@@ -485,11 +490,15 @@ export function applyEffect(sim: Sim, card: Card, e: Effect): void {
         const [k, v] = kv.split('=');
         return [k, Number.isNaN(Number(v)) ? v : Number(v)];
       }));
-      if (d.threads.length < DRIP.maxThreads) d.threads.push({ card: a, due: st.tick + Math.round((Number(b) || 24) * TICKS_PER_HOUR), data: { ...subjectData(card), ...extra } });
+      if (d.threads.length < DRIP.maxThreads) {
+        d.threads.push({ card: a, due: st.tick + Math.round((Number(b) || 24) * TICKS_PER_HOUR), data: { ...subjectData(card), ...extra } });
+        d.lastOpened = st.tick;
+      }
       return;
     }
     case 'promise':
       d.promises.push({ what: a, arg: b, byDay: sim.day + (Number(c) || 7), pawn: card.pawn ?? -1 });
+      d.lastOpened = st.tick;
       return;
     case 'risk': {
       // A storyteller weight a step up or down for some days; never starts anything itself.

@@ -136,6 +136,7 @@ function leaks(sim: Sim): CardSubject[] {
 
 const ceilingDrip: CardDef = {
   id: 'ceilingDrip',
+  opens: [1, 'ignored'],
   source: 'building',
   kind: 'moment',
   cooldownDays: 7,

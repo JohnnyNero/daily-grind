@@ -107,6 +107,7 @@ const out = (effects: Effect[], notice: string): Outcome => ({ effects, notice }
 /** A haggler wants a fiver off for the state of something in the flat. Money for good against a promise you have to keep. */
 const haggle: CardDef = {
   id: 'haggle',
+  opens: [1],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 10,
@@ -564,6 +565,7 @@ const paysMore: CardDef = {
 /** A tenant's mum wants a word with the landlord. The flat's tier decides how it goes, both ways. */
 const mumVisit: CardDef = {
   id: 'mumVisit',
+  opens: [0],
   source: 'tenant',
   kind: 'moment',
   cooldownDays: 7,
@@ -718,6 +720,7 @@ function couple(sim: Sim, a: Pawn, b: Pawn): void {
 /** Money now and a promise, against good service, which raises the bar for everyone. */
 const upFront: CardDef = {
   id: 'upFront',
+  opens: [0],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 21,
@@ -862,6 +865,7 @@ function depositFixture(seed: number, traits: string[]): { sim: Sim; subject: Ca
 /** A retired tenant's family want a key, in case of a fall. Safety against a person's liberty. */
 const familyKey: CardDef = {
   id: 'familyKey',
+  opens: [1],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 28,
@@ -977,6 +981,7 @@ const badTurn: CardDef = {
 /** The busybody wants to know what was in someone's parcel. Discretion against an informant who costs you that tenant's trust. */
 const parcelGossip: CardDef = {
   id: 'parcelGossip',
+  opens: [1],
   source: 'tenant',
   kind: 'ask',
   cooldownDays: 10,

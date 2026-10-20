@@ -124,6 +124,7 @@ const mem = (p: Pawn | number, id: string) => `mem:${typeof p === 'number' ? p :
 
 const billsShopping: CardDef = {
   id: 'billsShopping',
+  opens: [1, 'ignored'],
   source: 'tenant',
   kind: 'moment',
   followUp: true,
@@ -308,6 +309,7 @@ const quote = (sim: Sim, shower: { wear?: number; def: string; id: number } | un
 
 const billsShower: CardDef = {
   id: 'billsShower',
+  opens: [1],
   source: 'building',
   kind: 'moment',
   followUp: true,
@@ -587,6 +589,7 @@ const tierOk = (sim: Sim, b: Pawn): boolean => (TIER_THOUGHTS[flatInfo(sim, b.li
 
 const billsDaughter: CardDef = {
   id: 'billsDaughter',
+  opens: [0],
   source: 'tenant',
   kind: 'moment',
   followUp: true,

@@ -112,6 +112,8 @@ export interface CardDef {
   kind: CardKind;
   /** Can come between 23:00 and 07:00. */
   night?: boolean;
+  /** The answers that can open a thread or a promise: something that comes back. The drip leans on these after a quiet spell (DRIP.tailDays). */
+  opens?: Answer[];
   /** Only ever comes as a follow-up (a thread, a promise, the first week's script), never drawn by the drip. */
   followUp?: boolean;
   /** Days before it can come again. */

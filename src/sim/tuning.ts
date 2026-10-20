@@ -1084,6 +1084,13 @@ export const DRIP = {
   firstWeekIncome: 150 * POUND,
   /** A first-week beat that can't come at its time (the tray's full) waits this long, then it's skipped. */
   beatWait: 120,
+  /**
+   * Turned down, cards are rare enough that luck can deal a fortnight where no answer comes
+   * back. After this many days with no thread or promise opened, cards that can open one
+   * weigh this much more in the draw.
+   */
+  tailDays: 7,
+  tailWeight: 8,
   /** Cards that touch something live (a thread's or promise's person) weigh this much more. */
   liveWeight: 1.5,
   /** Each source's weight in the draw: the street's cards are always about, so they'd crowd out the building's own (spec 6: at most 30%). */

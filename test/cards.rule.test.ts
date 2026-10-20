@@ -116,3 +116,25 @@ describe('checking a card', () => {
     expect(sim.minuteOfDay).toBe(10 * 60);
   });
 });
+
+describe('which answers can open something', () => {
+  it('every drawn card lists exactly the answers its fixtures show opening a thread or a promise', () => {
+    const wrong: string[] = [];
+    for (const def of ALL_CARDS.filter((c) => !c.followUp)) {
+      const opened = new Set<string>();
+      for (const fx of def.fixtures) {
+        for (const seed of [1, 2, 3, 4, 5]) {
+          for (const answer of [0, 1, 'ignored'] as const) {
+            const { sim, subject } = fx.build(seed);
+            const card = { id: 999, def: def.id, tick: sim.state.tick, until: sim.state.tick + 1000, ...subject };
+            const o = def.resolve(sim, card, answer);
+            if (o.effects.some((e) => e.startsWith('thread:') || e.startsWith('promise:'))) opened.add(String(answer));
+          }
+        }
+      }
+      const listed = (def.opens ?? []).map(String).sort().join(',');
+      if (listed !== [...opened].sort().join(',')) wrong.push(`${def.id}: lists [${listed}], opens [${[...opened].sort().join(',')}]`);
+    }
+    expect(wrong).toEqual([]);
+  });
+});

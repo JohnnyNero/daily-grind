@@ -1016,6 +1016,11 @@ secondary". The core is layout and building. So the drip is occasional now.
   that chance while works are drawn or going (`DRIP.buildingFactor`). The old reductions still
   apply, and there is no day-after rule at one a day. Night cards and follow-ups still come, one
   of each at most. Measured in the pacing soak (decent, ruthless, random; weeks 2 and 3): 0.43 to 0.71 a day in any one week, about 0.55 on average. An ignored ask costs more (`leftToIt` -6, was -4) now there are fewer to ignore.
+- **Answers come back.** At about seven cards a fortnight, luck can deal a fortnight where
+  nothing you said comes back. So: after `DRIP.tailDays` (7) days with no thread or promise
+  opened, the next deal weighs cards whose yes (the first answer) can open one
+  `DRIP.tailWeight` (8) times as much; anything else eligible can still come. Each card lists
+  the answers that can open something (`CardDef.opens`), checked against its fixtures.
 - **First week.** The script is thinned to one card a day at most. Day 1 has only the evening
   key on the mat: the handover and the building come first.
 - **Targets changed.** Cards: a mean of 0.4 to 0.7 a day per week across runs, no single week

@@ -271,6 +271,7 @@ function vanFixture(traits: string[], def: string) {
 
 const manInAVan: CardDef = {
   id: 'manInAVan',
+  opens: [0, 1],
   source: 'street',
   kind: 'door',
   cooldownDays: 7,
@@ -469,6 +470,7 @@ function meterFixture(traits: [string[], string[]], locks: boolean, estimated = 
 
 const meterReader: CardDef = {
   id: 'meterReader',
+  opens: [1],
   source: 'street',
   kind: 'door',
   cooldownDays: 14,
@@ -556,6 +558,7 @@ function sofaFixture(setup: (sim: Sim) => void) {
 
 const sofaOnThePavement: CardDef = {
   id: 'sofa',
+  opens: ['ignored'],
   source: 'street',
   kind: 'moment',
   cooldownDays: 14,

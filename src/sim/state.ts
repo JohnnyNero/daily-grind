@@ -379,6 +379,8 @@ export interface Drip {
   log: { tick: number; card: string; chose: number | 'ignored' }[];
   /** Money from cards in the first week, in pence. */
   income: number;
+  /** The tick a thread or a promise was last opened (DRIP.tailDays); the start if missing. */
+  lastOpened?: number;
 }
 
 export type TaleKind =
