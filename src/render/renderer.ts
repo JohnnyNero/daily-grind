@@ -10,6 +10,7 @@ import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, seconds, type Card, type CellKind, type Grade, type Pawn } from '../sim/state';
 import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, box, dark, edge, drawAnimal, drawFurniture, drawIcon, drawPerson, drawSleeper, iconName, light, mix, pawnHeight, rect, PERSON_H } from './art';
+import { mapFit } from '../sim/fit';
 import { BUDGET } from '../sim/tuning';
 import { spacesOf } from '../sim/shared';
 import { flatKind } from '../sim/rooms';
@@ -1198,6 +1199,17 @@ export class Renderer {
       ctx.fillRect(sx - w / 2, sy, w, size + 4);
       ctx.fillStyle = '#f3efe6';
       ctx.fillText(label, sx, sy + 2);
+      // layout L5: the household's need you know about, coloured by how the flat suits it.
+      const fit = mapFit(this.sim, f.id);
+      if (fit) {
+        const k = Math.max(1, Math.round((size + 4) / 10));
+        const bx = sx + w / 2 + 2;
+        ctx.fillStyle = fit.mood === 'good' ? '#4f944a' : fit.mood === 'bad' ? '#c4523f' : '#d9a21e';
+        ctx.fillRect(bx, sy, 8 * k + 6, size + 4);
+        ctx.fillStyle = '#f3efe6';
+        ctx.fillRect(bx + 2, sy + 2, 8 * k + 2, size);
+        drawIcon(ctx, fit.icon, bx + 3, Math.round(sy + (size + 4 - 8 * k) / 2), k);
+      }
     }
     // In build mode, what each room is for, on its floor.
     if (this.build.active) {

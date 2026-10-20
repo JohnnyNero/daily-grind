@@ -522,3 +522,6 @@ body.cards-waiting #build-done::after, body.cards-waiting #info-close::after, bo
   content: ''; position: absolute; top: 4px; right: 4px; width: 10px; height: 10px; border-radius: 50%;
   background: var(--bad); border: 2px solid var(--sheet);
 }
+
+/* layout L5: an applicant's needs and how the flat fits them */
+.fit-line { margin: 4px 0; gap: 4px; }
