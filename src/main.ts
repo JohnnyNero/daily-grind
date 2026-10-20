@@ -11,7 +11,7 @@ import { FurnitureCard } from './ui/furnitureCard';
 import { furnitureAt } from './sim/build';
 import { spaceAt } from './sim/shared';
 import { HandoverUi } from './ui/handover';
-import { CardTray, markerOf } from './ui/cards';
+import { CardTray } from './ui/cards';
 import { openCards } from './sim/drip';
 import { ProjectBar } from './ui/project';
 
@@ -130,15 +130,11 @@ function play(sim: Sim): void {
   tray.onFocus = (id) => {
     focusCard = id;
   };
-  /** The alerts column, which edge chips keep clear of. */
-  const alertsBox = () => {
-    const r = el('alerts').getBoundingClientRect();
-    return { x: r.left, y: r.top, w: r.width, h: r.height };
-  };
+  tray.cardAt = (x, y) => renderer.cardAt(x, y);
   function startPan(id: number, now: number): void {
     const c = openCards(sim).find((x) => x.id === id);
-    const m = c ? markerOf(sim, c) : null;
-    if (!c || !m) return;
+    const spot = c ? renderer.spotOf(c) : null;
+    if (!c || !spot) return;
     const cam = renderer.camera;
     const from = { ...cam };
     const box = viewBox();
@@ -151,7 +147,7 @@ function play(sim: Sim): void {
       const ss = cells.map(([, s]) => s);
       renderer.focus(Math.min(...xs), Math.max(...xs), Math.min(...ss), Math.max(...ss), box);
     }
-    const to = { scale: cam.scale, ox: box.x + box.w / 2 - m.wx * cam.scale, oy: box.y + box.h / 2 - (m.wy + 20) * cam.scale };
+    const to = { scale: cam.scale, ox: box.x + box.w / 2 - ((spot.x0 + spot.x1) / 2) * cam.scale, oy: box.y + box.h / 2 - ((spot.y0 + spot.y1) / 2) * cam.scale };
     Object.assign(cam, from);
     pan = { from, to, start: now };
   }
@@ -174,7 +170,7 @@ function play(sim: Sim): void {
         return;
       }
       // A card's `!` or edge chip opens it; with a card open, a tap on the building folds it.
-      if (tray.tap(renderer.camera, x, y, viewBox(), alertsBox())) return;
+      if (tray.tap(x, y)) return;
       const p = renderer.pawnAt(x, y);
       const was = card.showing;
       card.hide();
@@ -308,7 +304,7 @@ function play(sim: Sim): void {
     }
     const c = renderer.camera;
     const view = `${c.ox}|${c.oy}|${c.scale}|${renderer.selectedPawn}|${renderer.build.version}|${sim.version}|${renderer.overlay}`;
-    if (ticks > 0 || view !== lastView) renderer.draw();
+    if (ticks > 0 || view !== lastView || renderer.animating) renderer.draw();
     lastView = view;
     hud.update(now);
     tray.update(now);

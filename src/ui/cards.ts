@@ -1,122 +1,22 @@
 // The card tray (spec 1.1): at most two slim cards just above the tenant bar, newest on top.
 // Tap one to open it over the building; tap a button to answer; tap its face (or the
-// building) to fold it back. Also where the `!` markers over a card's subject and the edge
-// chips for subjects off screen are worked out (the renderer draws them, from cardMarkers and
-// edgeChips; taps on them come here), and the 10-real-second floor: the tray tells the sim
-// when a card has been up that long.
+// building) to fold it back. The renderer draws the `!` markers over a card's subject and the
+// edge chips for subjects off screen, and says which card a tap on one hit (renderer.cardAt,
+// handed in as `cardAt`). The tray also keeps the 10-real-second floor: it tells the sim when
+// a card has been up that long.
 //
 // In Build or with a panel open the tray is hidden (style.css) and the countdown keeps going;
 // the HUD puts a red dot on Done and Close while a card waits (cardsWaiting).
 
 import { answerCard, cardSeen, HOLD, openCards, viewOf, type CardView } from '../sim/drip';
 import type { Sim } from '../sim/sim';
-import { TILE, type Card } from '../sim/state';
 import { DRIP } from '../sim/tuning';
-import { furnitureDef } from '../sim/defs';
-import { PERSON_H, portrait } from '../render/art';
-import { floorY, type Camera } from '../render/renderer';
+import { drawIcon, iconName, portrait } from '../render/art';
 import { h } from './dom';
-
-/** A card's `!` in the world, in world pixels: the bottom middle of the bubble. */
-export interface Marker {
-  card: number;
-  wx: number;
-  wy: number;
-}
-
-/** A `!` chip on the edge of the view for a subject that's off screen, in screen pixels (its centre). */
-export interface EdgeChip {
-  card: number;
-  side: 'left' | 'right' | 'top' | 'bottom';
-  sx: number;
-  sy: number;
-}
-
-export interface Box {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** How far from a marker or chip's centre a tap still counts, in screen pixels. */
-const HIT = 22;
-/** Chips sit this far inside the view's edge. */
-const CHIP_INSET = 16;
 
 /** A card is waiting to be answered: the dots on Done and Close. */
 export function cardsWaiting(sim: Sim): boolean {
   return openCards(sim).length > 0;
-}
-
-/** Where a card's `!` goes: over the person, the thing, or the flat it's about. Null if it's about nothing on the map. */
-export function markerOf(sim: Sim, c: Card): Marker | null {
-  const st = sim.state;
-  const pawnId = c.pawn ?? c.visitor;
-  const p = pawnId !== undefined ? st.pawns.find((x) => x.id === pawnId) : undefined;
-  // Someone out (at work, at the shops) isn't on the map: their flat stands in for them.
-  if (p && !p.life?.away) return { card: c.id, wx: (p.x + 0.5) * TILE, wy: floorY(p.s) + (p.front ? 10 : 0) - PERSON_H - 6 };
-  if (c.furniture !== undefined) {
-    const f = st.furniture.find((x) => x.id === c.furniture);
-    if (f) {
-      const def = furnitureDef(f.def);
-      return { card: c.id, wx: (f.x + (def.w ?? 1) / 2) * TILE, wy: floorY(f.s) - ((def.h ?? 1) + 0.5) * TILE };
-    }
-  }
-  const flatId = c.flat ?? p?.life?.flat;
-  const flat = flatId ? sim.layout.flat(flatId) : undefined;
-  if (flat) {
-    const cells = sim.layout.flatCells(flat).map((n) => sim.layout.xs(n));
-    const top = Math.max(...cells.map(([, s]) => s));
-    const xs = cells.filter(([, s]) => s === top).map(([x]) => x);
-    return { card: c.id, wx: ((Math.min(...xs) + Math.max(...xs) + 1) / 2) * TILE, wy: floorY(top) - 2.5 * TILE };
-  }
-  return null;
-}
-
-/** Every open card's `!`, oldest first. */
-export function cardMarkers(sim: Sim): Marker[] {
-  return openCards(sim).map((c) => markerOf(sim, c)).filter((m): m is Marker => m !== null);
-}
-
-const toScreen = (cam: Camera, m: Marker) => ({ sx: cam.ox + m.wx * cam.scale, sy: cam.oy + m.wy * cam.scale });
-
-/** The card whose `!` is under a tap, if any (newest wins). */
-export function markerAt(sim: Sim, cam: Camera, sx: number, sy: number): number | null {
-  const hits = cardMarkers(sim).filter((m) => {
-    const p = toScreen(cam, m);
-    // The bubble sits above its anchor.
-    return Math.abs(p.sx - sx) <= HIT && sy <= p.sy + 6 && sy >= p.sy - HIT * 1.6;
-  });
-  return hits.length > 0 ? hits[hits.length - 1].card : null;
-}
-
-/**
- * Chips on the edge of the view for subjects outside it, on the side they're on, clear of
- * `avoid` (the alerts column).
- */
-export function edgeChips(sim: Sim, cam: Camera, view: Box, avoid?: Box): EdgeChip[] {
-  const out: EdgeChip[] = [];
-  for (const m of cardMarkers(sim)) {
-    const { sx, sy } = toScreen(cam, m);
-    const inside = sx >= view.x && sx <= view.x + view.w && sy >= view.y && sy <= view.y + view.h;
-    if (inside) continue;
-    const side: EdgeChip['side'] = sx < view.x ? 'left' : sx > view.x + view.w ? 'right' : sy < view.y ? 'top' : 'bottom';
-    let cx = Math.max(view.x + CHIP_INSET, Math.min(view.x + view.w - CHIP_INSET, sx));
-    let cy = Math.max(view.y + CHIP_INSET, Math.min(view.y + view.h - CHIP_INSET, sy));
-    if (avoid && cx >= avoid.x - CHIP_INSET && cx <= avoid.x + avoid.w + CHIP_INSET && cy >= avoid.y - CHIP_INSET && cy <= avoid.y + avoid.h + CHIP_INSET) {
-      if (side === 'top') cx = avoid.x - CHIP_INSET * 2;
-      else cy = avoid.y + avoid.h + CHIP_INSET * 2;
-    }
-    out.push({ card: m.card, side, sx: cx, sy: cy });
-  }
-  return out;
-}
-
-/** The chip under a tap, if any. */
-export function chipAt(chips: EdgeChip[], sx: number, sy: number): number | null {
-  const hit = chips.filter((c) => Math.abs(c.sx - sx) <= HIT && Math.abs(c.sy - sy) <= HIT);
-  return hit.length > 0 ? hit[hit.length - 1].card : null;
 }
 
 /** Roughly how long is left, for screen readers: never seconds on screen. */
@@ -132,6 +32,8 @@ export class CardTray {
   onFocus?: (cardId: number) => void;
   /** Called when a card's been answered, with the toast's words (or why it couldn't be). */
   onNotify?: (text: string) => void;
+  /** Which card's `!` marker or edge chip is under a screen point (main.ts hands in renderer.cardAt). */
+  cardAt?: (sx: number, sy: number) => { card: number; chip: boolean } | null;
   /** The card opened over the building, if any. Only one at a time. */
   openId: number | null = null;
   /** When each card was first seen (performance.now), for the 10-second floor. */
@@ -201,10 +103,10 @@ export class CardTray {
    * A tap on the building: a card's `!`, or an edge chip, opens it. Otherwise an open card
    * folds back. True if the tap was used.
    */
-  tap(cam: Camera, sx: number, sy: number, view?: Box, avoid?: Box): boolean {
-    const id = markerAt(this.sim, cam, sx, sy) ?? (view ? chipAt(edgeChips(this.sim, cam, view, avoid), sx, sy) : null);
-    if (id !== null) {
-      this.open(id);
+  tap(sx: number, sy: number): boolean {
+    const hit = this.cardAt?.(sx, sy);
+    if (hit) {
+      this.open(hit.card);
       return true;
     }
     return this.fold();
@@ -222,7 +124,16 @@ export class CardTray {
     const p = v.card.pawn !== undefined ? this.sim.state.pawns.find((x) => x.id === v.card.pawn) : undefined;
     const box = h('span', { className, 'aria-hidden': 'true' });
     if (p && !v.icon) box.append(portrait(p));
-    else box.innerHTML = ICONS[v.icon ?? ''] ?? ICONS.alert;
+    else {
+      // The renderer's pixel icons (the van, the bins, the water...), or a red `!`.
+      const c = document.createElement('canvas');
+      c.width = 8;
+      c.height = 8;
+      c.className = 'icon';
+      const ctx = c.getContext('2d');
+      if (ctx) drawIcon(ctx, iconName(v.icon) ?? 'bang', 0, 0, 1);
+      box.append(c);
+    }
     return box;
   }
 
@@ -312,25 +223,3 @@ export class CardTray {
 const SVG = 'http://www.w3.org/2000/svg';
 const R = 7;
 const RING = 2 * Math.PI * R;
-
-// Pixel icons for cards that aren't about a person, drawn from 8x8 grids like the tab icons.
-const GRIDS: Record<string, string[]> = {
-  alert: ['...##...', '...##...', '...##...', '...##...', '...##...', '........', '...##...', '...##...'],
-  cat: ['#.....#.', '##...##.', '#######.', '#.##.##.', '#######.', '.#####..', '.#...#.#', '.#...###'],
-  van: ['........', '#####...', '#####.#.', '#####..#', '########', '########', '.##..##.', '........'],
-  bins: ['.######.', '########', '.#.#.#..', '.######.', '.#.#.#..', '.######.', '.#.#.#..', '.######.'],
-  water: ['...#....', '...#....', '..###...', '..###...', '.#####..', '.##.##..', '.#####..', '..###...'],
-  parcel: ['........', '.######.', '#..##..#', '########', '#..##..#', '#..##..#', '########', '........'],
-  post: ['........', '########', '##....##', '#.#..#.#', '#..##..#', '#......#', '########', '........'],
-  key: ['........', '.###....', '#...#...', '#...#####', '#...#.#.', '.###..#.', '........', '........'],
-  door: ['.######.', '.#....#.', '.#....#.', '.#....#.', '.#...##.', '.#....#.', '.#....#.', '########'],
-};
-const ICONS: Record<string, string> = Object.fromEntries(
-  Object.entries(GRIDS).map(([name, rows]) => {
-    let r = '';
-    rows.forEach((row, y) => [...row].slice(0, 8).forEach((c, x) => {
-      if (c === '#') r += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
-    }));
-    return [name, `<svg viewBox="0 0 8 8" fill="currentColor" shape-rendering="crispEdges">${r}</svg>`];
-  }),
-);

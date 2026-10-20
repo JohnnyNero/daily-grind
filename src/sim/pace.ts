@@ -16,7 +16,8 @@ export const MORNING = 7 * 60;
 
 /**
  * Nothing that wants you: no happening, no Denise, no question waiting in the chat, no card
- * open, nobody about who isn't a tenant (a burglar, a guest, a visitor; the cat may sleep).
+ * open, nobody about who isn't a tenant (a burglar, a guest, a visitor; the cat may sleep,
+ * and someone walking past in the street is nobody's business).
  */
 function nothingGoingOn(sim: Sim): boolean {
   const st = sim.state;
@@ -24,6 +25,7 @@ function nothingGoingOn(sim: Sim): boolean {
   if (st.chat.some((c) => c.choices && c.chosen === undefined)) return false;
   if ((st.drip?.open.length ?? 0) > 0) return false;
   for (const p of st.pawns) {
+    if (p.kind === 'passerby') continue;
     if (p.kind === 'animal' ? p.pose !== 'sleep' : !p.life) return false;
     if (p.life?.leaving) return false;
   }
@@ -60,18 +62,14 @@ export function ticksToMorning(sim: Sim): number {
 /**
  * Skip to morning: runs up to `most` ticks, the same ticks the sim would run anyway, towards
  * 07:00. 'morning' when it gets there, 'woke' if something stirred on the way (checked each
- * game minute: anything going on, or before QUIET_NIGHT_TO a tenant up and about), 'more' if
- * it ran out of ticks for now.
+ * game minute: a card, a happening, a question in the chat, a burglar or a guest; a tenant
+ * up for the loo isn't news), 'more' if it ran out of ticks for now.
  */
 export function skipToMorning(sim: Sim, most: number): 'morning' | 'woke' | 'more' {
   for (let i = 0; i < most; i++) {
     sim.tick();
     if (sim.state.tick % TICKS_PER_DAY === MORNING * TICKS_PER_MINUTE) return 'morning';
-    if (sim.state.tick % TICKS_PER_MINUTE === 0) {
-      if (!nothingGoingOn(sim)) return 'woke';
-      const m = sim.minuteOfDay;
-      if ((m >= NIGHT_FROM || m < NIGHT_TO) && !allAsleep(sim)) return 'woke';
-    }
+    if (sim.state.tick % TICKS_PER_MINUTE === 0 && !nothingGoingOn(sim)) return 'woke';
   }
   return 'more';
 }

@@ -51,6 +51,15 @@ export const FLAGS: Record<string, FlagDef> = {
   dumpingSpot: { about: 'The spot by the bins is a dumping spot: fly-tips likelier', readBy: ['card:mattress'], grudge: true },
   lobbySofa: { about: 'A sofa in the lobby: people sit and meet on the stairs', readBy: ['render', 'moments', 'dirt.shared'] },
   squatter: { about: 'Someone\'s been sleeping in an empty flat: wear and dirt creep up', subject: 'flat', readBy: ['upkeep.wear', 'card:pizza'] },
+  // --- added by chunk 7 ---
+  lorraine: { about: 'Lorraine does the stairs and lobby every morning, and you pay her for it', readBy: ['handover.hour'] },
+  muckyStairs: { about: 'You turned the cleaner down: the stairs and lobby get dirtier, faster', readBy: ['dirt.shared'], grudge: true },
+  wrongBin: { about: 'A newcomer was pointed at the bins: the recycling goes in the wrong one and they overflow', readBy: ['bins.overflowing'] },
+  cleanWindows: { about: 'A window cleaner comes every month for £15', readBy: ['handover.hour'] },
+  grimyWindows: { about: 'You said no to the window cleaner: house-proud tenants notice the windows from week three', readBy: ['handover.hour'], grudge: true },
+  boilerServiced: { about: 'The boiler has been seen to: it burns a little less gas', readBy: ['bills.gas'] },
+  boilerMoods: { about: 'The boiler is left to its moods: it burns a little more gas', readBy: ['bills.gas'], grudge: true },
+  billWantsDown: { about: 'Bill has asked for a ground-floor flat, and you said you would look', readBy: ['card:billStairsAsk'] },
 };
 
 // ------------------------------------------------------------------ the hooks
@@ -132,6 +141,11 @@ export const READERS: Record<string, { [H in FlagHook]?: FlagReader<H> }> = {
   'risk:fight': { 'story.fight': (_sim, f, chance, ctx) => (riskAbout(f, ctx) ? storyStep(chance, riskSteps(f)) : chance) },
   'risk:breakup': { 'story.split': (_sim, f, chance, ctx) => (riskAbout(f, ctx) ? storyStep(chance, riskSteps(f)) : chance) },
   'risk:party': { 'story.party': (_sim, f, chance, ctx) => (riskAbout(f, ctx) ? storyStep(chance, riskSteps(f)) : chance) },
+  // --- added by chunk 7 ---
+  muckyStairs: { 'dirt.shared': (_sim, _flag, dirt) => dirt * 1.5 },
+  wrongBin: { 'bins.overflowing': () => true },
+  boilerServiced: { 'bills.gas': (_sim, _flag, bill) => Math.round(bill * 0.9) },
+  boilerMoods: { 'bills.gas': (_sim, _flag, bill) => Math.round(bill * 1.15) },
 };
 
 /** The steps in a `risk:` flag's subject ("2", or "1@42"). */

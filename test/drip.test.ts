@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { tenants } from '../src/sim/chat';
+import { cardDef } from '../src/sim/cards';
 import { fixtureSim, sitting } from '../src/sim/cards/rule';
 import type { CardDef, CardSubject, Outcome } from '../src/sim/cards/types';
 import { answerCard, cardSeen, dayBudget, dripDayStart, dripMorning, FLAGS, HOLD, openCard, openCards, READERS, resolveCard, setFlag, hasFlag, useCatalogue } from '../src/sim/drip';
@@ -366,6 +367,24 @@ describe('Skip to morning', () => {
     expect(quietNight(sim)).toBe(true);
     expect(planTicks(0.1, 1, 0)).toEqual(planTicks(0.1, 1, 0));
     expect(planTicks(0.1, 1, 0).ticks).toBe(Math.floor(0.1 * pace.BASE_TICKS_PER_SECOND));
+  });
+});
+
+describe('the first week', () => {
+  it('plays the script instead of the daily budget: only follow-up cards, at most 3 a day', () => {
+    useCatalogue(null);
+    const sim = Sim.create(1);
+    const cards = watch(sim, 7, (s) => {
+      for (const c of [...openCards(s)]) if (s.state.tick - c.tick >= 40 * MIN) answerCard(s, c.id, 0);
+    });
+    expect(cards.length).toBeGreaterThanOrEqual(7);
+    const perDay = new Map<number, number>();
+    for (const c of cards) {
+      expect(cardDef(c.def)?.followUp, c.def).toBe(true);
+      const day = Math.floor(c.tick / TICKS_PER_DAY);
+      perDay.set(day, (perDay.get(day) ?? 0) + 1);
+    }
+    for (const [, n] of perDay) expect(n).toBeLessThanOrEqual(3);
   });
 });
 

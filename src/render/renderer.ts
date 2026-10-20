@@ -7,9 +7,10 @@
 import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
-import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, type CellKind, type Grade, type Pawn } from '../sim/state';
+import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, seconds, type Card, type CellKind, type Grade, type Pawn } from '../sim/state';
 import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
-import { FLAT_WALLS, LIGHTS, PAL, PERSON_H, box, dark, edge, drawFurniture, drawPerson, drawSleeper, light, mix, rect } from './art';
+import { FLAT_WALLS, LIGHTS, PAL, box, dark, edge, drawAnimal, drawFurniture, drawIcon, drawPerson, drawSleeper, iconName, light, mix, pawnHeight, rect, PERSON_H } from './art';
+import { BUDGET } from '../sim/tuning';
 import { spacesOf } from '../sim/shared';
 import { flightOf, unsupportedCells, type BuildParts } from '../sim/build';
 import { currentPiece, partsOf, piecesBetween, type Piece } from '../sim/works';
@@ -50,6 +51,151 @@ export interface BuildView {
   version: number;
 }
 
+
+// ------------------------------------------------------------------ the bubble budget (spec 2.5)
+
+/** Where a bubble sits in the budget: card markers first, then talk, then moments, then habits. */
+export type BubbleRank = 0 | 1 | 2 | 3;
+
+/** Something that wants a bubble this frame: a pawn's own, or a card's `!` (keyed by minus the card's id). */
+export interface BubbleCand {
+  key: number;
+  rank: BubbleRank;
+  /** What it says: changes when the bubble does. */
+  sig: string;
+  text: string;
+  icon?: string;
+  card?: number;
+  pawn?: number;
+}
+
+interface Held {
+  cand: BubbleCand;
+  since: number;
+}
+
+/**
+ * Keeps bubbles to BUDGET.bubbles on screen, best first, and each up for at least
+ * BUDGET.bubbleSeconds of real time (`now` is in ms from a clock you pass in, so tests can fake it).
+ * The sim's `until` is only a minimum: a bubble the sim has dropped stays till its time is up,
+ * and one being talked over waits its turn.
+ */
+export class BubbleBudget {
+  private held = new Map<number, Held>();
+
+  constructor(
+    private readonly most = BUDGET.bubbles,
+    private readonly minMs = BUDGET.bubbleSeconds * 1000,
+  ) {}
+
+  /** The bubbles to draw now, worst first (so the best end up on top). */
+  pick(cands: BubbleCand[], now: number): BubbleCand[] {
+    const want = new Map<number, BubbleCand>();
+    for (const c of cands) {
+      const was = want.get(c.key);
+      if (!was || c.rank < was.rank) want.set(c.key, c);
+    }
+    const served = (h: Held) => now - h.since >= this.minMs;
+    for (const [k, h] of this.held) {
+      const c = want.get(k);
+      if (c && c.sig === h.cand.sig) {
+        h.cand = c;
+        want.delete(k);
+      } else if (c && (c.rank === 0 || served(h))) {
+        this.held.delete(k);
+      } else if (c) {
+        // Same pawn, something new to say, but the old one's not had its time yet.
+        want.delete(k);
+      } else if (served(h)) this.held.delete(k);
+    }
+    const fresh = [...want.values()].sort((a, b) => a.rank - b.rank);
+    for (const c of fresh) {
+      if (this.held.size >= this.most) {
+        // Make room by dropping the worst that's had its time, if this one beats it.
+        let worst: [number, Held] | null = null;
+        for (const e of this.held) {
+          if (!served(e[1]) || e[1].cand.rank <= c.rank) continue;
+          if (!worst || e[1].cand.rank > worst[1].cand.rank || (e[1].cand.rank === worst[1].cand.rank && e[1].since < worst[1].since)) worst = e;
+        }
+        if (!worst) continue;
+        this.held.delete(worst[0]);
+      }
+      this.held.set(c.key, { cand: c, since: now });
+    }
+    return [...this.held.values()].map((h) => h.cand).sort((a, b) => b.rank - a.rank);
+  }
+
+  /** Anything still waiting out its time (so the frame needs drawing again). */
+  get any(): boolean {
+    return this.held.size > 0;
+  }
+}
+
+// ------------------------------------------------------------------ edge chips and the arrival pulse
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface Chip {
+  x: number;
+  y: number;
+  side: 'left' | 'right' | 'top' | 'bottom';
+}
+
+/** Radius of an edge chip, and the room round it, in screen pixels. */
+export const CHIP_R = 15;
+const CHIP_GAP = 6;
+
+/**
+ * Where the `!` chip for an off-screen spot goes: on the edge of the box on the side it's
+ * on, and clear of `avoid` (the alerts column). Null if the spot is inside the box.
+ */
+export function chipFor(ax: number, ay: number, box: Rect, avoid?: Rect): Chip | null {
+  const x1 = box.x + box.w;
+  const y1 = box.y + box.h;
+  if (ax >= box.x && ax <= x1 && ay >= box.y && ay <= y1) return null;
+  const m = CHIP_R + CHIP_GAP;
+  const cx = Math.max(box.x + m, Math.min(x1 - m, ax));
+  const cy = Math.max(box.y + m, Math.min(y1 - m, ay));
+  // The side it's furthest past, as a share of the box.
+  const dx = ax < box.x ? (box.x - ax) / box.w : ax > x1 ? (ax - x1) / box.w : 0;
+  const dy = ay < box.y ? (box.y - ay) / box.h : ay > y1 ? (ay - y1) / box.h : 0;
+  let chip: Chip;
+  if (dx >= dy) chip = { side: ax < box.x ? 'left' : 'right', x: ax < box.x ? box.x + m : x1 - m, y: cy };
+  else chip = { side: ay < box.y ? 'top' : 'bottom', x: cx, y: ay < box.y ? box.y + m : y1 - m };
+  if (avoid && chip.x + CHIP_R > avoid.x && chip.x - CHIP_R < avoid.x + avoid.w && chip.y + CHIP_R > avoid.y && chip.y - CHIP_R < avoid.y + avoid.h) {
+    if (chip.side === 'right') chip.y = Math.min(y1 - m, avoid.y + avoid.h + CHIP_R + CHIP_GAP);
+    else chip.x = Math.max(box.x + m, avoid.x - CHIP_R - CHIP_GAP);
+  }
+  return chip;
+}
+
+/** How long the pale ring round a new card's subject takes, in real ms. */
+export const PULSE_MS = 500;
+
+/** 0 to 1 through the ring, or null once it's done (or before it began). */
+export function pulseAt(since: number, now: number): number | null {
+  const t = (now - since) / PULSE_MS;
+  return t < 0 || t >= 1 ? null : t;
+}
+
+/** What a card is about, in world pixels. */
+export interface Spot {
+  /** Its bounding box. */
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  /** The cell it's in. */
+  cell: Cell;
+  /** Pawn id of the person, if it's about one (the marker takes the place of their own bubble). */
+  pawn?: number;
+}
+
 /** Doors are 30 pixels tall: a person and a bit. */
 const DOOR_H = 30;
 
@@ -71,6 +217,17 @@ export class Renderer {
   private viewW = 0;
   private viewH = 0;
   selectedPawn: number | null = null;
+  /** Real time in ms (a fake one in tests). The bubble hold and the arrival pulse run on it. */
+  clock: () => number = () => performance.now();
+  /** The part of the screen the building shows in (set by fit and focus): chips sit on its edge. */
+  private box: Rect | null = null;
+  /** The alerts column's size, top right of the box: chips keep clear of it. */
+  alertsSize = { w: 160, h: 150 };
+  private bubbles = new BubbleBudget();
+  /** When each open card was first drawn (real ms), for its pulse. */
+  private seen = new Map<number, number>();
+  /** Where the `!` markers and chips were last drawn, for taps. */
+  private hits: { card: number; x: number; y: number; r: number; chip: boolean }[] = [];
   build: BuildView = { active: false, marks: [], ghost: null, selected: null, version: 0 };
 
   constructor(private readonly canvas: HTMLCanvasElement, private readonly sim: Sim) {
@@ -113,6 +270,7 @@ export class Renderer {
 
   /** Fits a box of the world inside a box of the screen, centred. */
   private frame(wx0: number, wx1: number, wy0: number, wy1: number, box: { x: number; y: number; w: number; h: number }, most = 6): void {
+    this.box = { ...box };
     const scale = Math.min(most, box.w / (wx1 - wx0), box.h / (wy1 - wy0));
     this.camera.scale = Math.max(0.5, Math.floor(scale * 4) / 4 || scale);
     this.camera.ox = box.x + (box.w - (wx1 - wx0) * this.camera.scale) / 2 - wx0 * this.camera.scale;
@@ -138,7 +296,8 @@ export class Renderer {
     let bestD = Infinity;
     for (const p of this.visiblePawns()) {
       const { px, py } = this.feet(p);
-      if (wx < px - 7 || wx > px + 7 || wy < py - PERSON_H - 2 || wy > py + 4) continue;
+      const half = p.kind === 'animal' ? 9 : 7;
+      if (wx < px - half || wx > px + half || wy < py - pawnHeight(p) - 2 || wy > py + 4) continue;
       const d = Math.abs(wx - px);
       if (d < bestD) {
         bestD = d;
@@ -175,17 +334,22 @@ export class Renderer {
     const pawns = this.visiblePawns().sort((a, b) => Number(!!a.front) - Number(!!b.front));
     for (const p of pawns) {
       const { px, py } = this.feet(p);
-      if (p.pose === 'sleep') {
+      const tick = this.sim.state.tick;
+      const walking = p.path.length > 0;
+      if (p.kind === 'animal') {
+        drawAnimal(ctx, p, Math.round(px), Math.round(py), (Math.abs(p.x) * 1.6) % 1, walking, tick);
+      } else if (p.pose === 'sleep') {
         this.drawAsleep(ctx, p, px, py);
         continue;
+      } else {
+        const phase = p.pose === 'dance' ? (tick / 14) % 1 : (Math.abs(p.x) * 1.6) % 1;
+        drawPerson(ctx, p, Math.round(px), Math.round(py), phase, walking, { seated: this.onSeat(p), tick });
       }
-      const walking = p.path.length > 0;
-      const phase = p.pose === 'dance' ? (this.sim.state.tick / 14) % 1 : (Math.abs(p.x) * 1.6) % 1;
-      drawPerson(ctx, p, Math.round(px), Math.round(py), phase, walking);
       if (p.id === this.selectedPawn) {
         ctx.strokeStyle = '#f2c46d';
         ctx.lineWidth = 1;
-        ctx.strokeRect(Math.round(px) - 7.5, Math.round(py) - PERSON_H - 2.5, 15, PERSON_H + 4);
+        const h = pawnHeight(p);
+        ctx.strokeRect(Math.round(px) - 7.5, Math.round(py) - h - 2.5, 15, h + 4);
       }
     }
     this.drawLight(ctx);
@@ -196,6 +360,13 @@ export class Renderer {
     // Text at screen resolution.
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.drawLabels();
+  }
+
+  /** Sat on something (a chair, the loo): reading or on the phone, they're drawn sitting. */
+  private onSeat(p: Pawn): boolean {
+    const id = p.life?.using?.furniture;
+    const f = id === undefined ? undefined : this.sim.state.furniture.find((o) => o.id === id);
+    return !!f && !!furnitureDef(f.def).offers?.some((o) => o.pose === 'sit');
   }
 
   /** Everyone on the map (tenants at work or out aren't). */
@@ -790,6 +961,217 @@ export class Renderer {
     rect(ctx, x + 3, y - 15 - bob * 3, 3, 2, '#56606d');
   }
 
+  // ------------------------------------------------------------------ what's on screen: bubbles, markers, chips
+
+  /** Where an open card's subject is: the visitor at the door, the person, the thing, the flat, or the street door. */
+  spotOf(card: Card): Spot | null {
+    const st = this.sim.state;
+    const lay = this.sim.layout;
+    const pawnSpot = (id: number | undefined): Spot | null => {
+      const p = id === undefined ? undefined : this.visiblePawns().find((o) => o.id === id);
+      if (!p) return null;
+      const { px, py } = this.feet(p);
+      const h = pawnHeight(p);
+      return { x0: px - 7, x1: px + 7, y0: py - h, y1: py + 2, cell: { x: Math.round(p.x), s: Math.round(p.s) }, pawn: p.id };
+    };
+    const v = pawnSpot(card.visitor) ?? pawnSpot(card.pawn);
+    if (v) return v;
+    const f = card.furniture === undefined ? undefined : st.furniture.find((o) => o.id === card.furniture);
+    if (f) {
+      const d = furnitureDef(f.def);
+      return { x0: f.x * TILE, x1: (f.x + d.w) * TILE, y0: floorY(f.s) - d.h * TILE, y1: floorY(f.s), cell: { x: f.x, s: f.s } };
+    }
+    const flat = card.flat ? lay.flat(card.flat) : undefined;
+    if (flat) {
+      const cells = lay.flatCells(flat).map((n) => lay.xs(n));
+      const xs = cells.map(([x]) => x);
+      const ss = cells.map(([, s]) => s);
+      const topS = Math.max(...ss);
+      return { x0: Math.min(...xs) * TILE, x1: (Math.max(...xs) + 1) * TILE, y0: floorY(topS) - 2 * TILE - 2, y1: floorY(Math.min(...ss)), cell: { x: xs[0], s: topS } };
+    }
+    // Something in the street (the van, the bins, the cat out front): the street door.
+    const mid = Math.round((st.plot.x0 + st.plot.x1) / 2);
+    return { x0: mid * TILE - 8, x1: mid * TILE + 8, y0: GROUND_Y - 30, y1: GROUND_Y, cell: { x: mid, s: 0 } };
+  }
+
+  /** The visible part of the screen: where the building shows. */
+  private get visibleBox(): Rect {
+    return this.box ?? { x: 0, y: 0, w: this.viewW, h: this.viewH };
+  }
+
+  /** The card whose `!` marker or edge chip is under this screen point (a tap), and whether it was the chip. */
+  cardAt(sx: number, sy: number): { card: number; chip: boolean } | null {
+    let best: { card: number; chip: boolean } | null = null;
+    let bestD = Infinity;
+    for (const h of this.hits) {
+      const d = Math.hypot(sx - h.x, sy - h.y);
+      if (d <= h.r && d < bestD) {
+        bestD = d;
+        best = { card: h.card, chip: h.chip };
+      }
+    }
+    return best;
+  }
+
+  /** True while something's moving that needs frames even if the sim's paused (a pulse, a bubble running out its time). */
+  get animating(): boolean {
+    return this.pulsing || this.lingering;
+  }
+  private pulsing = false;
+  private lingering = false;
+
+  private drawBubbles(ctx: CanvasRenderingContext2D, toScreen: (wx: number, wy: number) => readonly [number, number]): void {
+    const c = this.camera;
+    const st = this.sim.state;
+    const tick = st.tick;
+    const now = this.clock();
+    const open = st.drip?.open ?? [];
+    this.hits = [];
+    // Cards: where each one's subject is, a pulse when it's new, a marker or an edge chip.
+    const box = this.visibleBox;
+    const avoid: Rect = { x: box.x + box.w - this.alertsSize.w, y: box.y, w: this.alertsSize.w, h: this.alertsSize.h };
+    for (const id of [...this.seen.keys()]) if (!open.some((k) => k.id === id)) this.seen.delete(id);
+    const cands: BubbleCand[] = [];
+    const markers: { card: Card; spot: Spot; sx: number; sy: number }[] = [];
+    const takenPawns = new Set<number>();
+    const chips: Chip[] = [];
+    this.pulsing = false;
+    for (const card of open) {
+      const spot = this.spotOf(card);
+      if (!spot) continue;
+      if (!this.seen.has(card.id)) this.seen.set(card.id, tick - card.tick <= seconds(3) ? now : -Infinity);
+      const [sx, sy] = toScreen((spot.x0 + spot.x1) / 2, spot.y0 - 3);
+      const chip = chipFor(sx, sy, box, avoid);
+      if (chip) {
+        // Two on the same edge sit side by side rather than on top of each other.
+        for (const o of chips) {
+          if (Math.hypot(o.x - chip.x, o.y - chip.y) < CHIP_R * 2 + 3) {
+            if (chip.side === 'left' || chip.side === 'right') chip.y = o.y + CHIP_R * 2 + 4;
+            else chip.x = o.x - CHIP_R * 2 - 4;
+          }
+        }
+        chips.push(chip);
+        this.drawChip(ctx, chip, card.id, now);
+        continue;
+      }
+      markers.push({ card, spot, sx, sy });
+      cands.push({ key: -card.id, rank: 0, sig: `card${card.id}`, text: '!', card: card.id, pawn: spot.pawn });
+      if (spot.pawn !== undefined) takenPawns.add(spot.pawn);
+      const t = pulseAt(this.seen.get(card.id)!, now);
+      if (t !== null) {
+        this.pulsing = true;
+        const [x0, y0] = toScreen(spot.x0, spot.y0);
+        const [x1, y1] = toScreen(spot.x1, spot.y1);
+        const grow = 3 + t * 9;
+        ctx.strokeStyle = `rgba(255,233,224,${(1 - t) * 0.95})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(x0 - grow, y0 - grow, x1 - x0 + grow * 2, y1 - y0 + grow * 2, 6 + grow);
+        ctx.stroke();
+      }
+    }
+    // Everyone's own bubble, but the card's marker takes the place of a person's.
+    for (const p of this.visiblePawns()) {
+      const b = p.bubble;
+      if (!b || b.until <= tick || takenPawns.has(p.id)) continue;
+      const icon = iconName(b.icon);
+      if (p.pose === 'sleep' && icon !== 'zz') continue;
+      cands.push({ key: p.id, rank: b.kind === 'habit' ? 3 : b.kind === 'moment' ? 2 : 1, sig: `${b.text}|${b.icon ?? ''}`, text: b.text, icon: icon ?? undefined, pawn: p.id });
+    }
+    const picks = this.bubbles.pick(cands, now);
+    this.lingering = picks.some((k) => !cands.some((o) => o.key === k.key));
+    ctx.font = `700 ${Math.max(10, Math.min(14, c.scale * 4))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const k = Math.max(2, Math.min(4, Math.round(c.scale)));
+    const drawn: { x: number; w: number; y: number }[] = [];
+    for (const cand of picks) {
+      let sx: number;
+      let sy: number;
+      if (cand.card !== undefined) {
+        const m = markers.find((o) => o.card.id === cand.card);
+        if (!m) continue;
+        [sx, sy] = [m.sx, m.sy];
+      } else {
+        const p = st.pawns.find((o) => o.id === cand.key);
+        if (!p) continue;
+        const { px, py } = this.feet(p);
+        [sx, sy] = toScreen(px, py - pawnHeight(p) - 3);
+      }
+      const isCard = cand.card !== undefined;
+      const hgt = isCard ? 26 : cand.icon ? 8 * k + 8 : 18;
+      const w = isCard ? 26 : cand.icon ? 8 * k + 8 : Math.max(18, ctx.measureText(cand.text).width + 10);
+      // A marker bobs a little; a bubble that would sit on another moves aside.
+      if (isCard) sy += Math.round(Math.sin(now / 220) * 2);
+      let bx = sx;
+      for (const d of drawn) if (Math.abs(d.x - bx) < (d.w + w) / 2 + 2 && Math.abs(d.y - sy) < hgt) bx = d.x + (d.w + w) / 2 + 3;
+      drawn.push({ x: bx, w, y: sy });
+      const top = sy - hgt - 6;
+      ctx.fillStyle = isCard ? '#d0452f' : cand.text === '!' ? '#f6d2ca' : '#fbf7ef';
+      ctx.strokeStyle = PAL.outline;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(bx - w / 2, top, w, hgt, isCard ? 13 : 5);
+      ctx.fill();
+      ctx.stroke();
+      // The tail, down to what it's about.
+      ctx.beginPath();
+      ctx.moveTo(sx - 3, top + hgt);
+      ctx.lineTo(sx, sy - 1);
+      ctx.lineTo(sx + 3, top + hgt);
+      ctx.closePath();
+      ctx.fillStyle = isCard ? '#d0452f' : cand.text === '!' ? '#f6d2ca' : '#fbf7ef';
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(sx - 2, top + hgt - 1);
+      ctx.lineTo(sx + 2, top + hgt - 1);
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.stroke();
+      if (isCard) {
+        ctx.font = '800 17px system-ui, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('!', bx, top + 4);
+        ctx.font = `700 ${Math.max(10, Math.min(14, c.scale * 4))}px system-ui, sans-serif`;
+        this.hits.push({ card: cand.card!, x: bx, y: top + hgt / 2, r: 24, chip: false });
+      } else if (cand.icon) {
+        drawIcon(ctx, cand.icon, Math.round(bx - 4 * k), Math.round(top + 4), k);
+      } else {
+        ctx.fillStyle = PAL.outline;
+        ctx.fillText(cand.text, bx, top + 3);
+      }
+    }
+  }
+
+  /** A round red `!` on the edge of the screen, with a point towards what it's about. Tap it to go there. */
+  private drawChip(ctx: CanvasRenderingContext2D, chip: Chip, card: number, now: number): void {
+    const pulse = Math.sin(now / 260) * 1.2;
+    ctx.fillStyle = '#d0452f';
+    ctx.strokeStyle = PAL.outline;
+    ctx.lineWidth = 1.5;
+    const dir = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] }[chip.side];
+    const [dx, dy] = dir;
+    const tip = CHIP_R + 6 + pulse;
+    ctx.beginPath();
+    ctx.moveTo(chip.x + dx * tip, chip.y + dy * tip);
+    ctx.lineTo(chip.x + dx * (CHIP_R - 4) - dy * 7, chip.y + dy * (CHIP_R - 4) + dx * 7);
+    ctx.lineTo(chip.x + dx * (CHIP_R - 4) + dy * 7, chip.y + dy * (CHIP_R - 4) - dx * 7);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(chip.x, chip.y, CHIP_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '800 18px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', chip.x, chip.y + 1);
+    ctx.textBaseline = 'top';
+    this.hits.push({ card, x: chip.x, y: chip.y, r: CHIP_R + 8, chip: true });
+  }
+
   // ------------------------------------------------------------------ labels
 
   private drawLabels(): void {
@@ -828,25 +1210,7 @@ export class Renderer {
       ctx.fillStyle = '#f3efe6';
       ctx.fillText(sp.name, sx, sy + 2);
     }
-    // Speech bubbles over anyone talking.
-    const tick = this.sim.state.tick;
-    ctx.font = `700 ${Math.max(10, Math.min(14, c.scale * 4))}px system-ui, sans-serif`;
-    for (const p of this.visiblePawns()) {
-      if (!p.bubble || p.bubble.until <= tick || p.pose === 'sleep') continue;
-      const { px, py } = this.feet(p);
-      const [sx, sy] = toScreen(px, py - 26);
-      const w = Math.max(18, ctx.measureText(p.bubble.text).width + 10);
-      const hgt = 18;
-      ctx.fillStyle = p.bubble.text === '!' ? '#f6d2ca' : '#fbf7ef';
-      ctx.strokeStyle = PAL.outline;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(sx - w / 2, sy - hgt - 6, w, hgt, 5);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = PAL.outline;
-      ctx.fillText(p.bubble.text, sx, sy - hgt - 3);
-    }
+    this.drawBubbles(ctx, toScreen);
     // Name tags under people, once zoomed in enough to read.
     if (c.scale < 1.6) return;
     ctx.font = `500 ${Math.min(11, c.scale * 3.5)}px system-ui, sans-serif`;

@@ -486,7 +486,7 @@ body.building .tray, body.panel-open .tray { display: none; }
   background: #d9ccb6; color: var(--outline); display: grid; place-items: center;
 }
 .card-face canvas { width: 100%; height: 100%; image-rendering: pixelated; display: block; }
-.card-face svg { width: 18px; height: 18px; }
+.card-face canvas.icon { width: 16px; height: 16px; }
 .ring { flex: none; width: 20px; height: 20px; }
 .ring circle { fill: none; stroke-width: 3; }
 .ring .back { stroke: #00000022; }

@@ -4,7 +4,7 @@ import { fixtureSim, sitting } from '../src/sim/cards/rule';
 import type { CardDef } from '../src/sim/cards/types';
 import { answerCard, HOLD, openCard, openCards, useCatalogue } from '../src/sim/drip';
 import { TICKS_PER_MINUTE } from '../src/sim/state';
-import { CardTray, cardsWaiting, edgeChips, markerOf } from '../src/ui/cards';
+import { CardTray, cardsWaiting } from '../src/ui/cards';
 
 // The tray (spec 1.1) on a phone-sized screen (390 x 844), with a fake clock and a fake
 // document: just enough DOM for the tray to build its cards and take taps.
@@ -153,26 +153,18 @@ describe('the tray', () => {
   });
 
   it('opens a card when you tap its `!` over the person, or its chip on the edge', () => {
-    const { sim, tray, first, second } = twoCards();
+    const { tray, first, second } = twoCards();
     tray.update(0);
-    const cam = { scale: 2, ox: 0, oy: 0 };
-    const m = markerOf(sim, first)!;
-    expect(m).not.toBeNull();
-    expect(tray.tap(cam, m.wx * 2, m.wy * 2 - 8)).toBe(true);
+    // The renderer knows where it drew each marker and chip; a fake one here.
+    tray.cardAt = (sx, sy) => (sx === 100 && sy === 200 ? { card: first.id, chip: false } : sx === 380 && sy === 300 ? { card: second.id, chip: true } : null);
+    expect(tray.tap(100, 200)).toBe(true);
     expect(tray.openId).toBe(first.id);
-    // Off screen: a chip on the edge, clear of the alerts column, opens it too.
-    const view = { x: 8, y: 60, w: 374, h: 500 };
-    const far = { scale: 2, ox: 5000, oy: 0 };
-    const chips = edgeChips(sim, far, view, { x: 232, y: 60, w: 150, h: 120 });
-    const chip = chips.find((c) => c.card === second.id)!;
-    expect(chip.side).toBe('right');
-    expect(chip.sy).toBeGreaterThan(180);
-    expect(tray.tap(far, chip.sx, chip.sy, view)).toBe(true);
+    expect(tray.tap(380, 300)).toBe(true);
     expect(tray.openId).toBe(second.id);
-    // A tap on the building with a card open folds it.
-    expect(tray.tap(cam, 1, 1, view)).toBe(true);
+    // A tap on the building with a card open folds it; with none open, it's not the tray's.
+    expect(tray.tap(1, 1)).toBe(true);
     expect(tray.openId).toBeNull();
-    expect(tray.tap(cam, 1, 1, view)).toBe(false);
+    expect(tray.tap(1, 1)).toBe(false);
   });
 
   it('holds a card for 10 real seconds on the fake clock, then hands over the tick', () => {

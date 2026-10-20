@@ -23,7 +23,7 @@ import { tale } from './tales';
 import { remember } from './thoughts';
 import { DRIP, EXPECT, FLAG_EFFECTS, SECONDS_PER_GAME_MINUTE, UPKEEP } from './tuning';
 import { breakIt, bookInspection, mend } from './upkeep';
-import { ALL_CARDS, FIRST_WEEK_SCRIPT } from './cards';
+import { allCards, FIRST_WEEK_SCRIPT } from './cards';
 import { makeCard, type Answer, type CardChoice, type CardDef, type CardSubject, type Effect, type ScriptBeat } from './cards/types';
 import { furnitureDef } from './defs';
 
@@ -35,7 +35,7 @@ export { clearFlag, expireFlags, flagsOf, hasFlag, readFlags, setFlag, FLAGS, RE
 let testCards: { defs: readonly CardDef[]; beats: readonly ScriptBeat[]; byId: Map<string, CardDef> } | null = null;
 let realById: Map<string, CardDef> | null = null;
 
-const catalogue = (): readonly CardDef[] => testCards?.defs ?? ALL_CARDS;
+const catalogue = (): readonly CardDef[] => testCards?.defs ?? allCards();
 const script = (): readonly ScriptBeat[] => testCards?.beats ?? FIRST_WEEK_SCRIPT;
 
 /** For tests: deal from these cards (and this first-week script) instead of the real ones. Null puts the real ones back. */
@@ -46,7 +46,7 @@ export function useCatalogue(defs: readonly CardDef[] | null, beats: readonly Sc
 /** The def an open card was dealt from. */
 export function cardDefOf(id: string): CardDef | undefined {
   if (testCards) return testCards.byId.get(id);
-  realById ??= new Map(ALL_CARDS.map((c) => [c.id, c]));
+  realById ??= new Map(allCards().map((c) => [c.id, c]));
   return realById.get(id);
 }
 
@@ -259,7 +259,11 @@ export function openCard(sim: Sim, def: string, subject: CardSubject = {}): Card
   return put(sim, cd, subject);
 }
 
-/** The first week: each beat comes at its time, or when there's room within DRIP.beatWait, or it's skipped and gives its place to the ordinary drip. */
+/**
+ * The first week: each beat comes at its time, or as soon after as its card's `when` holds and
+ * there's room, within DRIP.beatWait; otherwise it's skipped and gives its place to the
+ * ordinary drip. Beats don't wait for the gap or the per-person rest.
+ */
 function playScript(sim: Sim): void {
   const d = sim.state.drip;
   const m = sim.minuteOfDay;
@@ -272,7 +276,7 @@ function playScript(sim: Sim): void {
     if (subjects.length > 0 && d.open.length < DRIP.maxOpen) {
       put(sim, def!, subjects[0]);
       d.cooldowns[key] = 1;
-    } else if (subjects.length === 0 || m > beat.minute + DRIP.beatWait) {
+    } else if (m > beat.minute + DRIP.beatWait) {
       d.cooldowns[key] = 1;
       d.budget++;
     }
