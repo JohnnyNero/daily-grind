@@ -757,23 +757,16 @@ export const FIRST_WEEK_CARDS: CardDef[] = [
 const at = (day: number, hour: number, minute: number, card: string): ScriptBeat => ({ day, minute: hour * 60 + minute, card });
 
 /**
- * When each scripted card is due: two a day, at least four game hours apart (DRIP.minGap). A
+ * When each scripted card is due: one a day or none (turned down: the handover and the building come first; day 1 has one, at night). A
  * beat whose card's `when` is false when it's due is skipped. Day 1 is a Monday and starts
  * at 08:00; the storyteller wakes on day 8.
  */
 export const FIRST_WEEK_SCRIPT: ScriptBeat[] = [
-  at(1, 11, 0, 'billsShopping'),
   at(1, 20, 0, 'keysOnMat'),
-  at(2, 8, 0, 'cleanerCard'),
   at(2, 19, 0, 'binsQuestion'),
   at(3, 10, 0, 'billsShower'),
-  at(3, 15, 0, 'windowMan'),
   at(4, 9, 0, 'gasMeterFirst'),
-  at(4, 19, 0, 'scaffoldNextDoor'),
   at(5, 14, 0, 'newcomerAsks'),
-  at(5, 19, 0, 'friendsRound'),
-  at(6, 11, 0, 'billsDaughter'),
   at(6, 23, 30, 'lockedOutFirst'),
   at(7, 10, 0, 'monthUpFront'),
-  at(7, 17, 0, 'boilerMoods'),
 ];

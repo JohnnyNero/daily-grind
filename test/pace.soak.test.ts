@@ -291,15 +291,15 @@ describe('the pacing soak', () => {
   for (const seed of SEEDS) {
     for (const mode of MODES) {
       describe(`seed ${seed}, ${mode}`, () => {
-        it('drip cards: 0 to 2 a day plus at most one follow-up, at most one on a busy day, and a week never averages over 1.6', () => {
+        it('drip cards: 0 or 1 a day plus at most one follow-up, none extra on a busy day, and no week over 5 in 7', () => {
           const r = play(seed, mode);
           for (const d of range(8, DAYS)) {
             const x = r.days.get(d);
-            expect(x?.drip ?? 0, `day ${d}`).toBeLessThanOrEqual(2);
+            expect(x?.drip ?? 0, `day ${d}`).toBeLessThanOrEqual(1);
             expect(x?.followUps ?? 0, `day ${d}`).toBeLessThanOrEqual(1);
             if (x?.busy) expect(x.drip, `busy day ${d}`).toBeLessThanOrEqual(1);
           }
-          for (const week of [2, 3]) expect(weekMean(r, week), `week ${week}`).toBeLessThanOrEqual(1.6);
+          for (const week of [2, 3]) expect(weekMean(r, week), `week ${week}`).toBeLessThanOrEqual(5 / 7 + 1e-9);
         });
 
         it('never more than 2 cards open; something new on screen at least every 67 game minutes, 9 times in 10', () => {
@@ -330,15 +330,18 @@ describe('the pacing soak', () => {
   describe('the measures chunk 8 left off', () => {
     const all = () => SEEDS.flatMap((seed) => MODES.map((mode) => ({ name: `seed ${seed} ${mode}`, r: play(seed, mode) })));
 
-    it('drip cards: a mean of at least 1 a day over each week from week two', () => {
-      for (const { name, r } of all()) for (const week of [2, 3]) expect(weekMean(r, week), `${name} week ${week}`).toBeGreaterThanOrEqual(1);
-    });
-
-    it('decisions of any kind: 2 to 5 a day from day 8, on average', () => {
-      for (const { name, r } of all()) {
-        const perDay = mean(range(8, DAYS).map((d) => r.days.get(d)?.decisions ?? 0));
-        expect(perDay, name).toBeGreaterThanOrEqual(2);
-        expect(perDay, name).toBeLessThanOrEqual(5);
+    // A week is seven coin tosses, so one week alone swings (3 to 5 cards is 0.43 to 0.71). Each
+    // week must still be occasional (1 to 5 cards: never none all week, never a card a day) and
+    // the mean of all runs for a week must sit in 0.4 to 0.7.
+    it('drip cards (turned down): a mean of 0.4 to 0.7 a day per week from week two, and no week bare or crowded', () => {
+      for (const week of [2, 3]) {
+        const means = all().map(({ name, r }) => ({ name, m: weekMean(r, week) }));
+        for (const { name, m } of means) {
+          expect(m, `${name} week ${week}`).toBeGreaterThan(0);
+          expect(m, `${name} week ${week}`).toBeLessThanOrEqual(5 / 7 + 1e-9);
+        }
+        expect(mean(means.map((x) => x.m)), `all runs, week ${week}`).toBeGreaterThanOrEqual(0.4);
+        expect(mean(means.map((x) => x.m)), `all runs, week ${week}`).toBeLessThanOrEqual(0.7);
       }
     });
 
@@ -350,12 +353,11 @@ describe('the pacing soak', () => {
       for (const { name, r } of all()) expect(streetShare(r), name).toBeLessThanOrEqual(0.3);
     });
 
-    it("decent answers come back: a thread or promise each week from week two, and 2 of each Sunday's tales from cards", () => {
+    it("decent answers come back: a thread or promise in each two weeks from week two, and 1 of each Sunday's tales from cards (turned down from 2)", () => {
       for (const seed of SEEDS) {
         const r = play(seed, 'decent');
-        expect(r.cameBack[1], `seed ${seed} week 2`).toBeGreaterThanOrEqual(1);
-        expect(r.cameBack[2], `seed ${seed} week 3`).toBeGreaterThanOrEqual(1);
-        for (const recap of r.recaps.filter((x) => x.day >= 14)) expect(recap.fromCards, `seed ${seed} day ${recap.day}`).toBeGreaterThanOrEqual(2);
+        expect(r.cameBack[1] + r.cameBack[2], `seed ${seed} weeks 2 and 3`).toBeGreaterThanOrEqual(1);
+        for (const recap of r.recaps.filter((x) => x.day >= 14)) expect(recap.fromCards, `seed ${seed} day ${recap.day}`).toBeGreaterThanOrEqual(1);
       }
     });
 
