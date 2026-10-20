@@ -49,6 +49,11 @@ export const FLAGS: Record<string, FlagDef> = {
   dumpingSpot: { about: 'The spot by the bins is a dumping spot: fly-tips likelier', readBy: ['card:mattress'], grudge: true },
   lobbySofa: { about: 'A sofa in the lobby: people sit and meet on the stairs', readBy: ['render', 'moments', 'dirt.shared'] },
   squatter: { about: 'Someone\'s been sleeping in an empty flat: wear and dirt creep up', subject: 'flat', readBy: ['upkeep.wear', 'card:pizza'] },
+  // --- added by chunk 2c ---
+  goodWord: { about: 'Word is out that a flat shows well: it lets a bit faster', subject: 'flat', readBy: ['letting.hours'] },
+  scaffolding: { about: 'Next door\'s scaffolding is up on your wall: top-floor windows are an easy way in', readBy: ['crime.risk', 'render'] },
+  meterRead: { about: 'The gas meter has been read: the bill is right again', readBy: ['bills.gas'] },
+  buildingCat: { about: 'You let the ginger cat stay: the building cat (visitors.ts makes it, state.cat holds it)', readBy: ['visitors.cat', 'card:cat'] },
 };
 
 // ------------------------------------------------------------------ the hooks
@@ -162,3 +167,9 @@ export function expireFlags(sim: Sim): void {
   const st = sim.state;
   if (st.drip.flags.some((f) => f.until !== undefined && f.until <= st.tick)) st.drip.flags = st.drip.flags.filter((f) => f.until === undefined || f.until > st.tick);
 }
+
+// --- added by chunk 2c ---
+// Readers for the flags above that change a number. (The rest are read by cards and the visitors.)
+READERS.goodWord = { 'letting.hours': (_sim, flag, hours, ctx) => (ctx.flat === flag.subject ? hours * 0.8 : hours) };
+READERS.scaffolding = { 'crime.risk': (_sim, _flag, risk) => Math.min(1, risk * 1.25) };
+READERS.meterRead = { 'bills.gas': (sim, _flag, bill) => (hasFlag(sim, 'estimated') ? Math.round(bill / 1.1) : bill) };
