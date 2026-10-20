@@ -172,7 +172,7 @@ export function dripMinute(sim: Sim): void {
 }
 
 /** Keys in a card's data that name another person (cards/*.ts). */
-const PAWN_KEYS = ['noisy', 'tenant', 'partner', 'about', 'bill', 'host'];
+const PAWN_KEYS = ['noisy', 'tenant', 'partner', 'about', 'bill', 'host', /* chunk b2: */ 'rider', 'owner', 'friend', 'cook', 'slacker', 'smoker', 'neighbour', 'helper', 'asker'];
 
 /** Room in the tray, and long enough since the last card. */
 function roomFor(sim: Sim): boolean {

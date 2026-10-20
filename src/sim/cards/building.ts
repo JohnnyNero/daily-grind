@@ -148,8 +148,8 @@ const ceilingDrip: CardDef = {
     return fit(`Water's coming through ${flatName(sim, String(card.data?.below))}'s ceiling. It's ${l ? first(l.up) : 'someone'}'s ${l ? furnitureDef(l.thing.def).name.toLowerCase() : 'shower'}.`, 80);
   },
   choices: (sim, card) => [
-    { label: 'Plumber', note: `£${(thing(sim, card.furniture) ? repairCost(thing(sim, card.furniture)!) : 80 * POUND) / POUND}. Says what's next` },
-    { label: 'Bucket and towel', note: 'Free. It will drip again' },
+    { label: 'Plumber', note: `£${(thing(sim, card.furniture) ? repairCost(thing(sim, card.furniture)!) : 80 * POUND) / POUND}` },
+    { label: 'Bucket and towel', note: 'Free' },
   ],
   resolve: (sim, card, answer): Outcome => {
     const l = leakOf(sim, card);
@@ -222,8 +222,8 @@ const ceilingDripAgain: CardDef = {
     return fit(`It's dripping again in ${flatName(sim, String(card.data?.below))}. ${l ? first(l.up) : 'Someone'}'s ${l ? furnitureDef(l.thing.def).name.toLowerCase() : 'shower'}, still.`, 80);
   },
   choices: (sim, card) => [
-    { label: 'Plumber, now', note: `£${(thing(sim, card.furniture) ? repairCost(thing(sim, card.furniture)!) : 80 * POUND) / POUND}. Should have done it` },
-    { label: 'Another bucket', note: 'Free. It will give up' },
+    { label: 'Plumber, now', note: `£${(thing(sim, card.furniture) ? repairCost(thing(sim, card.furniture)!) : 80 * POUND) / POUND}` },
+    { label: 'Another bucket', note: 'Free' },
   ],
   resolve: (sim, card, answer): Outcome => {
     const l = leakOf(sim, card);
@@ -259,8 +259,8 @@ const bins: CardDef = {
   text: () => 'The bins are overflowing. A fox has opinions.',
   name: () => 'The bins · Lobby',
   choices: () => [
-    { label: 'Bigger bins', note: '£60. They stay fixed' },
-    { label: 'Wait for Thursday', note: 'Free. The fox visits' },
+    { label: 'Bigger bins', note: '£60' },
+    { label: 'Wait for Thursday', note: 'Free' },
   ],
   resolve: (sim, _card, answer): Outcome => {
     const people = tenantsIn(sim);
@@ -330,8 +330,8 @@ const chirping: CardDef = {
   hook: (sim, card) => fit(`Chirping in ${flatName(sim, card.flat)}.`, 40),
   text: (sim, card) => fit(`Something in ${flatName(sim, card.flat)} is chirping every 40 seconds. Smoke alarm.`, 80),
   choices: () => [
-    { label: 'Pop round', note: '£2. You will see inside' },
-    { label: 'They can do it', note: 'Most will' },
+    { label: 'Pop round', note: '£2' },
+    { label: 'They can do it', note: '' },
   ],
   resolve: (sim, card, answer): Outcome => {
     const flat = card.flat ?? '';
@@ -406,8 +406,8 @@ const windowGone: CardDef = {
   hook: (sim, card) => fit(`${flatName(sim, card.flat)}'s window's gone.`, 40),
   text: (sim, card) => fit(`${flatName(sim, card.flat)}'s window's cracked. A ball, apparently.`, 80),
   choices: () => [
-    { label: 'Glazier and bars', note: '£90. Bars for good' },
-    { label: 'Tape it', note: 'Free. Cold, and easy to get in' },
+    { label: 'Glazier and bars', note: '£90' },
+    { label: 'Tape it', note: 'Free' },
   ],
   resolve: (sim, card, answer): Outcome => {
     const flat = card.flat ?? '';

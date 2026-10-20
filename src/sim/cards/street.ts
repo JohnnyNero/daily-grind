@@ -130,8 +130,8 @@ const applicantAtTheDoor: CardDef = {
   choices(sim, card) {
     const host = byId(sim, Number(card.data?.host));
     return [
-      { label: 'Show them round', note: 'They\'ll see it as it is' },
-      { label: host ? `Ask ${first(host)}` : 'Ask a tenant', note: host && (is(host, 'complainer') || is(host, 'knowsRights')) ? 'Might mention the boiler' : 'They\'ll meet' },
+      { label: 'Show them round', note: '' },
+      { label: host ? `Ask ${first(host)}` : 'Ask a tenant', note: '' },
     ];
   },
   resolve(sim, card, answer) {
@@ -209,11 +209,10 @@ const parcel: CardDef = {
   },
   hook: (sim, card) => `Parcel for ${first(byId(sim, card.pawn)!)}.`,
   text: (sim, card) => `Parcel for ${first(byId(sim, card.pawn)!)}, who's out. The courier wants it taken.`,
-  choices(sim) {
-    const safe = hasIntercom(sim) ? 'Safe enough' : sim.state.security.locks ? 'Probably fine' : 'Might walk';
+  choices() {
     return [
-      { label: 'Take it in', note: 'They\'ll be glad' },
-      { label: 'Lobby will do', note: safe },
+      { label: 'Take it in', note: '' },
+      { label: 'Lobby will do', note: '' },
     ];
   },
   resolve(sim, card, answer) {
@@ -299,8 +298,8 @@ const manInAVan: CardDef = {
     return `Bloke in a van says he'll do ${flatName(sim, card.flat)}'s ${f ? furnitureDef(f.def).name.toLowerCase() : 'cooker'} for £40 cash. Today.`;
   },
   choices: () => [
-    { label: 'Go on then', note: '£40, done today' },
-    { label: 'Get someone proper', note: 'Takes a couple of days' },
+    { label: 'Go on then', note: '£40 cash' },
+    { label: 'Get someone proper', note: 'A couple of days' },
   ],
   resolve(sim, card, answer) {
     const f = thingIn(sim, card);
@@ -347,7 +346,7 @@ const vanBreak: CardDef = {
   text: (sim, card) => `The ${nameOf(sim, card)} the van man did has packed up. He's not answering his phone.`,
   choices: () => [
     { label: 'Pay properly', note: 'The going rate' },
-    { label: 'Chalk it up', note: 'They\'ll go without' },
+    { label: 'Chalk it up', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = byId(sim, card.pawn)!;
@@ -404,8 +403,8 @@ const catOnTheStairs: CardDef = {
   text: () => 'A ginger cat has walked in and sat on the stairs like it pays rent.',
   name: () => 'The stairs',
   choices: () => [
-    { label: 'Let it stay', note: 'Pet owners will like it' },
-    { label: 'Shoo it out', note: 'Pet owners won\'t' },
+    { label: 'Let it stay', note: '' },
+    { label: 'Shoo it out', note: '' },
   ],
   resolve(sim, _card, answer) {
     const all = folk(sim);
@@ -419,7 +418,7 @@ const catOnTheStairs: CardDef = {
       'flag:buildingCat',
       'flag:petPrecedent',
     ];
-    if (answer === 0) return out(stays(), 'The cat\'s staying. Everyone\'s seen it. Saying no to pets just got harder.');
+    if (answer === 0) return out(stays(), 'The cat\'s staying. It has already chosen a doormat.');
     if (answer === 1) return out([...all.filter((p) => is(p, 'petOwner')).map((p) => mem(p, 'shooedCat')), 'flag:nextDoorCat'], 'You shooed it out. It went next door, and sat on their wall to look at you.');
     // Ignored: it's back every day, and by the third it's yours, with nobody's say.
     const e = [...stays().filter((s) => !s.includes(':buildingCat:')), ...all.map((p) => mem(p, 'leftToIt'))];
@@ -483,9 +482,9 @@ const meterReader: CardDef = {
   hook: () => 'Gas man at the door.',
   text: () => 'Man from the gas wants to read the meter. He has a lanyard.',
   name: (sim, card) => `${first(byId(sim, card.pawn)!)} · At the door`,
-  choices: (sim) => [
-    { label: 'Let him in', note: sim.state.security.locks ? 'Bill\'s right' : 'Bill\'s right, probably' },
-    { label: 'Not without a letter', note: 'Bill stays estimated' },
+  choices: () => [
+    { label: 'Let him in', note: '' },
+    { label: 'Not without a letter', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = byId(sim, card.pawn)!;
@@ -529,8 +528,8 @@ const meterAgain: CardDef = {
   hook: () => 'Gas man\'s back next week.',
   text: (sim, card) => `The gas man's back next week. Ask ${first(byId(sim, card.pawn)!)} to let him in?`,
   choices: () => [
-    { label: 'Ask them', note: 'A small favour' },
-    { label: 'Leave it', note: 'Bill stays estimated' },
+    { label: 'Ask them', note: '' },
+    { label: 'Leave it', note: '' },
   ],
   resolve(sim, card, answer) {
     const p = byId(sim, card.pawn)!;
@@ -572,9 +571,9 @@ const sofaOnThePavement: CardDef = {
   hook: () => 'A sofa on the pavement.',
   text: () => 'Someone\'s left a decent sofa outside. "Free to good home."',
   name: () => 'The pavement',
-  choices: (sim, card) => [
-    { label: 'Into the empty flat', note: `${flatName(sim, card.flat)} gets a seat` },
-    { label: 'In the lobby', note: 'Somewhere to sit' },
+  choices: () => [
+    { label: 'Into the empty flat', note: '' },
+    { label: 'In the lobby', note: '' },
   ],
   resolve(sim, card, answer) {
     const flat = card.flat ?? emptyFlats(sim)[0];
@@ -630,8 +629,8 @@ const scaffolding: CardDef = {
   text: () => 'Next door\'s builders want to scaffold your wall for a fortnight. £80.',
   name: () => 'Next door · Scaffolding',
   choices: () => [
-    { label: 'Take the money', note: '£80, and the noise' },
-    { label: 'No', note: 'They\'ll hold a grudge' },
+    { label: 'Take the money', note: '£80' },
+    { label: 'No', note: '' },
   ],
   resolve(sim, _card, answer) {
     const side = sideFlats(sim);
@@ -683,8 +682,8 @@ const postForPritchard: CardDef = {
   text: () => 'More post for Mr Pritchard. One looks like a cheque.',
   name: (sim, card) => `${first(byId(sim, card.pawn)!)} · The post`,
   choices: () => [
-    { label: 'Send it on', note: 'Someone knew him' },
-    { label: 'Open it', note: 'It might be £40' },
+    { label: 'Send it on', note: '' },
+    { label: 'Open it', note: '' },
   ],
   resolve(sim, card, answer) {
     const k = byId(sim, card.pawn)!;
@@ -767,8 +766,8 @@ const mattress: CardDef = {
   },
   name: () => 'By the bins',
   choices: (sim, card) => [
-    { label: `Word with ${flatName(sim, card.flat)}`, note: 'They pay, if it\'s theirs' },
-    { label: 'Pay the council', note: '£30, and say nothing' },
+    { label: `Word with ${flatName(sim, card.flat)}`, note: '' },
+    { label: 'Pay the council', note: '£30' },
   ],
   resolve(sim, card, answer) {
     const c = byId(sim, card.pawn)!;
@@ -840,8 +839,8 @@ const pizza: CardDef = {
   text: (sim, card) => `A pizza for ${flatName(sim, card.flat)}. ${flatName(sim, card.flat)}'s empty. Isn't it?`,
   name: (sim, card) => `${flatName(sim, card.flat)} · The step`,
   choices: (sim, card) => [
-    { label: 'Have a look', note: 'Someone\'s in there' },
-    { label: `Give it to ${first(byId(sim, Number(card.data?.bill)) ?? ({ name: 'a tenant' } as Pawn))}`, note: 'Free pizza' },
+    { label: 'Have a look', note: '' },
+    { label: `Give it to ${first(byId(sim, Number(card.data?.bill)) ?? ({ name: 'a tenant' } as Pawn))}`, note: '' },
   ],
   resolve(sim, card, answer) {
     const who = byId(sim, card.pawn)!;

@@ -134,10 +134,11 @@ function buildShell(st: State): void {
   put('radiator', 19, 1, 1);
   put('radiator', 23, 1, 1);
   for (const s of [0]) {
-    put('fridge', 14, s);
-    put('cooker', 15, s);
-    put('cupboard', 15, s, 2);
-    put('sink', 16, s);
+    // A cooker, the telly and the sofa in front of it: someone who works from home wants
+    // somewhere to put their feet up without going out (b2: the room used to be all kitchen).
+    put('cooker', 14, s);
+    put('cupboard', 14, s, 2);
+    put('tv', 15, s);
     put('sofa', 17, s, 0, true, 'cheap');
     put('picture', 18, s, 2);
     put('doubleBed', 21, s);
