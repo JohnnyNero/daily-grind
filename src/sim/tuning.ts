@@ -398,6 +398,8 @@ export const MEMORIES: Record<string, MemoryDef> = {
   toldToBleach: { label: 'Told to bleach the mould myself', value: -2, hours: 4 * 24, stack: 1 },
   draughty: { label: 'Draughty windows', value: -3, hours: 3 * 24, stack: 1 },
   wateredPlants: { label: 'Landlord watered my plants', value: 4, hours: 7 * 24, stack: 1, gossip: true },
+  // layout L3
+  smeltCooking: { label: 'Next door\'s cooking in the bedroom', value: -1, hours: 3, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -1276,3 +1278,68 @@ export const LAYOUT = {
   /** Sharers or a family (people who don't share a bed) with nowhere to sit but the beds. */
   nowhereToSit: -3,
 };
+
+// --- layout L3 ---
+
+/** Heat by room (heat.ts; docs/specs/layout.md 2.2). WARMTH's drift and base heat still apply, room by room. */
+export const HEAT = {
+  /** Degrees from each radiator per boiler setting, for every `radiatorTiles` of room. */
+  perRadiator: 5,
+  radiatorTiles: 8,
+  /** How much of the difference a room takes in an hour from the room through a wall, the one below and the one above, per tile of wall over its floor tiles. */
+  side: 0.1,
+  fromBelow: 0.12,
+  fromAbove: 0.04,
+  /** A door passes heat at this many times a wall; an insulated wall or floor at this share. */
+  door: 2,
+  insulated: 0.3,
+  /** The most of the differences a room takes in an hour, all told. */
+  most: 0.6,
+  /** For the building preview: a cold day outside, and hours to let it settle. */
+  previewOutside: 4,
+  previewHours: 96,
+};
+
+/** Damp by room (damp.ts; docs/specs/layout.md 2.3). Rates are a day's worth; damp runs 0 to 1. */
+export const DAMP = {
+  /** A day's damp from a bathroom and a kitchen, per person at home (up to `mostPeople`). */
+  bathroom: 0.12,
+  kitchen: 0.03,
+  mostPeople: 3,
+  /** A window lets this share of it in anyway; an extractor fan none. */
+  windowLets: 0.4,
+  /** Rising damp from the ground through a plinth with no damp course (insulating the plinth is the damp course). */
+  ground: 0.015,
+  /** A broken shower, bath, washer or dishwasher: a leak, mostly through the ceiling of the room below. */
+  leak: 0.3,
+  /** Of a leak, the share that wets its own room when there's a room below for the rest to come through to. */
+  leakStays: 0.3,
+  /** A day's drying: always, with a window, with a fan, and more the warmer the room. */
+  dry: 0.1,
+  windowDry: 0.1,
+  fanDry: 0.25,
+  warmDry: 0.12,
+  /** Of the difference, what spreads to the room through a wall in a day; and what drips to the room below. */
+  spread: 0.2,
+  dripDown: 0.3,
+  /** Damp over this is mould (the `mould` flag, and the council's list); over `damp` the tenants notice. */
+  mould: 0.5,
+  damp: 0.4,
+  /** Days a building mould flag lasts after the damp goes back under the line. */
+  mouldDays: 3,
+  /** What tenants think of it (live thoughts). */
+  smellsDamp: -1,
+  mouldy: -2,
+  /** Cleanliness points off a flat's impressiveness, per point of damp over `damp` in its wettest room. */
+  cleanDrag: 100,
+};
+
+/** Smells (damp.ts; layout.md 2.4): kept small, a flavour, not a system. */
+export const SMELL = {
+  /** Bins in a shared room through the wall from a flat's room. */
+  bins: -1,
+  binsOverflowing: -2,
+};
+
+/** The building preview's warmth and damp facts (preview.ts): the least change it mentions, in degrees and in damp. */
+export const PREVIEW = { warmer: 1, damper: 0.08 };

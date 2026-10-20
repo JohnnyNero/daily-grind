@@ -79,7 +79,7 @@ export class Hud {
     }
   }
 
-  onOverlay: (mode: 'none' | 'noise' | 'warmth' | 'liking') => void = () => {};
+  onOverlay: (mode: 'none' | 'noise' | 'warmth' | 'damp' | 'liking') => void = () => {};
 
   private tab(name: string): void {
     if (name === 'build') {

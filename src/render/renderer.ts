@@ -8,9 +8,11 @@ import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
 import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, seconds, type Card, type CellKind, type Grade, type Pawn } from '../sim/state';
-import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
+import { SHARED, noiseReaching, warmthOf } from '../sim/environment';
 import { FLAT_WALLS, LIGHTS, PAL, box, dark, edge, drawAnimal, drawFurniture, drawIcon, drawPerson, drawSleeper, iconName, light, mix, pawnHeight, rect, PERSON_H } from './art';
-import { BUDGET } from '../sim/tuning';
+import { BUDGET, DAMP } from '../sim/tuning';
+import { roomTemp } from '../sim/heat';
+import { roomDamp } from '../sim/damp';
 import { spacesOf } from '../sim/shared';
 import { flatKind } from '../sim/rooms';
 import { flightOf, unsupportedCells, type BuildParts } from '../sim/build';
@@ -211,7 +213,7 @@ export class Renderer {
   private lightMap: HTMLCanvasElement = document.createElement('canvas');
   private lightKey = '';
   /** A tint over each flat: noise getting in, warmth, or how much they like it. */
-  overlay: 'none' | 'noise' | 'warmth' | 'liking' = 'none';
+  overlay: 'none' | 'noise' | 'warmth' | 'damp' | 'liking' = 'none';
   /** How far open each door is, and which way it swings. */
   private doors = new Map<string, { open: number; dir: 1 | -1 }>();
   private dpr = 1;
@@ -723,13 +725,16 @@ export class Renderer {
   }
 
   private drawOverlay(ctx: CanvasRenderingContext2D): void {
+    if (this.overlay === 'warmth' || this.overlay === 'damp') {
+      this.drawRoomOverlay(ctx, this.overlay);
+      return;
+    }
     const sim = this.sim;
     const lay = sim.layout;
     const made = sim.noise();
     for (const f of lay.flats) {
       let v: number;
       if (this.overlay === 'noise') v = 1 - Math.min(1, noiseReaching(sim, made, f.id).amount / 3);
-      else if (this.overlay === 'warmth') v = warmthOf(tempOf(sim, f.id));
       else {
         const people = sim.state.pawns.filter((p) => p.life?.flat === f.id && !p.life.leaving);
         if (people.length === 0) continue;
@@ -745,6 +750,23 @@ export class Renderer {
       }
       ctx.globalAlpha = 1;
     }
+  }
+
+  /** Layout L3: Warmth and Damp colour each room, not each flat (the stairs and the lobby too). */
+  private drawRoomOverlay(ctx: CanvasRenderingContext2D, mode: 'warmth' | 'damp'): void {
+    const sim = this.sim;
+    const lay = sim.layout;
+    ctx.globalAlpha = 0.45;
+    for (const room of lay.rooms) {
+      if (room.outdoor || room.nodes.length === 0) continue;
+      const v = mode === 'warmth' ? warmthOf(roomTemp(sim, room.id)) : 1 - roomDamp(sim, room.id) / DAMP.mould;
+      const colour = mode === 'damp' ? (v >= 0.7 ? '#7fa7c9' : v >= 0.3 ? '#4f7fa8' : v > 0 ? '#3b5d82' : '#2d3b52') : v >= 0.6 ? '#d9813a' : v >= 0.4 ? '#d6a63c' : v >= 0.25 ? '#8fb0c9' : '#5b86b8';
+      for (const n of room.cells) {
+        const [x, s] = lay.xs(n);
+        rect(ctx, x * TILE, floorY(s) - TILE, TILE, TILE, colour);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ------------------------------------------------------------------ evening light

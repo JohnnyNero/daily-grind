@@ -77,7 +77,7 @@ export const FLAGS: Record<string, FlagDef> = {
   painted: { about: 'A tenant painted the flat their colour: once they\'ve gone, it lets slower', subject: 'flat', readBy: ['letting.hours', 'card:paint'] },
   // --- added by chunk b2 ---
   oddJobs: { about: 'A tenant does the odd jobs for money off the rent: a handy one keeps things from wearing, anyone keeps the stairs tidier', subject: 'pawn', readBy: ['upkeep.wear', 'dirt.shared', 'card:oddJobs'] },
-  extractorFan: { about: 'An extractor fan in a flat: no more cooking smells next door, no more mould', subject: 'flat', readBy: ['card:cookingSmells'] },
+  extractorFan: { about: 'An extractor fan in a flat: no more cooking smells next door, no more mould', subject: 'flat', readBy: ['card:cookingSmells', 'damp'] },
   ownWasher: { about: 'A tenant plumbed in their own washing machine: it can leak on the flat below', subject: 'flat', readBy: ['card:washer', 'card:washerLeak'] },
   rota: { about: 'A rota for the stairs on the wall: the stairs stay cleaner', readBy: ['dirt.shared', 'card:rota', 'card:rotaSlips'] },
   smokesIn: { about: 'A smoker told off the step smokes indoors: the flat wears faster', subject: 'flat', readBy: ['upkeep.wear', 'card:smokingOnStep'] },
@@ -88,7 +88,7 @@ export const FLAGS: Record<string, FlagDef> = {
   doorShuts: { about: 'The street door was planed and shuts properly: a touch harder to get in', readBy: ['crime.risk'] },
   doorSticks: { about: 'The street door sticks and doesn\'t always latch', readBy: ['crime.risk', 'card:doorJams'] },
   doorPropped: { about: 'Someone propped the street door open with a brick', readBy: ['crime.risk'] },
-  mould: { about: 'Damp and mould in a flat: it\'s on the council\'s list', subject: 'flat', readBy: ['council.issues', 'card:mould', 'card:mouldBack'] },
+  mould: { about: 'Damp and mould in a flat: it\'s on the council\'s list. Set by a card, or by the building when a room\'s damp is over the line (damp.ts)', subject: 'flat', readBy: ['council.issues', 'card:mould', 'card:mouldBack'] },
   looseSlates: { about: 'Loose slates over a flat: the weather gets in, and things wear faster', subject: 'flat', readBy: ['upkeep.wear'] },
   tapedCarpet: { about: 'The stair carpet is held down with gaffer tape: someone will catch a heel', readBy: ['card:stairCarpet', 'card:stairTrip'] },
   draughtProof: { about: 'Draught strips round a flat\'s windows: the gas goes further', subject: 'flat', readBy: ['bills.gas', 'card:draughtyWindow'] },

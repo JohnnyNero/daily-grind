@@ -443,6 +443,12 @@ const PIECES: Record<string, Draw> = {
     rect(c, 7, -8, 2, 1, PAL.poster);
     rect(c, 7, -6, 2, 1, PAL.white);
   },
+  // layout L3
+  extractorFan(c) {
+    box(c, 3, -15, 10, 10, '#e4e1da');
+    for (const y of [-13, -11, -9]) rect(c, 5, y, 6, 1, '#9a978f');
+    rect(c, 7, -15, 2, 1, '#bdb9b0');
+  },
 };
 
 function bed(c: Ctx, W: number, duvet: string): void {

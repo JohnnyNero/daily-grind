@@ -49,6 +49,9 @@ function normalize(raw: Partial<State>): State {
   st.cleaner ??= false;
   st.dirt ??= {};
   st.temps ??= {};
+  // Layout L3: room temperatures and damp (heat.ts, damp.ts); worked out afresh if missing.
+  st.roomTemps ??= {};
+  st.damp ??= {};
   st.noiseAvg ??= {};
   st.chat ??= [];
   // Version 4 added the builders.

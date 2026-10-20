@@ -10,6 +10,7 @@ import { flatInfo, goingRate } from './economy';
 import { expectGrade, expectThought } from './expectations';
 import { SHARED, binsOverflowing, dirtOf, itemsIn, tempOf } from './environment';
 import { flatScore, type FlatScore } from './impressiveness';
+import { dampThoughts } from './damp';
 import { opinion } from './social';
 import type { Sim } from './sim';
 import { TICKS_PER_HOUR, type HouseholdKind, type Life, type NeedId, type Pawn } from './state';
@@ -55,6 +56,7 @@ export function thoughtsOf(sim: Sim, p: Pawn): Thought[] {
     const rent = lease ? rentThought(lease.rent, goingRate(sim, flat.id), grade) : null;
     if (rent) out.push(rent);
     out.push(...placeThoughts(sim, life, flat.id));
+    out.push(...dampThoughts(sim, life, flat.id));
   }
   out.push(...amenityThoughts(sim, life));
   out.push(...peopleThoughts(sim, p));

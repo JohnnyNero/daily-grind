@@ -8,6 +8,9 @@ import { rentScore } from './impressiveness';
 import { flatKind, type FlatKind } from './rooms';
 import { Sim } from './sim';
 import type { CellKind, Furniture } from './state';
+import { settledTemps } from './heat';
+import { settledDamp } from './damp';
+import { PREVIEW } from './tuning';
 
 export interface Fact {
   text: string;
@@ -19,24 +22,54 @@ export interface Fact {
 export interface Change {
   cells?: Record<string, CellKind>;
   furniture?: Furniture[];
+  insulated?: Record<string, true>;
 }
 
 interface Seen {
   name: string;
   kind: FlatKind;
   rate: number;
+  /** Layout L3: each room's settled warmth and damp, by room name ("Bedroom"). */
+  rooms: Map<string, { temp: number; damp: number; living: boolean }>;
 }
 
 function look(sim: Sim, change: Change): Map<string, Seen> {
-  const copy = new Sim({ ...sim.state, cells: change.cells ?? sim.state.cells, furniture: change.furniture ?? sim.state.furniture });
+  const copy = new Sim({ ...sim.state, cells: change.cells ?? sim.state.cells, furniture: change.furniture ?? sim.state.furniture, insulated: change.insulated ?? sim.state.insulated });
+  const temps = settledTemps(copy);
+  const damp = settledDamp(copy);
   const out = new Map<string, Seen>();
   for (const f of copy.layout.flats) {
     const kind = flatKind(copy, f.id);
     // The going rate as the flat stands (not waiting out the days a tier takes to drop).
     const rate = rateFor(kind.type, rentScore(copy, f.id).tier);
-    out.set(f.id, { name: f.name, kind, rate });
+    const rooms = new Map<string, { temp: number; damp: number; living: boolean }>();
+    for (const r of kind.rooms) {
+      if (rooms.has(r.name)) continue;
+      rooms.set(r.name, { temp: temps.get(r.room) ?? 0, damp: damp.get(r.room) ?? 0, living: r.uses.includes('sleep') || r.uses.includes('sit') });
+    }
+    out.set(f.id, { name: f.name, kind, rate, rooms });
   }
   return out;
+}
+
+/** Layout L3: the room that got most colder or warmer, and most damper or drier. */
+function climateFacts(a: Map<string, Seen>, b: Map<string, Seen>): Fact[] {
+  let heat: { fact: Fact; by: number } | null = null;
+  let wet: { fact: Fact; by: number } | null = null;
+  for (const [id, now] of b) {
+    const was = a.get(id);
+    if (!was) continue;
+    for (const [name, r] of now.rooms) {
+      const o = was.rooms.get(name);
+      if (!o) continue;
+      const room = `${now.name} ${lower(name)}`;
+      const dt = r.temp - o.temp;
+      if (r.living && Math.abs(dt) >= PREVIEW.warmer && (!heat || Math.abs(dt) > heat.by)) heat = { by: Math.abs(dt), fact: { text: `${room}: ${dt > 0 ? 'warmer' : 'colder'}`, tone: dt > 0 ? 'up' : 'down' } };
+      const dd = r.damp - o.damp;
+      if (Math.abs(dd) >= PREVIEW.damper && (!wet || Math.abs(dd) > wet.by)) wet = { by: Math.abs(dd), fact: { text: `${room}: ${dd > 0 ? 'damper' : 'drier'}`, tone: dd > 0 ? 'down' : 'up' } };
+    }
+  }
+  return [heat?.fact, wet?.fact].filter((f): f is Fact => !!f);
 }
 
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
@@ -63,5 +96,5 @@ export function changeFacts(sim: Sim, before: Change, after: Change): Fact[] {
   const delta = sum(b) - sum(a);
   const rent: Fact[] = delta === 0 ? [] : [{ text: `Going rates ${delta > 0 ? '+' : '−'}£${Math.abs(delta) / POUND} a week`, tone: delta > 0 ? 'up' : 'down' }];
   // The money first if there's room, then what changed.
-  return [...rent, ...facts].slice(0, 3);
+  return [...rent, ...facts, ...climateFacts(a, b)].slice(0, 3);
 }

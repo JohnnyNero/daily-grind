@@ -7,6 +7,7 @@ import { accept, changeRent, giveNotice, likelyLiking, noticeProblem } from '../
 import { choose } from '../src/sim/post';
 import { answer } from '../src/sim/chat';
 import { itemsIn } from '../src/sim/environment';
+import { flatKind } from '../src/sim/rooms';
 import { scoreFor } from '../src/sim/impressiveness';
 import type { Sim } from '../src/sim/sim';
 import { mend } from '../src/sim/upkeep';
@@ -107,16 +108,19 @@ export function landlord(sim: Sim, policy: Policy, cards?: Cards): void {
   if (st.council.notice) for (const f of st.furniture) if (f.broken !== undefined) mend(sim, f.id);
   // Heating: the decent one puts a radiator in any flat that has none, let or about to be (a boiler
   // with nothing to heat is no heating at all); the ruthless one only once the council says it's too cold.
+  // Heat is by room (layout L3), so it goes where someone will sleep: a bedroom, or the room the
+  // bed will go in (the smallest big enough), else the first room.
   for (const f of sim.layout.flats) {
     if (itemsIn(sim, f.id, 'radiator') > 0) continue;
     if (policy === 'ruthless' && !st.council.notice?.issues.some((i) => i.startsWith(`${f.name} is too cold`))) continue;
     if (st.money < furniturePrice('radiator') + 200 * POUND) continue;
-    const cells = sim.layout.flatCells(f).map((n) => sim.layout.xs(n));
-    for (const [x, s] of cells) {
-      if (typeof furnitureProblem(st, 'radiator', x, s) === 'string') continue;
-      buyFurniture(sim, 'radiator', x, s, false);
-      break;
-    }
+    const lay = sim.layout;
+    const rooms = f.rooms.map((r) => lay.rooms[r]).filter((r) => r.nodes.length > 0);
+    const bedroom = flatKind(sim, f.id).rooms.find((r) => r.uses.includes('sleep'))?.room;
+    const bedRoom = [...rooms].filter((r) => r.nodes.length >= LAYOUT.bedroomTiles).sort((a, b) => a.nodes.length - b.nodes.length)[0];
+    const order = [...new Set([bedroom, bedRoom?.id, ...f.rooms].filter((r): r is number => r !== undefined))];
+    const spot = order.flatMap((r) => lay.rooms[r].cells.map((n) => lay.xs(n))).find(([x, s]) => typeof furnitureProblem(st, 'radiator', x, s) !== 'string');
+    if (spot) buyFurniture(sim, 'radiator', spot[0], spot[1], false);
   }
   // Keep a cushion, overpay the rest.
   const cushion = 1500 * POUND;

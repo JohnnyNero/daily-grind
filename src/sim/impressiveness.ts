@@ -9,6 +9,7 @@ import { furnitureDef } from './defs';
 import { furnitureValue } from './grades';
 import type { Sim } from './sim';
 import { warmthOf } from './environment';
+import { dampDrag } from './damp';
 import { amenities, hasOwnWasher } from './shared';
 import { flatKind, scoredFor } from './rooms';
 import { curve } from './stat';
@@ -113,7 +114,8 @@ function computeScore(sim: Sim, flatId: string, peopleOverride?: number): FlatSc
     basics: (Number(has.bed) + Number(has.toilet) + Number(has.wash) + Number(has.kitchen)) * 25,
     light: Math.min(100, I.light.base + windows * I.light.window + lamps * I.light.lamp),
     decor: Math.min(100, defs.filter((d) => d.decor).length * I.decor),
-    clean: 100 * (1 - (sim.state.dirt[flatId] ?? 0)),
+    // Damp over the line drags it down too (layout L3).
+    clean: Math.max(0, 100 * (1 - (sim.state.dirt[flatId] ?? 0)) - dampDrag(sim, flatId)),
     warmth: 100 * warmthOf(sim.state.temps[flatId] ?? WARMTH.start),
     quiet: Math.max(0, 100 - (sim.state.noiseAvg[flatId] ?? 0) * I.quietPerNoise),
   };

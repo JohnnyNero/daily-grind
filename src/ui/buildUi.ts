@@ -411,7 +411,7 @@ export class BuildUi {
     const applied = st.planning.applied;
     sign.textContent = planning && !applied ? `Apply for planning ${pounds(PLANNING_FEE)}` : `Sign off ${pounds(cost)}`;
     sign.disabled = red > 0 || (planning ? applied !== undefined || st.money < PLANNING_FEE : cost > st.money);
-    const facts = red > 0 ? [] : changeFacts(this.sim, {}, { cells: plan.cells });
+    const facts = red > 0 ? [] : changeFacts(this.sim, {}, { cells: plan.cells, insulated: plan.insulated });
     out.append(
       ...facts.map((f) => h('span', { class: `fact${f.tone ? ` ${f.tone}` : ''}` }, f.text)),
       h('strong', {}, pounds(cost)),

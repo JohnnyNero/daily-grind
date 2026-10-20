@@ -104,6 +104,8 @@ export const FURNITURE: readonly FurnitureDef[] = [
   { id: 'smokeAlarm', name: 'Smoke alarm', w: 1, h: 1, wall: true, group: 'decor', value: 0 },
   { id: 'cctv', name: 'CCTV camera', w: 1, h: 1, wall: true, group: 'decor', value: 20 },
   { id: 'intercom', name: 'Door intercom', w: 1, h: 1, wall: true, group: 'decor', value: 15 },
+  // layout L3: takes the steam out of a bathroom or kitchen (damp.ts). £60.
+  { id: 'extractorFan', name: 'Extractor fan', w: 1, h: 1, wall: true, group: 'bathroom', value: 7.5 },
 ];
 
 const byId = new Map(FURNITURE.map((d) => [d.id, d]));

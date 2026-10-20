@@ -1,9 +1,11 @@
 // The building as a place to live: how warm each flat is, how much noise gets through
 // from the neighbours, how dirty things get, and the bins.
 //
-// Warmth is one temperature per flat. It drifts towards the outside temperature through
-// its outside walls, roof and floor, and the central boiler pushes it back up through the
-// radiators. Insulating the outside walls and floors keeps the heat in.
+// Warmth is worked out room by room (heat.ts): each room drifts towards the outside
+// temperature through its outside walls, roof and floor, takes in some of the heat of the
+// rooms round it (most from the one below), and the central boiler pushes it back up
+// through the radiators. A flat's temperature is its bedrooms' and living rooms' average.
+// Damp moves room by room too (damp.ts).
 //
 // Noise is made by what people are doing (the telly, practising, a row) and passes to the
 // flats next door, above and below, through each wall and floor tile they share. How much
@@ -18,6 +20,8 @@ import { has } from './traits';
 import { BUILDER_NOISE, currentPiece, whereIs } from './works';
 import { DIRT, GAS_PER_RADIATOR, ITEMS, NOISE, WARMTH } from './tuning';
 import { readFlags } from './flags';
+import { heatHour } from './heat';
+import { dampHour } from './damp';
 
 // Heat, noise and dirt rates are in tuning.ts.
 export { CLEANER_WEEKLY, GAS_PER_RADIATOR } from './tuning';
@@ -205,23 +209,10 @@ export function gasBill(sim: Sim): number {
   return readFlags(sim, 'bills.gas', all * sim.state.boiler * GAS_PER_RADIATOR);
 }
 
-/** Every game hour: each flat's temperature drifts towards what its walls and radiators allow. */
+/** Every game hour: heat and damp move room by room (heat.ts, damp.ts); each flat's warmth follows its rooms. */
 function warmthHour(sim: Sim): void {
-  const st = sim.state;
-  const outside = outdoorTemp(sim);
-  const { byFlat } = shapesOf(sim);
-  for (const f of sim.layout.flats) {
-    const shape = byFlat.get(f.id)!;
-    const ins = shape.outside ? shape.insulated / shape.outside : 0;
-    const exposure = shape.outside / Math.max(1, shape.area * 2);
-    const people = sim.state.pawns.filter((p) => p.life?.flat === f.id && !p.life.away).length;
-    const W = WARMTH;
-    const heat = (radiators(sim, f) * st.boiler * W.perRadiator) / Math.max(1, f.area / W.radiatorTiles) + W.base + people * W.perPerson;
-    const target = outside + heat * (1 + ins);
-    const rate = (W.rate * Math.min(W.mostExposure, exposure + W.exposureBase) * (1 - W.insulationKeeps * ins)) / (1 + f.area / W.sizeTiles);
-    const now = st.temps[f.id] ?? target;
-    st.temps[f.id] = now + (target - now) * Math.min(1, rate);
-  }
+  heatHour(sim);
+  dampHour(sim);
 }
 
 export function tempOf(sim: Sim, flatId: string): number {
