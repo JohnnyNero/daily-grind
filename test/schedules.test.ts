@@ -61,6 +61,8 @@ function soak(seed: number): Soak {
   let needSamples = 0;
   // Per tenant and day: when they went off to their hours, and which habit slots they started.
   const leftAt = new Map<string, number>();
+  // When each tenant first turns up (someone let at 08:00 can't have left for a 07:30 start).
+  const arrived = new Map<number, { day: number; m: number }>();
   const started = new Set<string>();
   const goingTo = new Map(Object.values(HABIT_DEFS).map((d) => [d.going, d.id]));
   const doingAt = new Map(Object.values(HABIT_DEFS).map((d) => [d.doing, d.id]));
@@ -77,6 +79,7 @@ function soak(seed: number): Soak {
     if (weekday && m >= 10 * 60 && m < 16 * 60 && ts.length > 0) out.homeShare.push(ts.filter((p) => homeAndAwake(sim, p)).length / ts.length);
     for (const p of ts) {
       const life = p.life!;
+      if (!arrived.has(p.id)) arrived.set(p.id, { day, m });
       if (m >= 7 * 60 && m < 23 * 60 && !life.away) {
         for (const [k, v] of Object.entries(life.needs)) sums[k] = (sums[k] ?? 0) + v;
         needSamples++;
@@ -105,6 +108,8 @@ function soak(seed: number): Soak {
     if (!p?.life) continue;
     const hours = awayToday({ day, state: sim.state } as unknown as Sim, p.life);
     if (!hours) continue;
+    const came = arrived.get(id);
+    if (came && came.day === day && came.m > hours.leave) continue;
     if (m <= hours.leave + 5) out.onTime++;
     else out.late.push(`${p.name} (${p.life.schedule}) day ${day} left at ${m}, due ${hours.leave}`);
   }

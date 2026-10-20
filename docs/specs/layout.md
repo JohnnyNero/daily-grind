@@ -128,9 +128,9 @@ Applicants come as one of four households:
 | Household | People | Needs |
 | --- | --- | --- |
 | Single | 1 | a bed |
-| Couple | 2, partners | a double bed |
+| Couple | 2 | a double bed |
 | Sharers | 2 or 3 | a bedroom each |
-| Family | 3 or 4: partners and one or two children (students) | two bedrooms and a double bed |
+| Family | 3 or 4: two parents and one or two children (students) | two bedrooms and a double bed |
 
 Who applies depends on the flat (weights, then any it can't sleep are dropped):
 
@@ -140,9 +140,10 @@ Who applies depends on the flat (weights, then any it can't sleep are dropped):
 | One-bed | 45 | 55 | | |
 | Two-bed or more | 5 | 15 | 45 | 35 |
 
-Never more people than it sleeps; sharers never more than its bedrooms. A couple and a
-family's parents move in as partners (the romance code carries on from there: they can
-split up). A family has a second child 40% of the time, if it has the beds.
+Never more people than it sleeps; sharers never more than its bedrooms. A family has a
+second child 40% of the time, if it has the beds. A couple are not made partners in the
+romance sense when they move in (tried: it made affairs, a happening that holds up the drip,
+far commoner, and shook the pacing soak); romance still starts in the building. See 9.2.
 
 What they think of the fit (live thoughts, labelled like every other):
 
@@ -209,14 +210,31 @@ landing, and a flat beyond another can only be reached through it. So the ways t
 - More bedrooms fetch more at every tier; the carved flat's going rate beats the one-bed's
   though its quality is no better; squeezing people in leaves the going rate alone.
 - Households: a single-bed studio only draws singles; a two-bed draws sharers and families,
-  never more than it sleeps; couples only with a double bed; couples move in as partners;
-  sharers short of a bedroom say so; an old save gets households.
+  never more than it sleeps; couples only with a double bed; households move in as what
+  they are; sharers short of a bedroom say so; an old save gets households.
 - The preview gives at most three facts, names the type change and the rent, and changes
   nothing.
 - **The soak** (six weeks, seeds 1 to 3, the decent scripted landlord): flats 3 and 5 fitted
-  as one-beds with living rooms, or carved into two-beds without. Carved: **+54% rent**
-  (£5,825 against £3,782 over the three seeds) and **liking 46 against 58**. The test asks
+  as one-beds with living rooms, or carved into two-beds without. Carved: **+35% rent**
+  (£5,676 against £4,190 over the three seeds) and **liking 37 against 52**. The test asks
   for more than 20% and more than 4 points. Neither side is free.
+
+Changes to other tests, each for a reason:
+
+- `test/policy.ts`: the scripted landlords furnish like a player: the bed alone in the
+  smallest room big enough for a bedroom (a double if they can afford it), the rest
+  elsewhere. Before, everything went in the first room, which now makes a single-bed studio
+  that only singles apply for, and the building ran a person or two short of what the soaks
+  were tuned on.
+- `test/stage.ts`: `homeAndAwake` also takes them off the pavement walk (a tenant caught
+  walking home was teleported in and carried on walking along the street).
+- `test/schedules.test.ts`: a tenant let at 08:00 isn't counted late for a 07:30 start that
+  day (all four "late" lines were that).
+- `test/pace.soak.test.ts` (the drip-down branch's, not touched): three of its tight
+  measures now miss by a hair on single seeds (2+ people visible 94.8% against 95% on seed 1
+  decent; no thread or promise back in weeks 2 and 3 on seed 2; the absent landlord liked
+  more than the decent one in week 2 on seed 4). Who lives where has changed, so the dice
+  fall differently; it needs retuning with the drip's owner.
 
 What part 1 doesn't yet have, and parts 2 and 3 add: the carved flat's extra cost is only
 crowding, no living room and more people. Thinner walls between more households, the stair
@@ -424,8 +442,10 @@ combat; anything location-based.
 
 1. **Size factors.** Carving a one-bed into a two-bed lifts the going rate about 50% at the
    same quality. Too tempting, or right while parts 2 to 4 aren't in?
-2. **Households set at the door.** A couple is a couple from the day they move in (partners,
-   so they can split up later). Fine, or should it still form in the building?
+2. **Couples as partners.** A couple move in as a household but not as partners in the
+   romance code. Making them partners gives "In love", breakups and affairs from day one,
+   which is truer, but affairs are a happening and hold up the drip. Worth it, once the
+   drip's pacing soak is retuned for it?
 3. **Box room at under 3 tiles.** A single bed is 2 wide, so a box room is a 2-tile room.
    Right line?
 4. **Studios with a double bed** draw couples 15% of the time. Keep, or singles only?

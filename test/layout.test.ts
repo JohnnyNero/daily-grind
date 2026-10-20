@@ -170,11 +170,11 @@ describe('households', () => {
     expect(householdsFor(flatKind(sim, sim.layout.flats[1].id), false).map((o) => o.kind)).toEqual(['single']);
   });
 
-  it('a couple move in as partners; sharers short of a bedroom say so', () => {
+  it('households move in as what they are; sharers short of a bedroom say so', () => {
     const { sim, ids } = fitted(6, false);
     const [a, b] = moveIn(sim, ids[0], [makePerson(sim.state), makePerson(sim.state)], [], 'couple');
-    expect(a.life!.partner).toBe(b.id);
     expect(a.life!.household).toBe('couple');
+    expect(b.life!.household).toBe('couple');
     const sharers = moveIn(sim, ids[1], [makePerson(sim.state), makePerson(sim.state)], [], 'sharers');
     expect(thoughtsOf(sim, sharers[0]).map((t) => t.label)).toContain('Not enough bedrooms');
     expect(thoughtsOf(sim, a).map((t) => t.label)).not.toContain('Not enough bedrooms');

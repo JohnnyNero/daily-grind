@@ -12,6 +12,7 @@ import type { Sim } from '../src/sim/sim';
 import { mend } from '../src/sim/upkeep';
 import { answerCard, openCards } from '../src/sim/drip';
 import type { Card } from '../src/sim/state';
+import { LAYOUT } from '../src/sim/tuning';
 
 export type Policy = 'decent' | 'ruthless';
 
@@ -59,18 +60,35 @@ export function landlord(sim: Sim, policy: Policy, cards?: Cards): void {
     if (cards) cards(sim, c);
     else answerCard(sim, c.id, policy === 'decent' ? 0 : 1);
   }
-  // Both furnish a bare flat with the basics once they can afford it (cheapest first).
+  // Both furnish a bare flat with the basics once they can afford it (cheapest first), as a
+  // player would: the bed on its own in a room big enough to be a bedroom (a double if it
+  // fits), the rest anywhere but there. A flat of one room gets it all in the one room.
   for (const f of sim.layout.flats) {
     if (flatInfo(sim, f.id).lease) continue;
     const has = scoreFor(sim, f.id, 1).has;
     const want = [!has.bed && 'bed', !has.toilet && 'toilet', !has.wash && 'shower', !has.kitchen && 'cooker'].filter(Boolean) as string[];
-    const cells = sim.layout.flatCells(f).map((n) => sim.layout.xs(n));
+    const lay = sim.layout;
+    const rooms = f.rooms.map((r) => lay.rooms[r]).filter((r) => r.nodes.length > 0);
+    const bedRoom = [...rooms].filter((r) => r.nodes.length >= LAYOUT.bedroomTiles).sort((a, b) => a.nodes.length - b.nodes.length)[0];
+    const hasBed = (r: (typeof rooms)[number]) => st.furniture.some((x) => (x.def === 'bed' || x.def === 'doubleBed') && r.cells.includes(lay.node(x.x, x.s)));
     for (const def of want) {
       if (st.money < furniturePrice(def) + 600 * POUND) break;
-      for (const [x, s] of cells) {
-        if (typeof furnitureProblem(st, def, x, s) === 'string') continue;
-        buyFurniture(sim, def, x, s, false);
-        break;
+      const isBed = def === 'bed';
+      const order = isBed ? [bedRoom, ...rooms.filter((r) => r !== bedRoom)] : [...rooms.filter((r) => !hasBed(r)), ...rooms.filter((r) => hasBed(r))];
+      const tries = isBed && st.money >= furniturePrice('doubleBed') + 600 * POUND ? ['doubleBed', 'bed'] : [def];
+      let done = false;
+      for (const room of order) {
+        if (!room || done) continue;
+        for (const piece of tries) {
+          if (done) break;
+          for (const n of room.cells) {
+            const [x, s] = lay.xs(n);
+            if (typeof furnitureProblem(st, piece, x, s) === 'string') continue;
+            buyFurniture(sim, piece, x, s, false);
+            done = true;
+            break;
+          }
+        }
       }
     }
   }

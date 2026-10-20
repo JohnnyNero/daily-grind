@@ -21,6 +21,9 @@ export function homeAndAwake(sim: Sim, p: Pawn): Pawn {
   delete p.partyAt;
   p.path = [];
   p.goal = null;
+  // Not halfway along the pavement either.
+  delete p.front;
+  delete p.frontTo;
   p.task = 'go';
   p.waitUntil = 0;
   return p;

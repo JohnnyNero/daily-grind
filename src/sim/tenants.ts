@@ -55,8 +55,8 @@ export type { Person };
 
 /** A household moves into a flat. `revealed` are the traits you already know about (the first person's). */
 /**
- * People move in. Who they are together defaults to someone alone or sharers; a couple (and
- * a family's parents) move in as partners.
+ * People move in. Who they are together defaults to someone alone or sharers. (A couple aren't
+ * partners in the romance sense: that still starts in the building. See layout.md, 9.)
  */
 export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: string[] = [], household?: HouseholdKind): Pawn[] {
   const together: HouseholdKind = household ?? (people.length === 1 ? 'single' : 'sharers');
@@ -108,10 +108,6 @@ export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: str
     st.pawns.push(p);
     out.push(p);
   });
-  if ((together === 'couple' || together === 'family') && out.length >= 2) {
-    out[0].life!.partner = out[1].id;
-    out[1].life!.partner = out[0].id;
-  }
   for (const p of out) p.life!.liking = likingTarget(thoughtsOf(sim, p));
   return out;
 }
