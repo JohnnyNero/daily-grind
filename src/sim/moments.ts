@@ -17,13 +17,14 @@
 import { addDirt, dirtOf, neighboursOf, outdoorTemp, SHARED } from './environment';
 import { hasFlag } from './flags';
 import { findPath, type Flat } from './layout';
+import { furnitureDef } from './defs';
 import { keysOf, setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import { awayToday, freeFor, homeAndAwake } from './schedules';
 import type { Sim } from './sim';
 import { opinion, rememberAbout } from './social';
 import { TICKS_PER_MINUTE, seconds, type Life, type Pawn, type Pose, type State } from './state';
-import { MOMENTS, SCHEDULES, SEEK, SOCIAL } from './tuning';
+import { MOMENTS, MOVING_IN, SCHEDULES, SEEK, SOCIAL } from './tuning';
 import { has } from './traits';
 
 type Moment = NonNullable<Life['moment']>;
@@ -39,7 +40,8 @@ type Where =
   | 'theirLanding' // outside the other person's front door, a step along
   | 'home' // somewhere in their flat
   | 'kitchen' // by their cooker, else anywhere in the flat
-  | 'beside'; // next to the other person, where they are now
+  | 'beside' // next to the other person, where they are now
+  | 'seat'; // moving-in day: the seat they choose in their new flat
 
 interface Beat {
   to: Where;
@@ -149,7 +151,36 @@ function spotFor(sim: Sim, where: Where, me: Pawn, other: Pawn | undefined, k: n
     }
     case 'beside':
       return other ? near(sim, [Math.round(other.x), Math.round(other.s)]) : null;
+    case 'seat':
+      return seatFor(sim, me)?.at ?? null;
   }
+}
+
+// ------------------------------------------------------------------ moving-in day: where they sit
+
+type SeatKind = 'sofa' | 'armchair' | 'chair' | 'bed' | 'floor';
+
+/**
+ * Where a new tenant sits down first. The household take it in turn (lowest id first):
+ * sofa places, then the armchair, then the dining set, then the beds, then the floor. So a
+ * flat with nowhere to sit sees its people on the bed, and nobody has to be told.
+ */
+function seatFor(sim: Sim, me: Pawn): { at: [number, number]; kind: SeatKind } | null {
+  const lay = sim.layout;
+  const flat = lay.flat(me.life!.flat);
+  if (!flat) return null;
+  const cells = new Set(lay.flatCells(flat));
+  const places = (def: string, kind: SeatKind) =>
+    sim.state.furniture
+      .filter((f) => f.def === def && cells.has(lay.node(f.x, f.s)))
+      .flatMap((f) => (furnitureDef(f.def).spots ?? [0]).map((o) => ({ at: [f.x + o, f.s] as [number, number], kind })))
+      .filter((o) => lay.standable[lay.node(o.at[0], o.at[1])] === 1);
+  const seats = [...places('sofa', 'sofa'), ...places('armchair', 'armchair'), ...places('diningSet', 'chair'), ...places('bed', 'bed'), ...places('doubleBed', 'bed')];
+  const household = sim.state.pawns.filter((o) => o.life?.flat === flat.id && !o.life.leaving).sort((a, b) => a.id - b.id);
+  const mine = seats[household.indexOf(me)];
+  if (mine) return mine;
+  const at = flatSpot(sim, flat, me.id);
+  return at ? { at, kind: 'floor' } : null;
 }
 
 // ------------------------------------------------------------------ who's free
@@ -505,6 +536,29 @@ const CATALOGUE: MomentDef[] = [
       if (messy) rememberAbout(sim, a, 'slight', messy);
     },
   },
+  {
+    // Moving-in day: once the van has gone, each new tenant picks somewhere to sit and puts the
+    // kettle on. Never picked by the scheduler (no one casts it); visitors.ts starts it.
+    id: 'settlingIn',
+    n: 0,
+    weight: 0,
+    seconds: MOVING_IN.settleSeconds,
+    cast: () => null,
+    beats: (sim, me) => {
+      const kind = seatFor(sim, me)?.kind ?? 'floor';
+      const sit = {
+        sofa: { doing: 'Trying out the sofa', say: { text: 'Not bad' } },
+        armchair: { doing: 'Trying out the armchair', say: { text: 'Ooh' } },
+        chair: { doing: 'Sitting at the table', say: { text: 'Home.' } },
+        bed: { doing: 'Sitting on the bed', say: { text: 'Right.' } },
+        floor: { doing: 'Sitting on a box', say: { text: 'Cuppa?', icon: 'cup' } },
+      }[kind];
+      return [
+        { to: 'seat', ...sit, pose: 'sit', hold: MOVING_IN.sitSeconds },
+        { to: 'kitchen', doing: 'Putting the kettle on', say: { text: 'Tea?', icon: 'cup' }, hold: MOVING_IN.teaSeconds },
+      ];
+    },
+  },
 ];
 
 const BY_ID = new Map(CATALOGUE.map((d) => [d.id, d]));
@@ -529,7 +583,19 @@ function paceOf(sim: Sim): NonNullable<State['moments']> {
 
 /** How many moments are running (two people in one moment count once). */
 export function momentsRunning(sim: Sim): number {
-  return sim.state.pawns.filter((p) => p.life?.moment && (p.life.moment.with === undefined || p.id < p.life.moment.with)).length;
+  return sim.state.pawns.filter((p) => p.life?.moment && p.life.moment.kind !== 'settlingIn' && (p.life.moment.with === undefined || p.id < p.life.moment.with)).length;
+}
+
+/**
+ * Moving-in day (visitors.ts calls this once the van has gone): this new tenant picks somewhere
+ * to sit and puts the kettle on. False if they're busy or asleep or can't get there; try again later.
+ */
+export function settleIn(sim: Sim, p: Pawn): boolean {
+  const def = BY_ID.get('settlingIn')!;
+  if (!free(sim, p)) return false;
+  if (!def.beats(sim, p, undefined, 0).every((b, k) => canGet(sim, p, spotFor(sim, b.to, p, undefined, k)))) return false;
+  begin(sim, def, [p]);
+  return true;
 }
 
 /** Once a game minute: maybe start a moment somewhere (the scheduler), and end ones whose time is up. */

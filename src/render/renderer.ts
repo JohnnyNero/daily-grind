@@ -7,9 +7,10 @@
 import { furnitureDef } from '../sim/defs';
 import type { Layout } from '../sim/layout';
 import type { Sim } from '../sim/sim';
+import { vansAtKerb } from '../sim/visitors';
 import { DOOR_ROWS, MAX_ROWS, TILE, TICKS_PER_MINUTE, isDoor, key, seconds, type Card, type CellKind, type Grade, type Pawn } from '../sim/state';
 import { SHARED, noiseReaching, tempOf, warmthOf } from '../sim/environment';
-import { FLAT_WALLS, LIGHTS, PAL, box, dark, edge, drawAnimal, drawFurniture, drawIcon, drawPerson, drawSleeper, iconName, light, mix, pawnHeight, rect, PERSON_H } from './art';
+import { FLAT_WALLS, LIGHTS, PAL, box, dark, edge, drawAnimal, drawFurniture, drawVan, drawIcon, drawPerson, drawSleeper, iconName, light, mix, pawnHeight, rect, PERSON_H } from './art';
 import { BUDGET } from '../sim/tuning';
 import { spacesOf } from '../sim/shared';
 import { flatKind } from '../sim/rooms';
@@ -332,6 +333,8 @@ export class Renderer {
     ctx.drawImage(this.layer, 0, 0);
     this.drawDirt(ctx);
     this.drawDoors(ctx);
+    // Moving-in day: the van at the kerb, on the road below the pavement.
+    for (const v of vansAtKerb(this.sim)) drawVan(ctx, (v.x + 0.5) * TILE, GROUND_Y + 2 * TILE - 4);
     const pawns = this.visiblePawns().sort((a, b) => Number(!!a.front) - Number(!!b.front));
     for (const p of pawns) {
       const { px, py } = this.feet(p);

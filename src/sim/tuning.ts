@@ -398,6 +398,8 @@ export const MEMORIES: Record<string, MemoryDef> = {
   toldToBleach: { label: 'Told to bleach the mould myself', value: -2, hours: 4 * 24, stack: 1 },
   draughty: { label: 'Draughty windows', value: -3, hours: 3 * 24, stack: 1 },
   wateredPlants: { label: 'Landlord watered my plants', value: 4, hours: 7 * 24, stack: 1, gossip: true },
+  // layout L8
+  firstNight: { label: 'First night in the new place', value: 3, hours: 20, stack: 1 },
 };
 
 /** Need bands: below `under`, this thought. Lowest band first. */
@@ -1275,4 +1277,34 @@ export const LAYOUT = {
   tooFewBedrooms: -6,
   /** Sharers or a family (people who don't share a bed) with nowhere to sit but the beds. */
   nowhereToSit: -3,
+};
+
+// --- layout L8 ---
+
+/** Moving-in day (visitors.ts, moments.ts; docs/specs/layout.md, payoff b): a van, boxes, somewhere to sit, a takeaway. */
+export const MOVING_IN = {
+  /** Game minutes after the keys change hands that the van pulls up. */
+  vanAfter: [4, 10] as [number, number],
+  /** The van only comes between these (minutes of the day); otherwise it waits for the morning. */
+  vanFrom: 7 * 60,
+  vanUntil: 20 * 60,
+  /** Boxes each mover carries up: this plus one for every person moving in, at most `mostTrips`. */
+  baseTrips: 1,
+  mostTrips: 3,
+  /** Real seconds at 1x: picking a box up, putting it down, shutting the van up. */
+  boxSeconds: [1, 2] as [number, number],
+  putDownSeconds: [2, 3] as [number, number],
+  shutSeconds: [2, 3] as [number, number],
+  /** How long after the van goes a tenant has to find a moment to sit down, in game hours. */
+  settleHours: 18,
+  /** Real seconds a moving-in moment may run, and how long they sit with their first cup of tea. */
+  settleSeconds: 45,
+  sitSeconds: 10,
+  teaSeconds: 4,
+  /** The first night's takeaway comes in this window (minutes of the day); after the last, there isn't one. */
+  takeawayFrom: 19 * 60,
+  takeawayTo: 20 * 60 + 30,
+  takeawayLast: 21 * 60,
+  /** Minutes later than usual they go to bed on the first night. */
+  lateBy: 90,
 };

@@ -12,12 +12,19 @@
 // `Pawn.act` ("to:1" heading for stop 1, "at:1" doing it), so a saved game picks up where it
 // left off. The cat and the fox have minds of their own.
 //
+// Moving-in day (layout.md, payoff b): when you let a flat (`movingIn`, called from leases.ts
+// accept) a van pulls up at the kerb (`van|<flat>` in the day's list; once it's here `#van|<flat>`
+// holds the tick it arrived), two removal men carry boxes up to the flat, the van goes, and each
+// new tenant picks somewhere to sit (`#settle|<flat>|<pawn>`; moments.ts, `settleIn`). That
+// evening a takeaway comes for the new flat (`rider|first|<flat>`), and their bedtime is late.
+//
 // Left to other chunks: the window cleaner, the meter reader, the council officer, applicants
 // viewing, kids on the pavement and pets (cards and moments can call `addVisitor`).
 
 import { addDirt, binsOverflowing, SHARED } from './environment';
 import { scoreFor } from './impressiveness';
 import { household } from './leases';
+import { settleIn } from './moments';
 import { atNode, addPawn, setGoal } from './pawns';
 import { pick, randInt, random, type RngHolder } from './rng';
 import type { Keys } from './layout';
@@ -26,7 +33,7 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Pawn, type Pose } from './state';
 import { remember } from './thoughts';
 import { has } from './traits';
-import { VISITORS } from './tuning';
+import { MOVING_IN, VISITORS } from './tuning';
 
 /** A key that opens the street door and no flat's: the cleaner, the postie and the rest are let into the shared parts. */
 const LET_IN = '*';
@@ -117,13 +124,14 @@ export function visitorsSpawn(sim: Sim): void {
   const st = sim.state;
   const next = st.visitors.next;
   if (next["#day"] !== sim.day) plan(sim);
+  movingDay(sim);
   for (const key of Object.keys(next).sort()) {
     if (key.startsWith('#') || st.tick < next[key]) continue;
     const role = key.split('|')[0];
     const priority = PRIORITY.has(role);
     const late = st.tick - next[key] > VISITORS.staleHours * TICKS_PER_HOUR * (priority ? 2 : 1);
-    // One space is kept back for the postie, the cleaner and the tradespeople.
-    const room = visitorsOnMap(sim).filter((p) => p.kind === 'visitor').length < VISITORS.most - (priority ? 0 : 1);
+    // One space is kept back for the postie, the cleaner and the tradespeople. The van isn't a person.
+    const room = role === 'van' || visitorsOnMap(sim).filter((p) => p.kind === 'visitor' && p.role !== 'mover').length < VISITORS.most - (priority ? 0 : 1);
     if (!room && !late) continue;
     delete next[key];
     if (!room) continue;
@@ -177,9 +185,13 @@ function launch(sim: Sim, key: string): void {
   const st = sim.state;
   const [role, a, def] = key.split('|');
   if (role === 'cleaner' && !st.cleaner) return;
+  if (role === 'van') return pullUp(sim, a);
   if (role === 'rider') {
-    const host = hungryHost(sim);
+    // The first night in a new flat: the takeaway is for them.
+    const first = a === 'first';
+    const host = first ? household(sim, def).find((t) => homeAndAwake(sim, t)) : hungryHost(sim);
     if (!host) return;
+    if (first) for (const t of household(sim, def)) remember(sim, t.life!, 'firstNight');
     const p = addVisitor(sim, 'rider');
     p.flat = host.life!.flat;
     p.doing = 'On the way with a takeaway';
@@ -287,6 +299,11 @@ function dress(sim: Sim, p: Pawn, role: string): void {
       p.doing = `Calling on ${first}`;
       break;
     }
+    case 'mover':
+      p.name = 'Del the removal man';
+      p.note = 'Moving someone in.';
+      p.doing = 'Unloading the van';
+      break;
     case 'tradesperson':
       p.name = 'Mick the handyman';
       p.note = 'Here to mend something.';
@@ -499,6 +516,19 @@ function stopsFor(sim: Sim, p: Pawn): Stop[] {
       }
       break;
     }
+    case 'mover': {
+      // Boxes from the van to the middle of the flat, a few trips each, then the van doors.
+      const spot = p.flat ? workSpot(sim, p.flat) : null;
+      const trips = Math.min(MOVING_IN.mostTrips, MOVING_IN.baseTrips + household(sim, p.flat ?? '').length);
+      if (step && spot) {
+        for (let i = 0; i < trips; i++) {
+          add({ at: step, secs: MOVING_IN.boxSeconds, travel: 'Back to the van', doing: 'Getting a box off the van', pose: 'carry', icon: 'box', text: 'Box', begin: (_s, v) => void (v.prop = 'box') });
+          add({ at: spot, secs: MOVING_IN.putDownSeconds, travel: 'Carrying a box up', doing: 'Putting a box down', icon: 'box', text: 'Box', drop: true });
+        }
+        add({ at: step, secs: MOVING_IN.shutSeconds, travel: 'Back to the van', doing: 'Shutting the van up' });
+      }
+      break;
+    }
     case 'tradesperson': {
       const spot = workSpot(sim, p.flat);
       if (spot) add({ at: spot, secs: VISITORS.tradeSeconds, travel: 'Carrying a toolbox', doing: 'Mending something', icon: 'spanner', text: 'Bang', drop: true });
@@ -664,7 +694,7 @@ function catThink(sim: Sim, p: Pawn): boolean {
 
 /** The doors a visitor can open: the street door (and so the shared parts), and a flat only if they're expected there. */
 export function visitorKeys(p: Pawn): Keys {
-  const expected = (p.role === 'friend' || p.role === 'family' || p.role === 'tradesperson') && p.flat;
+  const expected = (p.role === 'friend' || p.role === 'family' || p.role === 'tradesperson' || p.role === 'mover') && p.flat;
   return { flats: expected ? [LET_IN, p.flat!] : [LET_IN] };
 }
 
@@ -675,5 +705,69 @@ export function visitorsOnMap(sim: Sim): Pawn[] {
 
 /** Room for another (VISITORS.most, not counting party guests or applicants with Denise). */
 export function visitorRoom(sim: Sim): boolean {
-  return visitorsOnMap(sim).filter((p) => p.kind === 'visitor').length < VISITORS.most;
+  return visitorsOnMap(sim).filter((p) => p.kind === 'visitor' && p.role !== 'mover').length < VISITORS.most;
+}
+
+// ------------------------------------------------------------------ moving-in day
+
+/** A flat's just been let (leases.ts accept): the van is on its way. Not for sitting tenants, who were there already. */
+export function movingIn(sim: Sim, flatId: string, pawns: Pawn[]): void {
+  if (pawns.length === 0) return;
+  const st = sim.state;
+  let due = st.tick + randInt(vr(sim), ...MOVING_IN.vanAfter) * TICKS_PER_MINUTE;
+  // Nobody moves house in the dark: it waits for the morning.
+  const m = Math.floor(due / TICKS_PER_MINUTE) % (24 * 60);
+  const midnight = due - (due % TICKS_PER_DAY);
+  if (m < MOVING_IN.vanFrom) due = midnight + (MOVING_IN.vanFrom + randInt(vr(sim), 0, 30)) * TICKS_PER_MINUTE;
+  else if (m >= MOVING_IN.vanUntil) due = midnight + TICKS_PER_DAY + (MOVING_IN.vanFrom + randInt(vr(sim), 0, 30)) * TICKS_PER_MINUTE;
+  st.visitors.next[`van|${flatId}`] = due;
+}
+
+/** The vans at the kerb now, for drawing: which flat they're for and the tile they're in front of. */
+export function vansAtKerb(sim: Sim): { flat: string; x: number }[] {
+  const step = doorstep(sim);
+  const base = step ? step[0] : sim.state.plot.x0 - 3;
+  return Object.keys(sim.state.visitors.next)
+    .filter((k) => k.startsWith('#van|'))
+    .sort()
+    .map((k, i) => ({ flat: k.slice(5), x: base + i * 4 }));
+}
+
+/** The van's here: two removal men get out. */
+function pullUp(sim: Sim, flatId: string | undefined): void {
+  const st = sim.state;
+  if (!flatId || household(sim, flatId).length === 0 || st.visitors.next[`#van|${flatId}`] !== undefined) return;
+  const step = doorstep(sim);
+  if (!step) return;
+  st.visitors.next[`#van|${flatId}`] = st.tick;
+  ['Del the removal man', "Wayne, Del's lad"].forEach((name, i) => {
+    const p = addVisitor(sim, 'mover');
+    p.name = name;
+    p.flat = flatId;
+    p.x = step[0];
+    p.s = step[1];
+    p.waitUntil = st.tick + seconds(2 * i + 1);
+  });
+}
+
+/** Every tick: the van goes when its men are done; then the new tenants sit down; and the first night's takeaway. */
+function movingDay(sim: Sim): void {
+  const st = sim.state;
+  const next = st.visitors.next;
+  for (const key of Object.keys(next).sort()) {
+    if (key.startsWith('#van|')) {
+      const flatId = key.slice(5);
+      const working = st.pawns.some((p) => p.role === 'mover' && p.flat === flatId && p.task !== 'leave');
+      // (A mover who's been shut in with no way out counts as done after a while.)
+      if (working && st.tick - next[key] < 3 * TICKS_PER_HOUR) continue;
+      delete next[key];
+      for (const p of st.pawns) if (p.role === 'mover' && p.flat === flatId) p.task = 'leave';
+      for (const t of household(sim, flatId)) next[`#settle|${flatId}|${t.id}`] = st.tick + MOVING_IN.settleHours * TICKS_PER_HOUR;
+      const m = sim.minuteOfDay;
+      if (m < MOVING_IN.takeawayLast) next[`rider|first|${flatId}`] = Math.max(st.tick + 10 * TICKS_PER_MINUTE, at(sim, Math.max(m, MOVING_IN.takeawayFrom) + randInt(vr(sim), 0, MOVING_IN.takeawayTo - MOVING_IN.takeawayFrom)));
+    } else if (key.startsWith('#settle|') && st.tick % TICKS_PER_MINUTE === 0) {
+      const p = st.pawns.find((o) => o.id === Number(key.split('|')[2]));
+      if (!p?.life || p.life.leaving || st.tick > next[key] || settleIn(sim, p)) delete next[key];
+    }
+  }
 }
