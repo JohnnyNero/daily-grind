@@ -117,8 +117,12 @@ function step(sim: Sim, p: Pawn): void {
   if (atNode(p)) {
     p.x = Math.round(p.x);
     p.s = Math.round(p.s);
-    // Paths in a save were made for the saved building, so a freshly loaded pawn is up to date.
-    if (!seenVersion.has(p)) seenVersion.set(p, sim.version);
+    // Paths in a save were made for the saved building, so a freshly loaded pawn is up to date,
+    // unless the building changed under them before their first step (then they find their feet).
+    if (!seenVersion.has(p)) {
+      seenVersion.set(p, sim.version);
+      if (!sim.layout.standable[sim.layout.node(p.x, p.s)]) settle(sim, p);
+    }
     if (seenVersion.get(p) !== sim.version) {
       seenVersion.set(p, sim.version);
       settle(sim, p);

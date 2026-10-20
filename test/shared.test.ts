@@ -130,6 +130,9 @@ describe('shared spaces', () => {
 
   it('send tenants out to the garden in daylight on a nice day', () => {
     let sat = 0;
+    // Whenever they're idle at home and want something, they think of the garden: what's tested
+    // is that it's used, and only when it's nice out, not how often the thought crosses their mind.
+    SHARED_USE.leisureChance = 1;
     for (const seed of [1, 2, 3]) {
       const sim = building(seed, SATURDAY, 10);
       const garden = roofGarden(sim);

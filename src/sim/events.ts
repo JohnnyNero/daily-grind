@@ -461,18 +461,30 @@ function partyHour(sim: Sim, h: Happening): void {
   const made = sim.noise();
   const bothered = tenants(sim).filter((p) => p.life!.flat !== h.flat && !p.life!.away && noiseReaching(sim, made, p.life!.flat).amount >= 1);
   if (bothered.length === 0) return;
-  const who = poster(sim, bothered)!;
-  // Some knock on the door; the rest take it to the chat.
-  const awake = who.pose !== 'sleep' && !who.life!.using && !who.partyAt;
+  // Some knock on the door; the rest take it to the chat. Only someone up can knock: anyone in
+  // bed posts from under the duvet. Someone up but busy (cooking, on the sofa) puts it down and goes.
+  const up = bothered.filter((p) => p.pose !== 'sleep' && !p.partyAt && !p.life!.breakState && !p.life!.outing && p.task !== 'leave');
   const landing = doorSpots(sim, h.flat!).landing;
-  if (awake && landing.length > 0 && random(st) < PARTY.knock && setGoal(sim, who, landing[0])) {
-    h.flag = 'knocking';
-    h.knock = who.id;
-    who.waitUntil = st.tick;
-    who.doing = `Going to knock on ${sim.layout.flat(h.flat!)?.name ?? 'next door'}`;
-    return;
+  if (up.length > 0 && landing.length > 0 && random(st) < PARTY.knock) {
+    const who = poster(sim, up)!;
+    const was = who.life!.using;
+    who.life!.using = null;
+    if (setGoal(sim, who, landing[0])) {
+      delete who.pose;
+      h.flag = 'knocking';
+      h.knock = who.id;
+      who.waitUntil = st.tick;
+      who.doing = `Going to knock on ${sim.layout.flat(h.flat!)?.name ?? 'next door'}`;
+      return;
+    }
+    who.life!.using = was;
   }
-  complain(sim, h, who);
+  complain(sim, h, poster(sim, bothered)!);
+}
+
+/** True while a neighbour is on their way to knock about a party, or waiting at the door: tenantThink leaves them to it. */
+export function onKnock(sim: Sim, p: Pawn): boolean {
+  return sim.state.story.running.some((h) => h.kind === 'party' && h.knock === p.id && sim.state.tick < h.until);
 }
 
 /** The neighbour's at the door (or couldn't get there): the host turns it down, or doesn't. */
@@ -485,14 +497,19 @@ function knockAnswered(sim: Sim, h: Happening, host: Pawn | undefined): void {
     h.flag = 'complained';
     return;
   }
-  // Something else took over on the way (a break of their own, a trip out): they put it in the chat instead.
-  if (n.life.breakState || !n.doing.startsWith('Going to knock')) {
+  // Something else took over on the way (a break of their own, a trip out, a sit down): they put it in the chat instead.
+  if (n.life.breakState || n.life.using || n.life.outing || n.task === 'leave' || n.pose === 'sleep') {
     delete h.knock;
     h.flag = 'complained';
     complain(sim, h, n);
     return;
   }
-  if (n.path.length > 0) return;
+  const going = `Going to knock on ${sim.layout.flat(h.flat!)?.name ?? 'next door'}`;
+  if (n.path.length > 0) {
+    // A word with someone on the stairs doesn't make them forget what they were going up for.
+    if (n.talkUntil === undefined) n.doing = going;
+    return;
+  }
   delete h.knock;
   h.flag = 'complained';
   const lay = sim.layout;

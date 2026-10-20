@@ -13,6 +13,7 @@ import { thoughtsOf } from '../src/sim/thoughts';
 import { ITEMS, NOISE } from '../src/sim/tuning';
 import { issues } from '../src/sim/upkeep';
 import type { Flat } from '../src/sim/layout';
+import { homeAndAwake } from './stage';
 
 /** A bare first-floor one-bed, the one with the room to try things in. */
 function bareFlat(sim: Sim): Flat {
@@ -210,20 +211,33 @@ describe('in-flat items', () => {
   });
 
   it('curtains make for a dark bedroom and better sleep', () => {
-    const slept = (curtains: boolean) => {
+    /** A tired lodger with no job to get up for goes to bed at ten; what's on their mind when they wake? */
+    const night = (curtains: boolean) => {
       const { sim, flat } = start();
       const p = lodger(sim, flat);
+      p.life!.schedule = 'home';
+      p.life!.job = null;
+      // Nothing else on their mind tonight: no kicking off, no outings.
+      p.life!.calmUntil = Number.MAX_SAFE_INTEGER;
       put(sim, flat, 'bed');
       if (curtains) put(sim, flat, 'curtains');
+      while (sim.minuteOfDay !== 22 * 60) sim.run(TICKS_PER_MINUTE);
+      homeAndAwake(sim, p);
+      p.life!.needs.sleep = 0.1;
+      let inBed = false;
+      let woke = false;
       let dark = false;
-      for (let m = 0; m < 3 * 24 * 2; m++) {
-        sim.run(30 * TICKS_PER_MINUTE);
+      for (let m = 0; m < 18 * 60 && !woke; m++) {
+        sim.run(TICKS_PER_MINUTE);
+        inBed ||= p.pose === 'sleep' && p.life!.sleptOn === 'bed';
+        woke = inBed && p.pose !== 'sleep';
         dark ||= p.life!.memories.some((x) => x.id === 'darkBedroom');
       }
+      expect(woke, 'a night in their bed').toBe(true);
       return dark;
     };
-    expect(slept(false)).toBe(false);
-    expect(slept(true)).toBe(true);
+    expect(night(false)).toBe(false);
+    expect(night(true)).toBe(true);
   });
 
   it('the council wants a smoke alarm in every flat people live in; the furnished ones start with one', () => {

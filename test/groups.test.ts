@@ -6,6 +6,8 @@ import { Sim } from '../src/sim/sim';
 import { opinion, rememberAbout } from '../src/sim/social';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Pawn } from '../src/sim/state';
 import { moveIn } from '../src/sim/tenants';
+import { noiseThrough } from '../src/sim/environment';
+import { homeAndAwake } from './stage';
 
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life && !p.life.leaving);
 
@@ -54,12 +56,13 @@ describe('a party as a group', () => {
     const flat = sim.layout.flats[0].id;
     const h = startParty(sim, flat)!;
     h.queue = 6;
-    h.next = sim.state.tick;
+    // Everyone turns up at once, so the evening is in full swing straight away and stays so for hours.
     let landing = 0;
     let dancing = 0;
     let smoking = 0;
     let hosted = 0;
     for (let i = 0; i < 4 * 60 && running(sim, 'party', flat); i++) {
+      h.next = sim.state.tick;
       sim.run(TICKS_PER_MINUTE);
       if (running(sim, 'party', flat)?.phase !== 'swing') continue;
       for (const g of sim.state.pawns.filter((p) => p.kind === 'guest')) {
@@ -129,7 +132,13 @@ describe('a party as a group', () => {
       h.volume = 2;
       h.queue = 6;
       h.next = sim.state.tick;
-      while (sim.state.tick < h.until && !h.flag) sim.run(TICKS_PER_MINUTE);
+      // Just before eleven, the neighbour who hears it worst is in and still up.
+      while (sim.minuteOfDay !== 22 * 60 + 59) sim.run(TICKS_PER_MINUTE);
+      const next = tenants(sim).filter((p) => p.life!.flat !== flat).sort((a, b) => noiseThrough(sim, flat, b.life!.flat) - noiseThrough(sim, flat, a.life!.flat))[0];
+      homeAndAwake(sim, next);
+      sim.run(2 * TICKS_PER_MINUTE);
+      // Someone's said something by now, at the door or in the chat.
+      expect(h.flag, `seed ${seed}`).toBeDefined();
       if (h.flag === 'knocking') knocked++;
       // Time for the walk to their door, which takes real time, not game time.
       sim.run(seconds(30));

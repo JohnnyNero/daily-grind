@@ -43,7 +43,8 @@ const remembers = (p: Pawn, id: string): boolean => p.life!.memories.some((m) =>
 const mem = (p: Pawn, id: string): string => `mem:${p.id}:${id}`;
 const out = (effects: string[], notice: string): Outcome => ({ effects, notice });
 const chance = (sim: Sim, p: number): boolean => random(sim.state) < p;
-const retired = (p: Pawn): boolean => !p.life!.job;
+/** Retired, so in all day (not just someone without a job: some work from home now). */
+const retired = (p: Pawn): boolean => p.life!.schedule === 'retired';
 const hidden = (p: Pawn): string[] => p.life!.traits.filter((t) => !p.life!.revealed.includes(t));
 const sittingTenant = (sim: Sim, p: Pawn): boolean => !!flatInfo(sim, p.life!.flat).lease?.sitting;
 const hasIntercom = (sim: Sim): boolean => itemsIn(sim, SHARED, 'intercom') > 0;
@@ -453,7 +454,7 @@ const catOnTheStairs: CardDef = {
 
 // ------------------------------------------------------------------ 10. Meter reader
 
-function meterFixture(traits: [string[], string[]], locks: boolean, estimated = false) {
+function meterFixture(traits: [string[], string[]], locks: boolean, estimated = false, bOut = false) {
   return (seed: number) => {
     const sim = fixtureSim(seed);
     if (estimated) setFlag(sim, 'estimated', undefined, sim.state.tick + 14 * TICKS_PER_DAY);
@@ -461,6 +462,8 @@ function meterFixture(traits: [string[], string[]], locks: boolean, estimated = 
     const [a, b] = sitting(sim);
     setTraits(a, traits[0]);
     setTraits(b, traits[1]);
+    // Bill's retired, so he's in to keep an eye unless he's out.
+    if (bOut) away(sim, b);
     return { sim, subject: about(a) };
   };
 }
@@ -505,7 +508,7 @@ const meterReader: CardDef = {
   },
   fixtures: [
     { name: 'busybody home, locks', build: meterFixture([['friendly', 'handy'], ['busybody', 'easyGoing']], true) },
-    { name: 'no locks, nobody watching', build: meterFixture([['paysEarly', 'handy'], ['keenCook', 'partyAnimal']], false) },
+    { name: 'no locks, nobody watching', build: meterFixture([['paysEarly', 'handy'], ['keenCook', 'partyAnimal']], false, false, true) },
     { name: 'no locks, busybody home', build: meterFixture([['busybody', 'complainer'], ['keenCook', 'partyAnimal']], false) },
   ],
 };
