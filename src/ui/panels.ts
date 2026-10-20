@@ -23,8 +23,8 @@ import { choose } from '../sim/post';
 import type { Sim } from '../sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, type Letter, type NeedId, type Pawn } from '../sim/state';
 import { NEED_NAMES } from '../sim/tenants';
-import { expectGrade, expectName, expectNote } from '../sim/expectations';
-import { BASELINE, likingTarget, rentThought, thoughtsOf } from '../sim/thoughts';
+import { expectName, expectNote } from '../sim/expectations';
+import { BASELINE, likingTarget, thoughtsOf } from '../sim/thoughts';
 import { traitDef } from '../sim/traits';
 import { talesOf } from '../sim/tales';
 import { el, h, hhmm } from './dom';
@@ -208,23 +208,20 @@ export class Panels {
         }
         this.rerender();
       };
-      const ratio = shown / Math.max(1, going);
-      const feel = rentThought(shown, going, expectGrade(sim));
       rent.append(
-        h('div', { className: 'row' }, h('span', {}, lease ? 'Their rent' : 'Asking rent'), h('span', { className: 'small' }, `${Math.round(ratio * 100)}% of the going rate`)),
+        h('div', { className: 'row' }, h('span', {}, lease ? 'Their rent' : 'Asking rent')),
         h(
           'div',
           { className: 'stepper' },
           h('button', { type: 'button', className: 'btn', 'aria-label': 'Five pounds less', onclick: () => step(-5 * POUND) }, '−'),
           h('b', {}, pounds(shown)),
           h('button', { type: 'button', className: 'btn', 'aria-label': 'Five pounds more', onclick: () => step(5 * POUND) }, '+'),
-          h('span', { className: 'small' }, feel ? `${feel.label} (${signed(feel.value)})` : 'Fair (no feeling either way)'),
         ),
       );
       if (lease && draft !== null && draft !== current) {
         const rise = draft > lease.rent;
         rent.append(
-          h('p', { className: 'small' }, rise ? `A rise needs a week's notice, and they won't like it (${(draft - lease.rent) / lease.rent > 0.1 ? '−12' : '−5'} for a while).` : 'A cut: they\'ll like that (+6 for a while).'),
+          h('p', { className: 'small' }, rise ? 'A rise needs a week\'s notice.' : 'A cut starts in a week.'),
           h('div', { className: 'btns' }, h('button', { type: 'button', className: 'btn primary', onclick: () => { changeRent(sim, id, draft); this.draftRent = null; this.notify(`New rent for ${flat.name}: ${pounds(draft)} from ${dayName(sim.day + 7)} (day ${sim.day + 7}).`); this.rerender(); } }, rise ? 'Give notice of the rise' : 'Cut the rent'), h('button', { type: 'button', className: 'btn ghost', onclick: () => { this.draftRent = null; this.rerender(); } }, 'Cancel')),
         );
       }

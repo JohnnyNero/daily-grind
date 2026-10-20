@@ -199,7 +199,7 @@ const keysOnMat: CardDef = {
   turnsOn: ['locks'],
   when: (sim) => one(homeNow(sim)[0]),
   hook: () => 'Spare keys on the mat.',
-  text: () => "Pritchard's spare keys came through the door. No note. Who else has a set?",
+  text: () => "Mr Pritchard (the old owner) posted his spare keys back. Who else has a set?",
   choices: (sim) => [
     { label: 'Change the locks', note: sim.state.security.locks ? 'Already done' : '£60' },
     { label: 'Post them back', note: 'Free. Trusting.' },

@@ -3,7 +3,7 @@
 import { Layout } from './layout';
 import { stepPawns } from './pawns';
 import { newState } from './start';
-import { morning, mortgageDue, weeklyBills } from './economy';
+import { morning, raiseTiers, mortgageDue, weeklyBills } from './economy';
 import { applicantsHour, rentMorning } from './leases';
 import { outcomesHour } from './outcomes';
 import { postMorning } from './post';
@@ -113,6 +113,7 @@ export class Sim {
       planningMorning(this);
     }
     environmentHour(this);
+    raiseTiers(this);
     worksHour(this);
     romanceHour(this);
     requestsHour(this);

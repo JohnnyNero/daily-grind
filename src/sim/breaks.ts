@@ -399,7 +399,7 @@ const everyone = (sim: Sim) => sim.state.pawns.filter((o) => o.life && !o.life.l
 function free(sim: Sim, p: Pawn): boolean {
   const life = p.life!;
   const m = sim.minuteOfDay;
-  return !life.breakState && !life.away && !life.leaving && p.pose !== 'sleep' && m >= 9 * 60 && m < 20 * 60;
+  return !life.breakState && !life.moment && !life.away && !life.leaving && p.pose !== 'sleep' && m >= 9 * 60 && m < 20 * 60;
 }
 
 /** The good turns this happy tenant could do on the map right now. */

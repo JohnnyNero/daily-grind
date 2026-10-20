@@ -127,6 +127,15 @@ function updateTier(sim: Sim, id: string): void {
 
 // ------------------------------------------------------------------ the week
 
+/** Every hour: a flat that's been done up gets the going rate it now deserves. (Coming down waits for the morning.) */
+export function raiseTiers(sim: Sim): void {
+  const rank = (t: string) => TIERS.length - TIERS.findIndex((x) => x.name === t);
+  for (const f of sim.layout.flats) {
+    const info = flatInfo(sim, f.id);
+    if (rank(flatScore(sim, f.id).tier) > rank(info.tier)) updateTier(sim, f.id);
+  }
+}
+
 /** Once a day, first thing: tiers catch up. Rent and leases are in leases.ts. */
 export function morning(sim: Sim): void {
   for (const f of sim.layout.flats) updateTier(sim, f.id);
