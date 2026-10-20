@@ -1282,3 +1282,13 @@ export const LAYOUT_L11 = {
   /** Each repeat of the same decoration in a room counts this much of the one before (1, then half, then a quarter). */
   repeat: 0.5,
 };
+
+// --- layout L6 ---
+
+/** The overlay bar's colour scales (sim/lens.ts). */
+export const LENS = {
+  /** Noise reaching a room (per minute) that paints it fully red. Matches the old per-flat overlay. */
+  noiseFull: 3,
+  /** A going rate, in pence, that paints a room fully green on the Rent overlay. */
+  rentFull: 30000,
+};
