@@ -20,7 +20,7 @@ import { has } from './traits';
 import { SHARED, dirtOf, isNight, itemsIn, outdoorTemp, noiseReaching, tempOf, tidy, warmthOf } from './environment';
 import { noticeTrait } from './outcomes';
 import { breakThink } from './breaks';
-import { habitThink, scheduleFromJob } from './schedules';
+import { asleepHours, awayToday, dueOut, freeFor, habitStep, keepTime, habitThink, rollHabits, scheduleFromJob, wakeAt } from './schedules';
 import { momentStep, momentThink } from './moments';
 import { post, recently } from './chat';
 import { rememberAbout } from './social';
@@ -79,6 +79,7 @@ export function moveIn(sim: Sim, flatId: string, people: Person[], revealed: str
       schedule: person.schedule ?? scheduleFromJob(person.job),
       habits: [],
     };
+    life.habits = rollHabits(st, life);
     const p: Pawn = {
       id: st.nextId++,
       name: person.name,
@@ -176,34 +177,23 @@ function flatNodes(sim: Sim, flat: Flat): number[] {
   return flat.rooms.flatMap((r) => sim.layout.rooms[r].nodes);
 }
 
-function isWorkday(sim: Sim): boolean {
-  return (sim.day - 1) % 7 < 5;
-}
-
-/** When they wake up and go to bed, in minutes of the day. */
-function wakeAt(sim: Sim, life: Life): number {
-  if (life.job && isWorkday(sim)) return life.job.leave - 75;
-  return has(life, 'nightOwl') ? 10 * 60 + 30 : 8 * 60 + 30;
-}
-
-/** Bedtime, in minutes after midnight the night before (so past midnight is over 24 * 60). */
-function bedtime(sim: Sim, life: Life): number {
-  const weekend = (sim.day - 1) % 7 >= 4;
-  return (weekend ? 24 * 60 - 1 : 23 * 60) + (has(life, 'nightOwl') ? 120 : 0);
-}
-
-function asleepHours(sim: Sim, life: Life): boolean {
-  const m = sim.minuteOfDay;
-  const bed = bedtime(sim, life);
-  return (bed < 24 * 60 ? m >= bed : m < bed - 24 * 60) || m < wakeAt(sim, life);
-}
+// When they wake, sleep and go out to their hours comes from their schedule (schedules.ts).
 
 export function tenantThink(sim: Sim, p: Pawn): void {
+  decide(sim, p);
+  keepTime(sim, p);
+}
+
+function decide(sim: Sim, p: Pawn): void {
   const life = p.life!;
   const st = sim.state;
   if (life.using) {
-    continueUsing(sim, p);
-    return;
+    // Time to go to work: whatever they're doing (even sleeping) stops; the alarm's gone.
+    if (life.using.until > 0 && dueOut(sim, p)) stopUsing(sim, p, true);
+    else {
+      continueUsing(sim, p);
+      return;
+    }
   }
   delete p.pose;
   const flat = home(sim, p);
@@ -213,6 +203,8 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   if (base && !life.leaving && breakThink(sim, p, base)) return;
   // In the middle of an ambient moment (moments.ts): it carries on.
   if (base && !life.leaving && momentStep(sim, p, base)) return;
+  // Got to where a habit was taking them (schedules.ts): they get on with it.
+  if (base && !life.leaving && habitStep(sim, p)) return;
   if (life.leaving && p.task !== 'leave') {
     life.outing = { why: 'Moved out', until: st.tick };
     p.task = 'leave';
@@ -238,10 +230,11 @@ export function tenantThink(sim: Sim, p: Pawn): void {
   const here = sim.layout.flatAt(Math.round(p.x), Math.round(p.s));
   if (here?.id !== flat.id || sim.layout.isDoorNode(sim.layout.node(Math.round(p.x), Math.round(p.s)))) {
     // Bike out of the rack: off to work on it.
-    if (life.cycling && life.job) {
+    const hours = awayToday(sim, life);
+    if (life.cycling && life.job && hours) {
       delete life.cycling;
       life.cycled = true;
-      leaveFor(sim, p, 'At work', life.job.back);
+      leaveFor(sim, p, 'At work', hours.back);
       return;
     }
     // On the way in, a look at the post in the lobby: where neighbours bump into each other.
@@ -256,9 +249,12 @@ export function tenantThink(sim: Sim, p: Pawn): void {
     return;
   }
   const m = sim.minuteOfDay;
-  if (life.job && isWorkday(sim) && life.workedDay !== sim.day && m >= life.job.leave && m < life.job.back - 60) {
-    if (cycleToWork(sim, p)) return;
-    leaveFor(sim, p, 'At work', life.job.back);
+  // Off to their hours (work, or a student's lectures), leaving time for the stairs.
+  const hours = dueOut(sim, p);
+  if (hours) {
+    if (life.job && cycleToWork(sim, p)) return;
+    life.workedDay = sim.day;
+    leaveFor(sim, p, life.job ? 'At work' : 'At college', hours.back);
     return;
   }
   const needs = life.needs;
@@ -285,9 +281,12 @@ export function tenantThink(sim: Sim, p: Pawn): void {
     leaveFor(sim, p, 'Out for chips', m + 40);
     return;
   }
+  // A habit if one's due (schedules.ts): after the pressing needs, before boredom and chores.
+  if (habitThink(sim, p, flat)) return;
   if (needs.fun < SEEK.fun) {
     if (tryUse(sim, p, flat, 'fun')) return;
-    if (m >= 10 * 60 && m < 22 * 60) {
+    // Not if it'd make them late for work.
+    if (m >= 10 * 60 && m < 22 * 60 && freeFor(sim, p, 150 + 60)) {
       leaveFor(sim, p, random(st) < 0.5 ? 'Out at the pub' : 'Out for a walk', m + randInt(st, 60, 150));
       return;
     }
@@ -310,8 +309,8 @@ export function tenantThink(sim: Sim, p: Pawn): void {
     p.waitUntil = st.tick + randInt(st, 20, 40) * TICKS_PER_MINUTE;
     return;
   }
-  // A habit if one's due (schedules.ts), else maybe a moment (moments.ts), else pottering.
-  if (habitThink(sim, p, flat) || momentThink(sim, p, flat)) return;
+  // Maybe a moment (moments.ts), else pottering.
+  if (momentThink(sim, p, flat)) return;
   potter(sim, p, flat);
 }
 

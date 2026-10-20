@@ -25,7 +25,8 @@ function noisyNeighbours(insulated: boolean, seed = 11): { sim: Sim; sleeper: Re
   const sim = Sim.create(seed);
   skipHandover(sim);
   const [, two, , four] = sim.layout.flats;
-  const person = { ...makePerson(sim.state), traits: ['musician', 'nightOwl'] };
+  // Office hours, so they're in and playing in the evenings (an early shift has them asleep by ten).
+  const person = { ...makePerson(sim.state, undefined, 'office'), traits: ['musician', 'nightOwl'] };
   const [musician] = moveIn(sim, two.id, [person]);
   sim.state.flats[two.id] = { ...sim.state.flats[two.id], lease: { rent: 11000, startDay: 1, endDay: 99, deposit: 0, owed: 0, paid: 0, late: 0 }, listed: false };
   const sleeper = tenantsOf(sim).find((p) => p.life!.flat === four.id)!;

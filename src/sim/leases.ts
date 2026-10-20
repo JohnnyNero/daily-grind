@@ -7,7 +7,8 @@ import { scoreFor } from './impressiveness';
 import { FIRST, LAST } from './pawns';
 import { pick, randInt, random, type RngHolder } from './rng';
 import type { Sim } from './sim';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type Lease, type ListingStyle, type Pawn } from './state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type Lease, type ListingStyle, type Pawn, type Schedule } from './state';
+import { jobFor, rollSchedule } from './schedules';
 import { moveIn, type Person } from './tenants';
 import { friendsLeaving } from './social';
 import { amenities } from './shared';
@@ -18,20 +19,6 @@ import { rollTraits, traitDef, touchiness, has } from './traits';
 import { tale } from './tales';
 import { EVICTION_ARREARS_WEEKS, EVICTION_NOTICE_DAYS, LETTING as L, LISTING_PACE, MEMORIES, RENT as R } from './tuning';
 import { readFlags } from './flags';
-
-const JOBS: { title: string; leave: number; back: number }[] = [
-  { title: 'Office manager', leave: 8 * 60, back: 17 * 60 + 30 },
-  { title: 'Nurse', leave: 7 * 60, back: 15 * 60 + 30 },
-  { title: 'Barista', leave: 6 * 60 + 15, back: 14 * 60 + 30 },
-  { title: 'Civil servant', leave: 8 * 60 + 15, back: 17 * 60 + 15 },
-  { title: 'Delivery driver', leave: 7 * 60 + 30, back: 18 * 60 },
-  { title: 'Teaching assistant', leave: 8 * 60, back: 16 * 60 },
-  { title: 'Software tester', leave: 8 * 60 + 45, back: 17 * 60 + 45 },
-  { title: 'Estate agent', leave: 8 * 60 + 30, back: 18 * 60 + 15 },
-  { title: 'Junior solicitor', leave: 7 * 60 + 45, back: 19 * 60 },
-  { title: 'Bike courier', leave: 9 * 60, back: 17 * 60 },
-];
-const NO_JOBS = ['Retired', 'Student', 'Works from home', '"Between things"'];
 
 // ------------------------------------------------------------------ listings
 
@@ -95,12 +82,19 @@ function review(sim: Sim, flatId: string, people: Pawn[]): number | undefined {
 
 // ------------------------------------------------------------------ people
 
-export function makePerson(rng: RngHolder, surname?: string, working = random(rng) < L.working): Person {
-  const job = working ? pick(rng, JOBS) : null;
+/**
+ * Someone new. Their schedule (when they're in) is rolled in its share unless `working` says
+ * otherwise: true for someone with work (hours away, or from home), false for someone retired,
+ * or a schedule outright.
+ */
+export function makePerson(rng: RngHolder, surname?: string, working?: boolean | Schedule): Person {
+  const schedule = typeof working === 'string' ? working : rollSchedule(rng, working);
+  const { job, note } = jobFor(rng, schedule);
   return {
     name: `${pick(rng, FIRST)} ${surname ?? pick(rng, LAST)}`,
-    job: job ? { ...job } : null,
-    note: job ? job.title : pick(rng, NO_JOBS),
+    job,
+    schedule,
+    note,
     look: { skin: randInt(rng, 0, 5), hair: randInt(rng, 0, 7), top: randInt(rng, 0, 9), legs: randInt(rng, 0, 5) },
     traits: rollTraits(rng),
   };
@@ -139,7 +133,7 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   const people: Person[] = [];
   for (let i = 0; i < size; i++) {
     const professional = info.style === 'professionals';
-    let person = makePerson(st, i === 0 || random(st) < L.sameSurname ? surname : undefined, professional || (i === 0 ? random(st) < L.leadWorking : random(st) < L.othersWorking));
+    let person = makePerson(st, i === 0 || random(st) < L.sameSurname ? surname : undefined, professional || undefined);
     if (professional) person.traits = person.traits.filter((t) => t !== 'partyAnimal' && t !== 'musician');
     if (info.style === 'pets' && i === 0 && !person.traits.includes('petOwner') && random(st) < L.petsListing) person.traits = [...person.traits.slice(0, 2), 'petOwner'];
     if (person.traits.length === 0) person.traits = ['easyGoing'];

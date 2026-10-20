@@ -1053,7 +1053,22 @@ export const SCHEDULES = {
     student: { leave: 10 * 60, back: 13 * 60 },
   } as Record<string, { leave: number; back: number }>,
   /** Students are out on these weekdays only (0 is Monday). */
-  studentDays: [1, 3],
+  studentDays: [1, 3] as number[],
+  /** Game minutes before their hours that they set off, about (top floor to the end of the street is 25 or so). Each works out their own walk. */
+  setOff: 40,
+  /** Spare minutes on top of the walk, for a word on the stairs; and the longest walk anyone allows for. */
+  spare: 30,
+  longestWalk: 90,
+  /** On a working day, up this long before setting off (a wash, breakfast). */
+  upBefore: 70,
+  /** Getting up on a day in, and bedtime (minutes of the day; past 24 * 60 is after midnight). Night owls add two hours to bed and lie in. */
+  wake: { office: 8 * 60 + 30, early: 7 * 60 + 30, late: 9 * 60 + 30, nights: 10 * 60, home: 7 * 60 + 45, student: 9 * 60 + 30, retired: 7 * 60 } as Record<string, number>,
+  bed: { office: 23 * 60, early: 23 * 60, late: 24 * 60 + 30, nights: 25 * 60, home: 23 * 60, student: 24 * 60 + 30, retired: 22 * 60 + 30 } as Record<string, number>,
+  /** The night before an early shift, and anyone with the early-night habit. */
+  earlyBed: 21 * 60 + 30,
+  earlyNight: 22 * 60,
+  /** Back from a night shift, asleep until this. */
+  nightsWake: 14 * 60,
 };
 
 /** Habits (spec 2.1): one or two each, at about the same time every day. */
@@ -1063,6 +1078,8 @@ export const HABITS = {
   second: 0.5,
   /** How far either side of its time a habit can start, in game minutes. */
   slack: 20,
+  /** How long after its slot starts a habit can still begin; whatever it is runs past the end. */
+  window: 30,
 };
 
 // ================================================================== visitors (chunk 4 tunes)

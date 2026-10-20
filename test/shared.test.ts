@@ -14,6 +14,13 @@ import { SHARED_USE } from '../src/sim/tuning';
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life && !p.life.leaving);
 const labels = (sim: Sim, p: Pawn) => thoughtsOf(sim, p).map((t) => t.label);
 
+/** Flat 1's sitting tenant works from home now; for this, make them someone who goes out to work, as they used to. */
+function goesToWork(p: Pawn): Pawn {
+  p.life!.schedule = 'office';
+  p.life!.job = { title: 'Office manager', leave: 8 * 60, back: 17 * 60 + 30 };
+  return p;
+}
+
 /** A building with the handover out of the way, at this day and hour (day 92 is high summer; day 36 is the depths of winter). */
 function building(seed: number, day: number, hour: number): Sim {
   const sim = Sim.create(seed);
@@ -180,7 +187,7 @@ describe('shared spaces', () => {
 
   it('are thought well of, as labelled thoughts that add up', () => {
     const sim = building(1, SATURDAY, 11);
-    const p = tenants(sim)[0];
+    const p = goesToWork(tenants(sim)[0]);
     expect(labels(sim, p)).toContain('Nowhere to do the washing');
     expect(labels(sim, p)).not.toContain('Building has a roof terrace');
     const before = flatScore(sim, p.life!.flat).score;
@@ -203,7 +210,7 @@ describe('shared spaces', () => {
     const sim = building(1, MONDAY, 6);
     put(sim, 'bikeRack', 4, 1);
     SHARED_USE.cycleChance = 1;
-    const p = tenants(sim).find((t) => t.life!.job)!;
+    const p = goesToWork(tenants(sim)[0]);
     let cycled = false;
     let grim = false;
     minutes(sim, 15 * 60, () => {

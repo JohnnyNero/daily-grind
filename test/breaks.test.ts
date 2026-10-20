@@ -9,6 +9,13 @@ import { breakIt } from '../src/sim/upkeep';
 
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life);
 
+/** Flat 1's sitting tenant works from home now; for this, make them someone who goes out to work, as they used to. */
+function goesToWork(p: Pawn): Pawn {
+  p.life!.schedule = 'office';
+  p.life!.job = { title: 'Office manager', leave: 8 * 60, back: 17 * 60 + 30 };
+  return p;
+}
+
 /** A building at ten in the morning on a weekday (or a Saturday, when everyone's in), handover out of the way. */
 function morning(seed = 4, saturday = false): Sim {
   const sim = Sim.create(seed);
@@ -96,6 +103,7 @@ describe('breaks you can see', () => {
 
   it('refusing to get up means a bed, and no work today', () => {
     const sim = morning();
+    goesToWork(tenants(sim)[0]);
     const p = breaker(sim, 'bed');
     expect(p.life!.workedDay).toBe(sim.day);
     expect(until(sim, 120, () => p.pose === 'sleep' && p.doing === 'Refusing to get up')).toBe(true);
