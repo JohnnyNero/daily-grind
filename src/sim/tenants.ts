@@ -20,6 +20,7 @@ import { has } from './traits';
 import { SHARED, dirtOf, isNight, itemsIn, outdoorTemp, noiseReaching, tempOf, tidy, warmthOf } from './environment';
 import { noticeTrait } from './outcomes';
 import { breakThink } from './breaks';
+import { onKnock } from './events';
 import { asleepHours, awayToday, dueOut, freeFor, habitStep, keepTime, habitThink, rollHabits, scheduleFromJob, wakeAt } from './schedules';
 import { momentStep, momentThink } from './moments';
 import { post, recently } from './chat';
@@ -201,6 +202,11 @@ function decide(sim: Sim, p: Pawn): void {
   // Kicking off (or a good turn) comes before everything but moving out.
   const base = home(sim, p);
   if (base && !life.leaving && breakThink(sim, p, base)) return;
+  // At a noisy neighbour's door to knock (events.ts): they wait to be answered.
+  if (!life.leaving && onKnock(sim, p)) {
+    p.waitUntil = st.tick + TICKS_PER_MINUTE;
+    return;
+  }
   // In the middle of an ambient moment (moments.ts): it carries on.
   if (base && !life.leaving && momentStep(sim, p, base)) return;
   // Got to where a habit was taking them (schedules.ts): they get on with it.

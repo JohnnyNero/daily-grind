@@ -7,6 +7,8 @@ import { deserialize, serialize } from '../src/sim/save';
 import { Sim } from '../src/sim/sim';
 import { TICKS_PER_HOUR, TICKS_PER_MINUTE, type BreakKind, type Pawn } from '../src/sim/state';
 import { breakIt } from '../src/sim/upkeep';
+import { outcomesHour } from '../src/sim/outcomes';
+import { homeAndAwake } from './stage';
 
 // These watch other systems on seeded games with nobody answering: the drip's cards (which an
 // absent landlord ignores, at a cost) are left out so they don't decide the outcome.
@@ -50,12 +52,14 @@ describe('breaks you can see', () => {
   it('a fed-up tenant kicks off and the break shows on the map', () => {
     for (const seed of [1, 2, 3]) {
       const sim = morning(seed, true);
-      const p = tenants(sim)[0];
+      // In, up, and fed up for hours: each go is the hourly roll the sim makes for them.
+      const p = homeAndAwake(sim, tenants(sim)[0]);
+      p.life!.calmUntil = 0;
       let got: string | undefined;
-      for (let i = 0; i < 24 * 6 * 6 && !got; i++) {
+      for (let i = 0; i < 24 * 60 && !got; i++) {
         p.life!.liking = 18;
         p.life!.under.major = 10 * TICKS_PER_HOUR;
-        sim.run(10 * TICKS_PER_MINUTE);
+        outcomesHour(sim, p);
         got = p.life!.breakState?.kind;
       }
       expect(got, `seed ${seed}`).toBeDefined();
@@ -118,6 +122,7 @@ describe('breaks you can see', () => {
 
   it('a tantrum breaks something in their flat', () => {
     const sim = morning();
+    homeAndAwake(sim, tenants(sim)[0]);
     const p = breaker(sim, 'tantrum');
     const cells = new Set(sim.layout.flatCells(sim.layout.flat(p.life!.flat)!));
     const broken = () => sim.state.furniture.filter((f) => f.broken !== undefined && cells.has(sim.layout.node(f.x, f.s))).length;

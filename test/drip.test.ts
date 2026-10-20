@@ -177,8 +177,15 @@ describe('cadence', () => {
 describe('ignoring a card', () => {
   beforeEach(() => useCatalogue(ALL));
 
+  /** The day's budget already spent, so the drip deals nothing else while a test watches one card. */
+  const spent = (sim: Sim) => {
+    sim.state.drip.day = sim.day;
+    sim.state.drip.budget = 0;
+    return sim;
+  };
+
   it('a moment resolves at its worst when its countdown ends', () => {
-    const sim = fixtureSim(1, 9, 10);
+    const sim = spent(fixtureSim(1, 9, 10));
     const pawn = sitting(sim)[0];
     const c = openCard(sim, 'tMoment', { pawn: pawn.id })!;
     expect(c.until - c.tick).toBe(DRIP.life.moment * MIN);
@@ -191,7 +198,9 @@ describe('ignoring a card', () => {
   });
 
   it('an ask gets kept waiting at 480 and 960 minutes, and resolves at its worst at 1,440', () => {
-    const sim = fixtureSim(1, 9, 8);
+    // Only the ask in the catalogue, so nothing else comes in the day it waits.
+    useCatalogue([tAsk]);
+    const sim = spent(fixtureSim(1, 9, 8));
     const pawn = sitting(sim)[1];
     const c = openCard(sim, 'tAsk', { pawn: pawn.id })!;
     const waited = () => pawn.life!.memories.filter((m) => m.id === 'keptWaiting').length;
@@ -206,6 +215,8 @@ describe('ignoring a card', () => {
     expect(waited()).toBe(2);
     sim.run(479 * MIN);
     expect(openCards(sim)).toHaveLength(1);
+    // The next morning's budget spent too, so the ask isn't dealt again the minute it goes.
+    spent(sim);
     sim.run(MIN);
     expect(openCards(sim)).toHaveLength(0);
     expect(pawn.life!.memories.some((m) => m.id === 'ignored')).toBe(true);
@@ -213,7 +224,7 @@ describe('ignoring a card', () => {
   });
 
   it('a card is never resolved before its 10-real-second tick', () => {
-    const sim = fixtureSim(1, 9, 10);
+    const sim = spent(fixtureSim(1, 9, 10));
     const c = openCard(sim, 'tBuilding')!;
     // The UI saw it at 8x and its 10 seconds aren't up until well past its end.
     cardSeen(sim, c.id, c.until + 30 * MIN);
@@ -351,8 +362,9 @@ describe('Skip to morning', () => {
   });
 
   it('stops when something wakes', () => {
-    useCatalogue(ALL);
+    // A quiet night first (the test cards would deal their own in the evening), then the thread.
     const sim = quiet(7);
+    useCatalogue(ALL);
     sim.state.drip.threads.push({ card: 'tFollow', due: sim.state.tick + TICKS_PER_HOUR, data: {} });
     expect(skipToMorning(sim, TICKS_PER_DAY)).toBe('woke');
     expect(openCards(sim).map((c) => c.def)).toEqual(['tFollow']);

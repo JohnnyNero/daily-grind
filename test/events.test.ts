@@ -4,7 +4,7 @@ import { POUND, flatInfo, goingRate } from '../src/sim/economy';
 import { CAP, FIRST_DAY, endParty, found, maybeFight, running, startAffair, startFight, startParty } from '../src/sim/events';
 import { burglaryRisk, startBurglary, waysIn } from '../src/sim/crime';
 import { scoreFor } from '../src/sim/impressiveness';
-import { landlordRating, makePerson, moveOut } from '../src/sim/leases';
+import { applicantsHour, landlordRating, makePerson, moveOut } from '../src/sim/leases';
 import { applyForPlanning, needsPlanning } from '../src/sim/planning';
 import { Sim } from '../src/sim/sim';
 import { opinion } from '../src/sim/social';
@@ -213,9 +213,13 @@ describe('listings and reviews', () => {
           info.style = style;
           info.asking = goingRate(sim, f.id);
         }
-        for (let d = 0; d < 4; d++) {
-          sim.run(TICKS_PER_DAY);
+        // Count everyone who turns up over a month of the letting hour, seen to as they come so the
+        // queue never fills: the listing's pull, not how long people happen to wait about.
+        for (let h = 0; h < 30 * 24; h++) {
+          sim.state.tick += TICKS_PER_HOUR;
+          applicantsHour(sim);
           n += sim.state.applicants.length;
+          sim.state.applicants = [];
         }
       }
       return n;

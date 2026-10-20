@@ -7,7 +7,7 @@ import { makePerson, moveOut } from '../src/sim/leases';
 import { deserialize, serialize } from '../src/sim/save';
 import { Sim } from '../src/sim/sim';
 import { INTEREST, MAX_TALES, recap, tale, talesOf } from '../src/sim/tales';
-import { TICKS_PER_DAY, TICKS_PER_HOUR, type Pawn } from '../src/sim/state';
+import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, type Pawn } from '../src/sim/state';
 import { moveIn } from '../src/sim/tenants';
 
 const tenants = (sim: Sim) => sim.state.pawns.filter((p) => p.life && !p.life.leaving);
@@ -162,8 +162,14 @@ describe('the storyteller\'s budget', () => {
     sim.changed();
     at(sim, 13, 2);
     expect(threat(sim)).toBe(2);
+    // Nobody about to catch them at it: the tenants are all away for the night and the street's empty.
+    for (const p of sim.state.pawns) if (p.life) p.life.away = { until: sim.state.tick + 6 * TICKS_PER_HOUR, why: 'Away for the night' };
     expect(startBurglary(sim)).toBe(true);
-    sim.run(3 * TICKS_PER_HOUR);
+    expect(sim.state.pawns.find((p) => p.kind === 'burglar')!.burgle!.more).toBe(1);
+    for (let m = 0; m < 3 * 60; m++) {
+      sim.state.pawns = sim.state.pawns.filter((p) => p.kind !== 'passerby');
+      sim.run(TICKS_PER_MINUTE);
+    }
     const hit = sim.state.chronicle.tales.filter((t) => t.kind === 'burglary');
     expect(hit.length).toBe(2);
     expect(hit[0].flat).not.toBe(hit[1].flat);

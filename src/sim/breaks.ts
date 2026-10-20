@@ -15,6 +15,7 @@ import { furnitureDef } from './defs';
 import type { Flat } from './layout';
 import { household } from './leases';
 import { choices } from './tenants';
+import { awayToday } from './schedules';
 import { setGoal } from './pawns';
 import { pick, randInt, random } from './rng';
 import type { Sim } from './sim';
@@ -133,7 +134,9 @@ export function startBreak(sim: Sim, p: Pawn, level: Level, straw: string, leavi
   };
   if (level !== 'minor' || kind !== 'sulk') sim.notify(`${line[kind]} ${straw}.`);
   // Staying in bed means missing work.
-  if (kind === 'bed' && life.job && (sim.day - 1) % 7 < 5 && sim.minuteOfDay < life.job.back - 60) life.workedDay = sim.day;
+  // Their hours today, whatever the shift (a night shift comes back after midnight).
+  const hours = kind === 'bed' ? awayToday(sim, life) : null;
+  if (hours && sim.minuteOfDay < hours.back - 60) life.workedDay = sim.day;
   return kind;
 }
 
@@ -255,6 +258,8 @@ const STEPS: Record<BreakKind, Step> = {
   tantrum(sim, p, flat, b) {
     go(sim, p, b, (b.at ??= flatSpot(sim, flat)), 'Having a tantrum', '#@!', () => {
       b.step = (b.step ?? 0) + 1;
+      // A long walk home (from the street to the top floor) doesn't use the temper up.
+      if (b.step === 1) b.until = Math.max(b.until, sim.state.tick + minutes(10));
       say(sim, p, '#@!', 4);
       p.waitUntil = sim.state.tick + minutes(4);
       addDirt(sim, flat.id, 0.04);
