@@ -183,7 +183,12 @@ export interface Life {
   habits: string[];
   /** An ambient moment they're in (moments.ts): what, until when (a tick), how far through, with whom (and whether they lead it), and where. */
   moment?: { kind: string; until: number; step: number; with?: number; at?: [number, number]; lead?: boolean };
+  /** Layout L5: what about their lives the layout matters to (a baby, bad knees, a dog), beyond traits and hours (fit.ts). Missing on old saves: none. */
+  circs?: Circ[];
 }
+
+/** Layout L5: circumstances that read off the layout (fit.ts). */
+export type Circ = 'baby' | 'wontClimb' | 'dog';
 
 export type BreakKind = 'sulk' | 'slam' | 'bins' | 'bed' | 'tantrum' | 'music' | 'boxes' | 'tidy' | 'bbq' | 'mend' | 'paint' | 'plant';
 
@@ -589,6 +594,8 @@ export interface Applicant {
   until: number;
   /** Comes with a catch you find out later. */
   desperate?: boolean;
+  /** Layout L5: a baby, bad knees, a dog (fit.ts). Missing: none. */
+  circs?: Circ[];
 }
 
 export interface Letter {

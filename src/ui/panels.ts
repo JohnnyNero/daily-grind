@@ -29,6 +29,8 @@ import { thoughtsOf } from '../sim/thoughts';
 import { traitDef } from '../sim/traits';
 import { talesOf } from '../sim/tales';
 import { el, h, hhmm } from './dom';
+import { NEEDS, applicantNeeds, fitFacts } from '../sim/fit';
+import type { Applicant } from '../sim/state';
 
 export type Showing =
   | { kind: 'flat'; id: string }
@@ -689,6 +691,7 @@ export class Panels {
               h('div', { className: 'top-line' }, face({ look: lead.look, kind: 'tenant' }), h('div', {}, h('h4', {}, a.people.map((p) => p.name.split(' ')[0]).join(' & ') + ' ' + lead.name.split(' ').slice(1).join(' ')), h('p', { className: 'muted' }, [lead.note, ...others.map((o) => o.note)].join(', ') + ` · ${householdName(a.household ?? 'single', a.people.length).toLowerCase()}`))),
               h('dl', { className: 'kv' }, h('dt', {}, 'Offers'), h('dd', {}, `${pounds(a.offer)} a week`), h('dt', {}, 'Deposit'), h('dd', {}, pounds(a.offer * 4)), h('dt', {}, 'Known trait'), h('dd', {}, h('span', { className: 'chip' }, traitDef(a.shown).name))),
               h('p', { className: 'small muted' }, traitDef(a.shown).says),
+              ...fitChips(sim, a),
               ...a.hints.map((t) => h('div', { className: 'hintline' }, '? ', t)),
               h('p', { className: 'small muted' }, `Waiting until day ${Math.floor(a.until / TICKS_PER_DAY) + 1}.`),
               h(
@@ -706,6 +709,16 @@ export class Panels {
 }
 
 // ------------------------------------------------------------------ bits
+
+/** Layout L5: what they've let on about their lives, and what the flat's like for each. Facts, not a verdict. */
+function fitChips(sim: Sim, a: Applicant): HTMLElement[] {
+  const needs = applicantNeeds(a);
+  if (needs.length === 0) return [];
+  const facts = fitFacts(sim, a.flat, needs);
+  return needs.map((n) =>
+    h('div', { className: 'chips fit-line' }, h('span', { className: 'chip' }, NEEDS[n].name), ...facts.filter((f) => f.need === n).map((f) => h('span', { className: `chip ${f.good ? 'good' : 'bad'}` }, f.text))),
+  );
+}
 
 function days(n: number): string {
   return `${n} day${n === 1 ? '' : 's'}`;

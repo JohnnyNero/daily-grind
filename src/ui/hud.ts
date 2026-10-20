@@ -2,6 +2,7 @@
 // alerts down the right edge, the tabs along the bottom and short notices.
 
 import { billsDue, flatInfo, pounds } from '../sim/economy';
+import type { Lens } from '../sim/lens';
 import { linesFor } from '../sim/outcomes';
 import type { Sim } from '../sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE } from '../sim/state';
@@ -73,13 +74,13 @@ export class Hud {
     panels.onChange = () => this.markTab();
     for (const b of document.querySelectorAll<HTMLButtonElement>('#overlays [data-overlay]')) {
       b.addEventListener('click', () => {
-        this.onOverlay(b.dataset.overlay as 'none');
+        this.onOverlay(b.dataset.overlay as Lens);
         for (const o of document.querySelectorAll<HTMLButtonElement>('#overlays [data-overlay]')) o.setAttribute('aria-pressed', String(o === b));
       });
     }
   }
 
-  onOverlay: (mode: 'none' | 'noise' | 'warmth' | 'damp' | 'liking') => void = () => {};
+  onOverlay: (mode: Lens) => void = () => {};
 
   private tab(name: string): void {
     if (name === 'build') {
