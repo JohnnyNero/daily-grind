@@ -10,6 +10,7 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type HouseholdKind, type Lease, type ListingStyle, type Pawn, type Schedule } from './state';
 import { jobFor, rollSchedule } from './schedules';
 import { moveIn, type Person } from './tenants';
+import { movingIn } from './visitors';
 import { friendsLeaving } from './social';
 import { amenities } from './shared';
 import { post } from './chat';
@@ -224,6 +225,7 @@ export function accept(sim: Sim, applicantId: number): string | null {
     if (a.circs.includes('dog') && pawns[0] && pawns[0].life!.pet === undefined) pawns[0].life!.pet = 'a dog';
   }
   tale(sim, 'moveIn', pawns, { flat: a.flat });
+  movingIn(sim, a.flat, pawns);
   for (const p of pawns) p.life!.memories.push({ id: 'newPlace', at: st.tick });
   // What the listing promised colours the first week.
   if (info.style === 'agent') for (const p of pawns) p.life!.memories.push({ id: 'notAsAdvertised', at: st.tick });

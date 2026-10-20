@@ -18,7 +18,7 @@ import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_MINUTE, key, seconds, type Life, type Pawn, type Person, type Pose, type Schedule } from './state';
 import { choices } from './tenants';
 import { has } from './traits';
-import { HABITS, SCHEDULES as S } from './tuning';
+import { HABITS, MOVING_IN, SCHEDULES as S } from './tuning';
 
 export type { Schedule } from './state';
 
@@ -169,6 +169,8 @@ function bedOn(day: number, life: Life): number {
   // Up for an early shift tomorrow: an early night.
   if (schedule === 'early' && awayOn(day + 1, life)) return S.earlyBed + owl;
   let bed = S.bed[schedule];
+  // Their first night in a new place: lights on late, unpacking and a takeaway (moving-in day).
+  if (life.memories.some((m) => m.id === 'firstNight')) bed += MOVING_IN.lateBy;
   // Friday and Saturday nights run later.
   if (schedule !== 'nights' && (weekday(day) === 4 || weekday(day) === 5)) bed += 60;
   return bed + owl;

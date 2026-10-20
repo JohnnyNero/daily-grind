@@ -30,6 +30,8 @@ function watch(seed: number, days: number) {
     for (const p of sim.state.pawns) {
       const m = p.life?.moment;
       if (!m) continue;
+      // Moving-in day's sitting down (visitors.ts starts it; the scheduler never does) is no ambient moment: a tenant's break can cut it short.
+      if (m.kind === 'settlingIn') continue;
       if (m.with !== undefined && !m.lead) continue;
       // The same person can start another the minute one ends, so a moment is who and when it runs out.
       const id = `${p.id}@${m.until}`;

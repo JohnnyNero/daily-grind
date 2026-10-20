@@ -906,6 +906,23 @@ export function speciesOf(role: string | undefined): Species {
 /** How tall an animal is drawn, for tapping. */
 export const ANIMAL_H: Record<Species, number> = { cat: 12, dog: 13, fox: 14 };
 
+/** A removal van at the kerb, side on, back doors open: `x` is its middle, `y` the road under its wheels. */
+export function drawVan(ctx: Ctx, x: number, y: number): void {
+  const L = Math.round(x - 26);
+  box(ctx, L, y - 26, 38, 22, '#e8e2d4');
+  rect(ctx, L + 2, y - 12, 34, 2, '#b8442e');
+  box(ctx, L + 38, y - 18, 14, 14, '#c9d2dc');
+  rect(ctx, L + 44, y - 16, 6, 6, '#7aa3c4');
+  // The back, open: a dark mouth with a few boxes in it.
+  rect(ctx, L, y - 24, 3, 18, PAL.outline);
+  rect(ctx, L + 4, y - 22, 8, 7, '#a9824f');
+  rect(ctx, L + 13, y - 22, 7, 5, '#b78d58');
+  for (const wx of [L + 8, L + 42]) {
+    rect(ctx, wx - 1, y - 8, 10, 9, PAL.outline);
+    rect(ctx, wx + 2, y - 5, 4, 4, '#8a8a90');
+  }
+}
+
 /**
  * An animal with its feet at (x, y), drawn the way people are: the silhouette first, in the
  * outline colour, then the animal itself. The pose is `sit` or `sleep`, else it stands or walks.
