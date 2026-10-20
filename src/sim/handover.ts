@@ -7,9 +7,12 @@
 // it breaks nothing. It can be skipped from the menu.
 
 import { post } from './chat';
+import { hasFlag } from './flags';
 import { HANDOVER_ADVANCE as ADVANCE, POUND, billsDue, book, flatInfo, letter } from './economy';
 import { scoreFor } from './impressiveness';
 import { household, newApplicant } from './leases';
+import { remember } from './thoughts';
+import { has } from './traits';
 import { setGoal } from './pawns';
 import type { Sim } from './sim';
 import { BASE } from './start';
@@ -291,10 +294,30 @@ export function meet(sim: Sim, pawnId: number): void {
 
 // ------------------------------------------------------------------ the beats
 
+/** The first week's script is on: days 1 to 7, unless the handover was skipped. */
+export function firstWeekOn(sim: Sim): boolean {
+  return !sim.state.handover.skipped && sim.day <= 7;
+}
+
+/** What the first week's cards left running (flags.ts), whatever the day. Cheap when none are set. */
+function cardAftermath(sim: Sim, hour: number): void {
+  const st = sim.state;
+  // Lorraine, once you've taken her on: the stairs and lobby are done every morning, at a price.
+  if (!st.cleaner && hasFlag(sim, 'lorraine')) st.cleaner = true;
+  if (hour !== 9) return;
+  // The window cleaner: £15 every four weeks, from the day he first came.
+  if (hasFlag(sim, 'cleanWindows') && sim.day > 3 && (sim.day - 3) % 28 === 0) book(sim, 'Window cleaner', -15 * POUND);
+  // No window cleaner: from week three the house-proud notice.
+  if (hasFlag(sim, 'grimyWindows') && sim.day >= 15) {
+    for (const p of st.pawns) if (p.life && !p.life.leaving && has(p.life, 'houseProud')) remember(sim, p.life, 'grubbyWindows');
+  }
+}
+
 /** Once an hour, through the first fortnight. */
 export function handoverHour(sim: Sim): void {
   const st = sim.state;
   const h = st.handover;
+  cardAftermath(sim, Math.floor(sim.minuteOfDay / 60));
   if (h.skipped || sim.day > 21) return;
   const hour = Math.floor(sim.minuteOfDay / 60);
   const beat = (name: string) => {
@@ -308,6 +331,12 @@ export function handoverHour(sim: Sim): void {
     delete h.advance;
   }
   if (h.stop >= 0) return;
+  // The first thing you save for, done: a word from Denise, the once.
+  const fit = h.fit ? todo(sim).find((t) => t.id === 'fit') : undefined;
+  if (fit?.done && !st.project.praised && h.stop < 0 && sim.day > 1 && h.fit && scoreFor(sim, h.fit, 1).has.bed) {
+    st.project.praised = true;
+    letter(sim, { from: AGENT, title: 'Well done', body: "That flat looks like somewhere to live. That's the whole trick: pick the next thing, save for it, do it. The bar at the bottom will keep suggesting one. No prize, I'm afraid. D." });
+  }
   // The list, all done: a word from Denise, and it goes away.
   if (listDone(sim) && beat('list')) {
     letter(sim, { from: AGENT, title: 'All done', body: 'That\'s my list ticked off. You\'re on your own now. Ring if the boiler does anything new.' });
