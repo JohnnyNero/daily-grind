@@ -118,10 +118,10 @@ describe('applicants', () => {
   it('nobody applies who couldn\'t pay it: singles least, couples more', () => {
     const { sim, flat3 } = building(6);
     const studio = sim.layout.flats[1].id;
-    expect(affordable(sim, studio, 200 * POUND).map((o) => o.kind)).toEqual(['single']);
-    expect(affordable(sim, studio, 300 * POUND)).toEqual([]);
-    // A one-bed with a double bed at £300 a week: only a couple could pay that.
-    flatInfo(sim, flat3).asking = 300 * POUND;
+    expect(affordable(sim, studio, 250 * POUND).map((o) => o.kind)).toEqual(['single']);
+    expect(affordable(sim, studio, 350 * POUND)).toEqual([]);
+    // A one-bed with a double bed at £450 a week: only a couple could pay that.
+    flatInfo(sim, flat3).asking = 450 * POUND;
     for (let i = 0; i < 40; i++) expect(newApplicant(sim, flat3).household).toBe('couple');
   });
 });
