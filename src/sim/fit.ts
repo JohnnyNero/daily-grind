@@ -215,9 +215,9 @@ function dice(sim: Sim, a: number, b: number): RngHolder {
   return h;
 }
 
-/** What an applicant household brings: a baby, bad knees, a dog. */
-export function rollCircs(sim: Sim, id: number, household: HouseholdKind, people: readonly Person[], petsListing: boolean): Circ[] {
-  const d = dice(sim, id, 0);
+/** What an applicant household brings: a baby, bad knees, a dog. `key` picks the dice (leases.ts rolls it from the flat's own). */
+export function rollCircs(sim: Sim, key: number, household: HouseholdKind, people: readonly Person[], petsListing: boolean): Circ[] {
+  const d = dice(sim, key, 0);
   const out: Circ[] = [];
   const babyChance = people.some((p) => p.schedule === 'retired') ? 0 : household === 'family' ? FIT.babyFamily : household === 'couple' ? FIT.babyCouple : 0;
   if (random(d) < babyChance) out.push('baby');

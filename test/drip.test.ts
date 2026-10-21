@@ -13,7 +13,7 @@ import { planTicks, quietNight, skipToMorning } from '../src/sim/pace';
 import { deserialize, serialize } from '../src/sim/save';
 import { Sim } from '../src/sim/sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE } from '../src/sim/state';
-import { DRIP } from '../src/sim/tuning';
+import { DRIP, DRIP_WEEK } from '../src/sim/tuning';
 
 // The drip engine (spec 1.1, 1.2, 1.5, 1.6) and Skip to morning (0.2), on a small test-only
 // set of cards: the real catalogue is written elsewhere and checked by the rule test.
@@ -75,13 +75,20 @@ function watch(sim: Sim, days: number, each?: (sim: Sim) => void): { def: string
 }
 
 // The engine is tested at the old pace (a card a day for sure, two at most), so its rules show
-// up on every day; the turned-down numbers have their own test below.
+// up on every day; the turned-down numbers have their own test below. The old pace had no
+// weekly cap or floor (DRIP_WEEK), so those are off here too; the pacing soak holds them.
 const TURNED_DOWN = { dayChance: DRIP.dayChance, perDay: DRIP.perDay };
+const WEEK = { ...DRIP_WEEK };
 beforeAll(() => {
   DRIP.dayChance = 1;
   DRIP.perDay = 2;
+  DRIP_WEEK.most = Infinity;
+  DRIP_WEEK.from = Infinity;
 });
-afterAll(() => Object.assign(DRIP, TURNED_DOWN));
+afterAll(() => {
+  Object.assign(DRIP, TURNED_DOWN);
+  Object.assign(DRIP_WEEK, WEEK);
+});
 
 describe('turned down', () => {
   it('a day gets a card about every other day, and fewer while works are drawn or going', () => {
@@ -112,6 +119,47 @@ describe('turned down', () => {
       DRIP.dayChance = 1;
       DRIP.perDay = 2;
     }
+  });
+});
+
+describe('the week', () => {
+  // At the turned-down pace a card comes on about half the days, so luck alone could deal six
+  // in a week or none: the drip holds both lines itself (DRIP_WEEK).
+  const tDaily: CardDef = { ...tBuilding, id: 'tDaily', cooldownDays: 0 };
+  const days = (dayChance: number) => {
+    useCatalogue([tDaily]);
+    Object.assign(DRIP, TURNED_DOWN, { dayChance });
+    Object.assign(DRIP_WEEK, WEEK);
+    try {
+      const sim = fixtureSim(2, 8, 6);
+      const cards = watch(sim, 21, (s) => {
+        // Nothing else going on to take a day's card away (dayBudget's reductions).
+        s.state.applicants = [];
+        s.state.post = [];
+        s.state.story.running = [];
+        delete s.state.council.visitDay;
+        for (const c of [...openCards(s)]) answerCard(s, c.id, 0);
+      });
+      return cards.map((c) => Math.floor(c.tick / TICKS_PER_DAY) + 1);
+    } finally {
+      DRIP.dayChance = 1;
+      DRIP.perDay = 2;
+      DRIP_WEEK.most = Infinity;
+      DRIP_WEEK.from = Infinity;
+    }
+  };
+  const inWeek = (ds: number[], end: number) => ds.filter((d) => d > end - 7 && d <= end).length;
+
+  it('never more than 5 cards in any 7 days, however the dice fall', () => {
+    const ds = days(1);
+    for (let end = 14; end <= 28; end++) expect(inWeek(ds, end), `the week to day ${end}`).toBeLessThanOrEqual(WEEK.most);
+    // (It does deal: five a week, not one.)
+    expect(ds.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('and from the second week, never 7 days with none', () => {
+    const ds = days(0);
+    for (let end = WEEK.from + 6; end <= 28; end++) expect(inWeek(ds, end), `the week to day ${end}`).toBeGreaterThan(0);
   });
 });
 
@@ -338,14 +386,15 @@ describe('a quiet spell', () => {
   /** Share of tOpens among the cards dealt over a fortnight, answering everything at once, with a thread or promise last opened `ago`. */
   const share = (ago: () => number) => {
     useCatalogue([tPlain, tOpens]);
-    // Three buildings' four weeks, pooled: a fortnight's handful of cards is too few to tell.
-    const cards = [3, 4, 5].flatMap((seed) =>
+    // Six buildings' four weeks, pooled: a fortnight's handful of cards is too few to tell (three
+    // buildings, about 45 cards, put the share a whole 0.07 either way of what the weights make it).
+    const cards = [3, 4, 5, 6, 7, 8].flatMap((seed) =>
       watch(fixtureSim(seed, 2, 7), 28, (s) => {
         s.state.drip.lastOpened = ago();
         for (const c of [...openCards(s)]) answerCard(s, c.id, 1);
       }),
     );
-    expect(cards.length).toBeGreaterThan(24);
+    expect(cards.length).toBeGreaterThan(48);
     return cards.filter((c) => c.def === 'tOpens').length / cards.length;
   };
 
@@ -354,6 +403,7 @@ describe('a quiet spell', () => {
     const recent = share(() => Number.MAX_SAFE_INTEGER);
     const quiet = share(() => 0);
     // Alike, they come about half and half; leaning, the one that can open something comes most.
+    console.log('quiet spell', recent, quiet);
     expect(recent).toBeLessThan(0.7);
     expect(quiet).toBeGreaterThan(0.7);
     expect(quiet - recent).toBeGreaterThan(0.25);

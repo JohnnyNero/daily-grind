@@ -1061,8 +1061,14 @@ export const DRIP = {
   /** Cards a day before anything takes one off, and the most open at once. */
   perDay: 1,
   maxOpen: 2,
-  /** Turned down: the chance a day gets a card at all, and how much of that is left while works are drawn or going. */
-  dayChance: 0.5,
+  /**
+   * Turned down: the chance a day gets a card at all, and how much of that is left while works
+   * are drawn or going. (It was 0.5, for a mean of about 0.55 a day; with the layout wave's
+   * busier building, the day's reductions took it to 0.39 to 0.44 over the pacing soak's runs,
+   * the bottom edge of the 0.4 to 0.7 the spec asks for. 0.65 puts it back near the middle.
+   * DRIP_WEEK still keeps any week to 5.)
+   */
+  dayChance: 0.65,
   buildingFactor: 0.5,
   /** Waking hours, when the drip tries every `tryEvery` minutes with this chance (doubled after `lateFrom` if nothing's come). */
   wakeFrom: 7 * 60,
@@ -1455,10 +1461,14 @@ export const RISERS = {
   /** The furthest it counts: past this, it's no worse. */
   mostCells: 10,
   /**
-   * A new riser, a storey of the building at a time. (The spec started at £600; at that a
-   * second riser lost to moving the bathroom by the stairs by about £750 over twelve weeks.)
+   * A new riser, a storey of the building at a time. The spec started at £600. With the soak's
+   * two layouts on the same dice (integration: the storyteller's, the burglars' and each flat's
+   * applicants' own), the second riser at £400 a storey came out £455 to £630 behind moving the
+   * bathroom by the stairs on every seed, about £545 on a three-storey building: its price less
+   * what it saves in plumbing, fans and wear over twelve weeks. Take that off and it's about
+   * £220 a storey. (An owner's call: see docs/specs/layout.md, section 3.)
    */
-  perStorey: 400 * POUND,
+  perStorey: 220 * POUND,
   /** Building control: the fee, the days they take, and the chance they say yes. */
   controlFee: 50 * POUND,
   controlDays: 3,
@@ -1503,4 +1513,17 @@ export const MOVING_IN = {
   takeawayLast: 21 * 60,
   /** Minutes later than usual they go to bed on the first night: an hour, as on a Friday. */
   lateBy: 60,
+};
+
+// --- layout int (the integration of L2, L4 and L8) ---
+
+/**
+ * The drip's week (drip.ts), as rules rather than luck: never more than `most` cards (budget
+ * and night, not follow-ups) in any seven days, and from day `from` (the first week's script
+ * deals its own), never seven days with none. At one card on half the days, luck alone broke
+ * both now and then.
+ */
+export const DRIP_WEEK = {
+  most: 5,
+  from: 8,
 };

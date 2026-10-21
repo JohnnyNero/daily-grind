@@ -13,7 +13,7 @@ import { placeFurniture } from './build';
 import { furnitureDef } from './defs';
 import { household } from './leases';
 import { addPawn, atNode, setGoal } from './pawns';
-import { pick, randInt, random } from './rng';
+import { diceIn, pick, randInt, random, type RngHolder } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_MINUTE, type Furniture, type Grade, type Pawn } from './state';
 import { remember } from './thoughts';
@@ -23,6 +23,17 @@ import { gradeOf } from './grades';
 import { itemsIn, SHARED } from './environment';
 import { BURGLARY as B, GRADES, ITEMS, RISK_WORDS } from './tuning';
 import { readFlags } from './flags';
+
+/** The burglars' own dice (state.ts Story.crimeRng): where they try, what they take, who spots them. */
+const CRIME_DICE = 0x0c1e5e7;
+function crimeDice(sim: Sim): RngHolder {
+  return diceIn(sim.state.story, 'crimeRng', sim.state.seed ^ CRIME_DICE);
+}
+
+/** One break-in's dice (Pawn.burgle.rng). */
+function burglarDice(p: Pawn): RngHolder {
+  return diceIn(p.burgle ?? {}, 'rng', p.id);
+}
 
 const first = (p: Pawn) => p.name.split(' ')[0];
 /** What a thing would cost new, at its grade: what it's worth to a burglar. */
@@ -114,7 +125,6 @@ export function riskWord(risk: number): string {
 
 /** Someone in a hoodie turns up in the small hours. */
 export function startBurglary(sim: Sim): boolean {
-  const st = sim.state;
   const lay = sim.layout;
   if (!canStart(sim, ['crime'])) return false;
   // The flat with the most worth taking (anywhere with people in has something).
@@ -123,7 +133,7 @@ export function startBurglary(sim: Sim): boolean {
   if (!best) return false;
   const ways = waysIn(sim).filter((w) => w.entry === 'door' || w.flat === best.f.id);
   if (ways.length === 0) return false;
-  const way = pick(st, ways);
+  const way = pick(crimeDice(sim), ways);
   const p = addPawn(sim, 'burglar');
   p.name = 'Someone in a hoodie';
   p.look = { skin: p.look.skin, hair: 0, top: 0, legs: 0 };
@@ -132,9 +142,11 @@ export function startBurglary(sim: Sim): boolean {
   p.doing = 'Having a look about';
   // The more the building's worth, the greedier they are.
   const push = threat(sim);
-  const take = random(st) < push - B.twoThings ? 2 : 1;
-  const more = random(st) < (push - B.secondFlat) * 2 ? 1 : 0;
-  p.burgle = { stage: 'case', entry: way.entry, until: 0, at: way.at, ...(way.inside ? { inside: way.inside } : {}), ...(take > 1 ? { take } : {}), ...(more > 0 ? { more } : {}) };
+  const take = random(crimeDice(sim)) < push - B.twoThings ? 2 : 1;
+  const more = random(crimeDice(sim)) < (push - B.secondFlat) * 2 ? 1 : 0;
+  // This break-in's own dice, from the burglars': who spots them and what they find never moves the next one's.
+  const rng = randInt(crimeDice(sim), 0, 0x3fffffff);
+  p.burgle = { stage: 'case', entry: way.entry, until: 0, at: way.at, ...(way.inside ? { inside: way.inside } : {}), ...(take > 1 ? { take } : {}), ...(more > 0 ? { more } : {}), rng };
   beginHappening(sim, 'burglary', ['crime'], 4, [p], best.f.id);
   return true;
 }
@@ -161,7 +173,7 @@ export function burglarThink(sim: Sim, p: Pawn): boolean {
     return true;
   }
   if (b.stage === 'try') {
-    if (st.security.locks && random(st) < B.lockPutsOff) {
+    if (st.security.locks && random(burglarDice(p)) < B.lockPutsOff) {
       flee(sim, p, 'gaveUp');
       return false;
     }
@@ -184,12 +196,12 @@ export function burglarThink(sim: Sim, p: Pawn): boolean {
   const here = lay.flatAt(Math.round(p.x), Math.round(p.s));
   if (here?.id !== flat.id || lay.isDoorNode(lay.node(Math.round(p.x), Math.round(p.s)))) {
     const nodes = flat.rooms.flatMap((r) => lay.rooms[r].nodes).filter((n) => !lay.isDoorNode(n));
-    if (nodes.length === 0 || !setGoal(sim, p, lay.xs(pick(st, nodes)))) flee(sim, p, 'gaveUp');
+    if (nodes.length === 0 || !setGoal(sim, p, lay.xs(pick(burglarDice(p), nodes)))) flee(sim, p, 'gaveUp');
     return true;
   }
   if (p.doing !== 'Rummaging') {
     p.doing = 'Rummaging';
-    p.waitUntil = st.tick + randInt(st, ...B.rummage) * TICKS_PER_MINUTE;
+    p.waitUntil = st.tick + randInt(burglarDice(p), ...B.rummage) * TICKS_PER_MINUTE;
     return true;
   }
   return steal(sim, p, flat);
@@ -214,8 +226,8 @@ export function crimeMinute(sim: Sim): void {
     const bell = b.entry === 'door' && itemsIn(sim, SHARED, 'intercom') > 0 ? ITEMS.intercomSpotted : 1;
     for (const w of st.pawns) {
       if (w === p || Math.abs(w.x - p.x) > 6 || w.s > 2.5) continue;
-      if (w.kind === 'passerby' && random(st) < B.passerby * cameras) return flee(sim, p, 'passerby');
-      if (awake(w) && random(st) < B.spotted * cameras * bell) return flee(sim, p, 'spotted', w);
+      if (w.kind === 'passerby' && random(burglarDice(p)) < B.passerby * cameras) return flee(sim, p, 'passerby');
+      if (awake(w) && random(burglarDice(p)) < B.spotted * cameras * bell) return flee(sim, p, 'spotted', w);
     }
     return;
   }
@@ -224,7 +236,7 @@ export function crimeMinute(sim: Sim): void {
     if (w.life!.away || !atNode(p)) continue;
     const here = sim.layout.flatAt(Math.round(p.x), Math.round(p.s));
     if (here?.id !== p.flat) continue;
-    if (awake(w) ? random(st) < B.foundAwake : random(st) < B.foundAsleep) return flee(sim, p, 'spotted', w);
+    if (awake(w) ? random(burglarDice(p)) < B.foundAwake : random(burglarDice(p)) < B.foundAsleep) return flee(sim, p, 'spotted', w);
   }
 }
 

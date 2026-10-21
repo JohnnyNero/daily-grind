@@ -333,7 +333,8 @@ function roofRun(seed: number, lagged: boolean): Run {
   let liked = 0;
   for (let h = 0; h < 6 * 7 * 24; h++) {
     sim.run(TICKS_PER_HOUR);
-    landlord(sim, 'decent');
+    // The test decides the roof, so the landlord leaves it alone (policy.ts would lag it over a cold top flat).
+    landlord(sim, 'decent', undefined, { roof: false });
     sim.state.boiler = 1;
     temp += sim.state.temps[top];
     rate += goingRate(sim, top);

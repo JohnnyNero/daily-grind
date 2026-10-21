@@ -27,7 +27,7 @@ export const TICKS_PER_SECOND = 200 / 3;
 /** Real seconds at 1x, in ticks. */
 export const seconds = (n: number): number => Math.round(n * TICKS_PER_SECOND);
 
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 
 /**
  * What a cell holds. Walls hold things up and keep people, heat and noise out; a window is
@@ -257,7 +257,7 @@ export interface Pawn {
   /** How they describe themselves: their job, or "Retired". */
   note?: string;
   /** A burglar's night: how far they've got, and how they're getting in. */
-  burgle?: { stage: 'case' | 'try' | 'in' | 'out'; entry: 'door' | 'window'; until: number; at?: [number, number]; inside?: [number, number]; take?: number; more?: number };
+  burgle?: { stage: 'case' | 'try' | 'in' | 'out'; entry: 'door' | 'window'; until: number; at?: [number, number]; inside?: [number, number]; take?: number; more?: number; /** This break-in's own dice (crime.ts); from the pawn if missing. */ rng?: number };
 }
 
 export interface State {
@@ -407,6 +407,8 @@ export interface Drip {
   lastOpened?: number;
   /** The drip's own dice (drip.ts); from the seed if missing (older saves). */
   rng?: number;
+  /** The days the last week's cards (budget and night, not follow-ups) counted for (drip.ts); none if missing. */
+  week?: number[];
 }
 
 export type TaleKind =
@@ -468,6 +470,15 @@ export interface Story {
   /** By tag: not again until this tick. */
   cooldowns: Record<string, number>;
   running: Happening[];
+  /**
+   * The storyteller's own dice (events.ts: the mood, whether something happens and what, and
+   * parties starting), and the burglars' (crime.ts). From the seed if missing. Kept apart so two
+   * games from one seed meet the same luck however differently their tenants live.
+   */
+  rng?: number;
+  crimeRng?: number;
+  /** Each kind of happening's own dice for the pick (events.ts), by tag. */
+  race?: Record<string, number>;
 }
 
 export interface Happening {
@@ -579,6 +590,8 @@ export interface FlatInfo {
   nextApplicant: number;
   /** How the listing's written, which changes who applies and what they expect. */
   style?: ListingStyle;
+  /** This flat's applicants' own dice (leases.ts): who applies and when. From the seed and the flat if missing. */
+  rng?: number;
 }
 
 export type ListingStyle = 'plain' | 'agent' | 'honest' | 'professionals' | 'pets';

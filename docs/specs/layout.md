@@ -445,3 +445,65 @@ combat; anything location-based.
 3. **Box room** under 3 tiles: keep.
 4. **A studio with a double bed** draws couples about 15% of the time (tested).
 5. **No second-stair tool** now; noted under L10.
+
+---
+
+## 10. Integrating L2, L4, L8 (branch `layout-int`)
+
+L2 (noise), L4 (risers) and L8 (moving-in day) are merged on top of L1, L3, L5, L6 and L11.
+
+**Seams.** A riser leak now wets every room it runs down for two days (`RISERS.leakWetDays`;
+`damp.ts` reads `riserLeakRooms`), as L4's `wet.leak` record was meant for. The building
+preview keeps everyone's facts side by side, three at most: going rates, "Far from the pipes",
+type changes and "bedroom: louder", then warmer and damper.
+
+**Moving-in day.** The guard is back: a new tenant settles in only if it won't make them late
+for work or catch bedtime (as any moment). Numbers with reasons, not by trial: the first night
+is an hour late (as a Friday); its memory is +2 for 16 hours (the evening and the morning
+after); the sitting down runs no longer than any moment (30 seconds: 8 sitting, as long as the
+longest held beat; 3 by the kettle).
+
+**Save.** `SAVE_VERSION` 11 → 12. Every new field is optional and filled in on use: room
+temperatures and damp (start empty), the wet stack (none is the one riser), and the new dice.
+
+### Why the soaks flipped, and what changed
+
+The two-arm soaks (roof or not, stacked or riser, decent or absent) shared one set of dice. The
+first thing that differed between the arms moved every later roll, so a burglary or a
+different applicant in one arm decided the comparison. Now:
+
+- **Dice of their own** (all from the seed): the storyteller (its mood, whether something
+  happens, and which: each kind of happening draws every time, and the lowest draw over its
+  weight wins, the same odds as one weighted draw), each break-in, the burglars, and each
+  flat's applicants. Two games from one seed meet the same luck however differently their
+  tenants live. Measured on the riser soak: a seed's two layouts were up to £1,700 apart
+  before; now five seeds of eight are within £100, and the rest within £850.
+- **The drip's week as rules**: never more than 5 cards in seven days, and from day 8 never
+  seven days with none (`DRIP_WEEK`). Both were luck before. An absent landlord now gets a
+  card a week to ignore. `DRIP.dayChance` 0.5 → 0.65: the busier building's reductions had
+  put the mean at 0.39 to 0.44 a day, the bottom edge of the spec's 0.4 to 0.7; it's 0.50 now.
+- **The decent scripted landlord** sees to the layout systems: a radiator in every bedroom, a
+  fan in a bathroom with no window, a leak mended when found, the roof lagged over a cold flat,
+  the bed in the quietest room big enough. Only once every flat is fitted and let, and with
+  £600 to spare. It keeps next week's mortgage (not £600) back when fitting out an empty flat,
+  and a quarter's mortgage (not £1,500) before overpaying. The ruthless one does none of it.
+
+### Decisions for the owner
+
+1. **The second riser costs £220 a storey** (L4 had £400 by trial; the spec said £600). On
+   the same dice, at £400 it came out £455 to £630 behind moving the bathroom by the stairs on
+   every seed over twelve weeks: about £545, its price less what it saves. At £220 the two
+   layouts are 1.8% apart on money over eight seeds. If a riser should stay dear, far pipes
+   need to cost more instead (the spec's "leak cards up 10% a cell" isn't wired yet).
+2. **Ignoring is thin after the first week.** Against the decent landlord the absent one is
+   16 points down in week one, then only 4 and 4. Three ignored cards in a row turned the drip
+   off for good, and the `ignored`/`leftToIt` memories fade in a week. Against the ruthless
+   landlord, ignoring costs nothing measurable by week three (still skipped). Proposed:
+   ignored asks that pile up (a "Landlord never answers" thought that grows while the run of
+   ignored cards lasts), and unmended things that hurt more each week they stay broken.
+3. **The start is break-even for a decent landlord.** With every flat let, rent about equals
+   the mortgage, gas, cleaner and repairs; one or two tenants leaving runs the cash down for
+   weeks. The scripted landlord now keeps a quarter's mortgage in hand. Worth a look at the
+   start money or rents.
+4. **The carve's liking gap** is 6 points (49 against 43), not part 1's 15. It passes (over 4);
+   noise and heat haven't widened it as hoped.

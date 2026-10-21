@@ -228,6 +228,7 @@ describe('carving it up, over six weeks', () => {
     }
     const keepLiking = totals.keep.liking / totals.keep.n;
     const carveLiking = totals.carve.liking / totals.carve.n;
+    console.log('carving: rent', totals.keep.rent / 100, 'against', totals.carve.rent / 100, '| liking', keepLiking.toFixed(1), 'against', carveLiking.toFixed(1));
     // The temptation is real: a good deal more coming in...
     expect(totals.carve.rent).toBeGreaterThan(totals.keep.rent * 1.2);
     // ...and so is the cost: cramped, nowhere to sit, more of them to keep happy.

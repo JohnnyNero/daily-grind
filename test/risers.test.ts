@@ -261,7 +261,10 @@ function twelveWeeks(seed: number, stacked: boolean, days: number): Run {
 describe('the wet stack, over twelve weeks', () => {
   it('bathrooms stacked by the riser, or at the far end with a second riser: about the same money and liking', () => {
     const sum = { stacked: { money: 0, liking: 0, n: 0, pipes: 0, riser: 0 }, riser: { money: 0, liking: 0, n: 0, pipes: 0, riser: 0 } };
-    for (const seed of [1, 2, 3, 4]) {
+    // Eight seeds (it was four): the two layouts now meet the same luck (the storyteller's, the
+    // burglars' and each flat's applicants' own dice), but a theft or a missed payment in one is
+    // still a few per cent of twelve weeks' money, and four seeds put the sum 6% either way.
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
       // How long building control took for this seed (the stacked landlord waits as long).
       const probe = Sim.create(seed);
       const day0 = probe.day;
@@ -288,5 +291,5 @@ describe('the wet stack, over twelve weeks', () => {
     const near = (a: number, b: number) => Math.abs(a - b) / Math.max(Math.abs(a), Math.abs(b));
     expect(near(sum.stacked.money, sum.riser.money)).toBeLessThan(0.05);
     expect(near(like(sum.stacked), like(sum.riser))).toBeLessThan(0.05);
-  }, 1200000);
+  }, 1800000);
 });

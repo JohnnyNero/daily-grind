@@ -86,7 +86,8 @@ describe('letting', () => {
     expect(sim.state.money).toBe(money + lease.deposit);
     expect(sim.state.pawns.filter((p) => p.life?.flat === a.flat)).toHaveLength(a.people.length);
     // They know the one trait you were told about.
-    const lead = sim.state.pawns.find((p) => p.name === a.people[0].name)!;
+    // (A tenant: a passer-by can share the name.)
+    const lead = sim.state.pawns.find((p) => p.life && p.name === a.people[0].name)!;
     expect(lead.life!.revealed).toEqual([a.shown]);
   });
 

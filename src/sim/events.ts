@@ -15,7 +15,7 @@ import { household } from './leases';
 import { furnitureDef } from './defs';
 import { furnitureValue } from './grades';
 import { addPawn, setGoal } from './pawns';
-import { pick, randInt, random } from './rng';
+import { diceIn, hashOf, pick, randInt, random, type RngHolder } from './rng';
 import type { Sim } from './sim';
 import { chemistry, opinion, rememberAbout } from './social';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Happening, type Pawn } from './state';
@@ -102,13 +102,23 @@ interface Option {
   run(): boolean;
 }
 
+/** The kinds of happening the storyteller picks between, each with dice of its own (Story.race). */
+const RACE = ['romance', 'crime', 'council', 'repair', 'money'];
+
+/** The storyteller's own dice (state.ts Story.rng). */
+const STORY_DICE = 0x51077e11;
+export function storyDice(sim: Sim): RngHolder {
+  return diceIn(sim.state.story, 'rng', sim.state.seed ^ STORY_DICE);
+}
+
 /** Once an hour: the mood turns, happenings run their course, and maybe something new starts. */
 export function storyHour(sim: Sim): void {
   const st = sim.state;
   const story = st.story;
+  const dice = storyDice(sim);
   if (st.tick >= story.until) {
     story.busy = !story.busy;
-    story.until = st.tick + (story.busy ? randInt(st, ...STORY.busyHours) : randInt(st, ...STORY.quietHours)) * TICKS_PER_HOUR;
+    story.until = st.tick + (story.busy ? randInt(dice, ...STORY.busyHours) : randInt(dice, ...STORY.quietHours)) * TICKS_PER_HOUR;
   }
   for (const h of [...story.running]) {
     if (h.kind === 'affair') affairHour(sim, h);
@@ -121,7 +131,7 @@ export function storyHour(sim: Sim): void {
   const push = threat(sim);
   let chance = (story.busy ? STORY.busyChance : STORY.quietChance) * (1 + STORY.threatChance * (push - 1));
   if (easy) chance *= STORY.strugglingChance;
-  if (random(st) > chance) return;
+  if (random(dice) > chance) return;
   const options: Option[] = [];
   // A card's `risk` moves these weights for a few days, never starts anything itself (flags.ts).
   const W = readFlags(sim, 'story.weights', STORY.weights);
@@ -135,10 +145,12 @@ export function storyHour(sim: Sim): void {
   const usable = options
     .filter((o) => canStart(sim, o.tags) && o.weight > 0)
     .map((o) => ({ ...o, weight: o.weight * (o.good ? (easy ? STORY.goodWhenStruggling : 1) : easy ? STORY.badWhenStruggling : flush(sim) ? STORY.badWhenFlush : 1) }));
-  const total = usable.reduce((n, o) => n + o.weight, 0);
-  if (total <= 0) return;
-  let r = random(st) * total;
-  const o = usable.find((x) => (r -= x.weight) < 0) ?? usable[0];
+  // Which: each kind draws its own number every time, whether it's on offer or not, and the
+  // lowest draw over weight wins (a race: the same odds as one weighted draw). So one game having
+  // something worn and another not doesn't change whether either gets burgled.
+  const draws = new Map(RACE.map((tag) => [tag, -Math.log(1 - random(diceIn((story.race ??= {}), tag, st.seed ^ STORY_DICE ^ hashOf(tag))))]));
+  const o = usable.filter((x) => x.weight > 0).sort((a, b) => draws.get(a.tags[0])! / a.weight - draws.get(b.tags[0])! / b.weight)[0];
+  if (!o) return;
   if (o.run()) coolDown(sim, o.tags);
 }
 
@@ -175,7 +187,7 @@ function maybeParty(sim: Sim): void {
     if (people.length === 0) continue;
     const animal = people.some((p) => has(p.life!, 'partyAnimal'));
     const chance = readFlags(sim, 'story.party', animal ? (st.story.busy ? PARTY.animalBusy : PARTY.animalQuiet) : people.length > 1 ? PARTY.household : PARTY.alone, { flat: f.id });
-    if (random(st) > chance || !canStart(sim, ['party', `party:${f.id}`])) continue;
+    if (random(storyDice(sim)) > chance || !canStart(sim, ['party', `party:${f.id}`])) continue;
     startParty(sim, f.id);
     return;
   }

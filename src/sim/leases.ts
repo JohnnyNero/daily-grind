@@ -5,7 +5,7 @@
 import { DEPOSIT_WEEKS, LEASE_WEEKS, MOVE_OUT_NOTICE_DAYS, POUND, RENT_NOTICE_DAYS, book, flatInfo, goingRate, letter, pounds, rateFor } from './economy';
 import { scoreFor } from './impressiveness';
 import { FIRST, LAST } from './pawns';
-import { pick, randInt, random, type RngHolder } from './rng';
+import { diceIn, hashOf, pick, randInt, random, type RngHolder } from './rng';
 import type { Sim } from './sim';
 import { TICKS_PER_DAY, TICKS_PER_HOUR, type Applicant, type HouseholdKind, type Lease, type ListingStyle, type Pawn, type Schedule } from './state';
 import { jobFor, rollSchedule } from './schedules';
@@ -118,46 +118,56 @@ export function applicantsHour(sim: Sim): void {
     const liveable = basics.bed && basics.toilet && basics.wash && basics.kitchen;
     // Word that nobody answers the door gets round (flags.ts).
     const meanHours = readFlags(sim, 'letting.hours', Math.max(L.fewestHours, Math.min(L.mostHours, L.meanHours * ratio ** 3)) * (liveable ? 1 : L.unliveableSlower) * LISTINGS[info.style ?? 'plain'].pace * ratingPace(sim), { flat: f.id });
-    info.nextApplicant = st.tick + Math.round(-Math.log(1 - random(st) * 0.999) * meanHours * TICKS_PER_HOUR);
+    info.nextApplicant = st.tick + Math.round(-Math.log(1 - random(applicantDice(sim, f.id)) * 0.999) * meanHours * TICKS_PER_HOUR);
     // Nobody applies who couldn't pay it (fit.ts).
     if (waiting < L.maxWaiting && ratio < L.tooDear - L.tooDearPerGrade * expectGrade(sim) && affordable(sim, f.id, info.asking).length > 0) st.applicants.push(newApplicant(sim, f.id, undefined, !liveable));
   }
 }
 
+/**
+ * Each flat's applicants roll their own dice (state.ts FlatInfo.rng): who applies for a flat,
+ * and when, doesn't hang on what the rest of the building got up to.
+ */
+const APPLICANT_DICE = 0x0a991e5;
+function applicantDice(sim: Sim, flatId: string): RngHolder {
+  return diceIn(flatInfo(sim, flatId), 'rng', sim.state.seed ^ APPLICANT_DICE ^ hashOf(flatId));
+}
+
 export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDesperate = false): Applicant {
   const st = sim.state;
   const info = flatInfo(sim, flatId);
+  const d = applicantDice(sim, flatId);
   // Who applies depends on what the flat sleeps: singles and couples for a studio or a
   // one-bed, sharers and families once there are bedrooms for them.
   // (Dice are only rolled for a real choice, so a studio's applicants cost none.)
   const kind = flatKind(sim, flatId);
-  const all = householdsFor(kind, kind.bedrooms >= 2 && kind.double && kind.sleeps >= 4 && random(st) < LAYOUT.secondChild);
+  const all = householdsFor(kind, kind.bedrooms >= 2 && kind.double && kind.sleeps >= 4 && random(d) < LAYOUT.secondChild);
   // Only those who could pay the asking rent (anyone, for a friend of a tenant's who'd come regardless).
   const afford = all.filter((o) => budgetOf(o.kind, o.size) >= info.asking);
   const options = afford.length > 0 ? afford : all;
-  let roll = options.length > 1 ? random(st) * options.reduce((n, o) => n + o.weight, 0) : 0;
+  let roll = options.length > 1 ? random(d) * options.reduce((n, o) => n + o.weight, 0) : 0;
   const chosen = options.find((o) => (roll -= o.weight) < 0) ?? options[0] ?? { kind: 'single' as HouseholdKind, size: 1 };
   const household = chosen.kind;
-  const surname = pick(st, LAST);
+  const surname = pick(d, LAST);
   const people: Person[] = [];
   for (let i = 0; i < chosen.size; i++) {
     const professional = info.style === 'professionals';
     // A family's children are at school or college; sharers don't share a surname, a couple might.
     const child = household === 'family' && i >= 2;
-    const kin = i === 0 || household === 'family' || (household === 'couple' && random(st) < L.sameSurname);
-    let person = makePerson(st, kin ? surname : undefined, child ? 'student' : professional || undefined);
+    const kin = i === 0 || household === 'family' || (household === 'couple' && random(d) < L.sameSurname);
+    let person = makePerson(d, kin ? surname : undefined, child ? 'student' : professional || undefined);
     if (professional) person.traits = person.traits.filter((t) => t !== 'partyAnimal' && t !== 'musician');
-    if (info.style === 'pets' && i === 0 && !person.traits.includes('petOwner') && random(st) < L.petsListing) person.traits = [...person.traits.slice(0, 2), 'petOwner'];
+    if (info.style === 'pets' && i === 0 && !person.traits.includes('petOwner') && random(d) < L.petsListing) person.traits = [...person.traits.slice(0, 2), 'petOwner'];
     if (person.traits.length === 0) person.traits = ['easyGoing'];
     // Nobody shares a first name with someone they live with.
-    for (let tries = 0; tries < 10 && people.some((o) => o.name.split(' ')[0] === person.name.split(' ')[0]); tries++) person = { ...person, name: `${pick(st, FIRST)} ${person.name.split(' ').slice(1).join(' ')}` };
+    for (let tries = 0; tries < 10 && people.some((o) => o.name.split(' ')[0] === person.name.split(' ')[0]); tries++) person = { ...person, name: `${pick(d, FIRST)} ${person.name.split(' ').slice(1).join(' ')}` };
     people.push(person);
   }
   const lead = people[0];
-  const shown = pick(st, lead.traits);
+  const shown = pick(d, lead.traits);
   const hidden = lead.traits.filter((t) => t !== shown);
-  const hints = hidden.slice(0, random(st) < 0.5 ? 1 : 2).map((t) => `Previous landlord: “${traitDef(t).hint}”`);
-  const desperate = mustBeDesperate || ((info.tier === 'Grim' || info.tier === 'Shabby') && random(st) < L.desperate);
+  const hints = hidden.slice(0, random(d) < 0.5 ? 1 : 2).map((t) => `Previous landlord: “${traitDef(t).hint}”`);
+  const desperate = mustBeDesperate || ((info.tier === 'Grim' || info.tier === 'Shabby') && random(d) < L.desperate);
   if (desperate) hints.push('Can move in today. Any flat, honestly.');
   // What the building has gets a mention (no dice: it's just what they notice).
   const have = amenities(sim);
@@ -167,8 +177,8 @@ export function newApplicant(sim: Sim, flatId: string, friendOf?: Pawn, mustBeDe
   if (friendOf) hints.unshift(`A friend of ${friendOf.name.split(' ')[0]}, who lives here already.`);
   const offer = has(lead, 'haggler') ? Math.round((info.asking * L.hagglerOffer) / (5 * POUND)) * 5 * POUND : info.asking;
   const id = st.nextId++;
-  // A baby, bad knees, a dog (fit.ts): on their own dice.
-  const circs = rollCircs(sim, id, household, people, info.style === 'pets');
+  // A baby, bad knees, a dog (fit.ts): on their own dice, keyed from the flat's (not the id, which hangs on everything else).
+  const circs = rollCircs(sim, randInt(d, 0, 0x3fffffff), household, people, info.style === 'pets');
   return { id, flat: flatId, household, people, traits: lead.traits, shown, hints, offer, until: st.tick + L.applicantDays * TICKS_PER_DAY, ...(desperate ? { desperate: true } : {}), ...(circs.length > 0 ? { circs } : {}) };
 }
 

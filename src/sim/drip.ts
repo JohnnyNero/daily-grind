@@ -22,7 +22,7 @@ import { TICKS_PER_DAY, TICKS_PER_HOUR, TICKS_PER_MINUTE, seconds, type Card, ty
 import { tale } from './tales';
 import { addVisitor, visitorRoom } from './visitors';
 import { remember } from './thoughts';
-import { DRIP, EXPECT, FLAG_EFFECTS, SECONDS_PER_GAME_MINUTE, UPKEEP } from './tuning';
+import { DRIP, DRIP_WEEK, EXPECT, FLAG_EFFECTS, SECONDS_PER_GAME_MINUTE, UPKEEP } from './tuning';
 import { breakIt, bookInspection, mend } from './upkeep';
 import { allCards, FIRST_WEEK_SCRIPT } from './cards';
 import { makeCard, type Answer, type CardChoice, type CardDef, type CardSubject, type Effect, type ScriptBeat } from './cards/types';
@@ -116,6 +116,9 @@ function setBudget(sim: Sim): void {
   }
   delete d.cooldowns.script;
   d.budget = dayBudget(sim);
+  // A week is never bare: six days without a card, and today brings one, whatever else is
+  // going on (an absent landlord included: they're asked, now and then, and go on ignoring it).
+  if (sim.day - 6 >= DRIP_WEEK.from && cardsInWeek(sim, sim.day - 1, 6) === 0) d.budget = Math.max(d.budget, 1);
   // Yesterday brought both its cards: one today. Two a day, day after day, is a queue, not a drip.
   if (DRIP.perDay > 1 && d.cooldowns.dealtDay === sim.day - 1 && (d.cooldowns.dealt ?? 0) >= DRIP.perDay) d.budget = Math.min(d.budget, DRIP.perDay - 1);
   // A card in the night spent today's budget.
@@ -142,7 +145,12 @@ export function dripHour(sim: Sim): void {
     const tonight = m >= DRIP.wakeTo ? st.tick - (m - DRIP.wakeTo) * TICKS_PER_MINUTE : st.tick - (m + 24 * 60 - DRIP.wakeTo) * TICKS_PER_MINUTE;
     if ((d.cooldowns.night ?? -1) < tonight) {
       const options = candidates(sim, true);
-      if (options.length > 0 && dripRoll(st) < DRIP.nightChance && deal(sim, options)) d.cooldowns.night = st.tick;
+      // It counts for the morning it spends.
+      const day = m >= DRIP.wakeTo ? sim.day + 1 : sim.day;
+      if (options.length > 0 && dripRoll(st) < DRIP.nightChance && roomInWeek(sim, day) && deal(sim, options)) {
+        d.cooldowns.night = st.tick;
+        countCard(sim, day);
+      }
     }
   }
   followUps(sim);
@@ -180,10 +188,28 @@ export function dripMinute(sim: Sim): void {
   if (options.length === 0) return;
   const late = m >= DRIP.lateFrom && d.lastCard < dripDayStart(sim);
   if (dripRoll(st) >= DRIP.tryChance * (late ? 2 : 1)) return;
-  if (!deal(sim, options)) return;
+  if (!roomInWeek(sim, sim.day) || !deal(sim, options)) return;
+  countCard(sim, sim.day);
   d.budget--;
   d.cooldowns.dealt = d.cooldowns.dealtDay === sim.day ? (d.cooldowns.dealt ?? 0) + 1 : 1;
   d.cooldowns.dealtDay = sim.day;
+}
+
+// ------------------------------------------------------------------ the week
+
+/** Cards from the budget and the night (not follow-ups) in the `days` days to `day`. */
+function cardsInWeek(sim: Sim, day: number, days = 7): number {
+  return (sim.state.drip.week ?? []).filter((x) => x > day - days && x <= day).length;
+}
+
+/** Room for one more card counted on `day`: never more than DRIP_WEEK.most in any seven days. */
+function roomInWeek(sim: Sim, day: number): boolean {
+  return cardsInWeek(sim, day) < DRIP_WEEK.most;
+}
+
+function countCard(sim: Sim, day: number): void {
+  const d = sim.state.drip;
+  d.week = [...(d.week ?? []).filter((x) => x > day - 7), day];
 }
 
 /** Keys in a card's data that name another person (cards/*.ts). */

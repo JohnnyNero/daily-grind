@@ -49,7 +49,10 @@ function normalize(raw: Partial<State>): State {
   st.cleaner ??= false;
   st.dirt ??= {};
   st.temps ??= {};
-  // Layout L3: room temperatures and damp (heat.ts, damp.ts); worked out afresh if missing.
+  // Version 12 (the layout wave) added room temperatures and damp (heat.ts, damp.ts), started
+  // empty and worked out afresh. Also new, and fine missing: the wet stack (`wet`: no record is
+  // the one riser the building came with), the noise average, and dice of their own for the
+  // storyteller, the burglars, each flat's applicants and the drip's week (all from the seed).
   st.roomTemps ??= {};
   st.damp ??= {};
   st.noiseAvg ??= {};
